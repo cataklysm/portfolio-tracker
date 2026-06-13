@@ -1,0 +1,26 @@
+# Secrets / local config
+.env
+.env.*
+!.env.example
+*.local
+secrets/
+
+# Claude Code config (machine-specific; settings.local.json contains secrets)
+.claude/
+
+# Node
+node_modules/
+dist/
+build/
+*.log
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# Editor/OS
+.DS_Store
+.idea/
+.vscode/

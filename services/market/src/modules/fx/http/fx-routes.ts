@@ -1,0 +1,56 @@
+import type { FastifyInstance, preHandlerHookHandler } from 'fastify';
+import { Type } from '@sinclair/typebox';
+import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
+import { AppError } from '@portfolio/platform';
+import type { FxService } from '../application/fx-service.js';
+
+const RatesQuery = Type.Object({ quote_currencies: Type.String({ minLength: 1 }) });
+const RateForDateQuery = Type.Object({
+  quote: Type.String({ minLength: 3, maxLength: 3 }),
+  date: Type.String({ format: 'date' }),
+});
+const RefreshBody = Type.Object({ history: Type.Optional(Type.Boolean()) });
+
+export interface FxRouteDeps {
+  service: FxService;
+  authenticate: preHandlerHookHandler;
+  requireScope: (scope: string) => preHandlerHookHandler;
+}
+
+/**
+ * FX endpoints. Reads (public, `market:read`) serve stored ECB rates. The
+ * refresh trigger is internal-only and calls the provider.
+ */
+export function registerFxRoutes(app: FastifyInstance, deps: FxRouteDeps): void {
+  const r = app.withTypeProvider<TypeBoxTypeProvider>();
+  const read = [deps.authenticate, deps.requireScope('market:read')];
+
+  r.get('/fx/rates', { preHandler: read, schema: { querystring: RatesQuery } }, async (request) => {
+    const currencies = request.query.quote_currencies
+      .split(',')
+      .map((c) => c.trim().toUpperCase())
+      .filter((c) => c.length === 3);
+    return deps.service.getEurRates(currencies);
+  });
+
+  r.get('/fx/rate', { preHandler: read, schema: { querystring: RateForDateQuery } }, async (request) => {
+    const result = await deps.service.getEurRateForDate(request.query.quote.toUpperCase(), request.query.date);
+    if (!result) throw AppError.notFound('fx_rate_unavailable', 'No FX rate available on or before that date');
+    return { quote_currency: request.query.quote.toUpperCase(), ...result };
+  });
+
+  // User-facing on-demand FX refresh (e.g. alongside a quote refresh) so
+  // reporting-currency conversions have a current rate.
+  r.post('/fx/refresh', { preHandler: read }, async () => {
+    const stored = await deps.service.refreshDaily();
+    return { stored };
+  });
+
+  // Internal: refresh from ECB. Network/gateway restricted.
+  r.post('/internal/fx/refresh', { schema: { body: RefreshBody } }, async (request) => {
+    const stored = request.body.history
+      ? await deps.service.refreshHistory()
+      : await deps.service.refreshDaily();
+    return { stored };
+  });
+}

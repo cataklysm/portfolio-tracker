@@ -1,0 +1,38 @@
+{
+  "name": "portfolio-platform",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.5.2",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "db:migrate": "node --env-file=.env --import tsx scripts/migrate.ts",
+    "db:seed:development": "node --env-file=.env --import tsx scripts/seed-development.ts",
+    "db:reset:development": "node --env-file=.env --import tsx scripts/reset-development.ts",
+    "bootstrap": "node --env-file=.env --import tsx services/authentication/src/bootstrap-cli.ts",
+    "dev": "concurrently -n gateway,auth,instruments,providers,market,fundamentals,events,portfolio,insights,web -c white,cyan,yellow,gray,green,greenBright,magentaBright,blue,red,magenta \"node --env-file=.env --watch --import tsx services/gateway/src/server.ts\" \"node --env-file=.env --watch --import tsx services/authentication/src/server.ts\" \"node --env-file=.env --watch --import tsx services/instruments/src/server.ts\" \"node --env-file=.env --watch --import tsx services/providers/src/server.ts\" \"node --env-file=.env --watch --import tsx services/market/src/server.ts\" \"node --env-file=.env --watch --import tsx services/fundamentals/src/server.ts\" \"node --env-file=.env --watch --import tsx services/events/src/server.ts\" \"node --env-file=.env --watch --import tsx services/portfolio/src/server.ts\" \"node --env-file=.env --watch --import tsx services/insights/src/server.ts\" \"pnpm --filter @portfolio/web dev\"",
+    "gateway:dev": "node --env-file=.env --watch --import tsx services/gateway/src/server.ts",
+    "auth:dev": "node --env-file=.env --watch --import tsx services/authentication/src/server.ts",
+    "instruments:dev": "node --env-file=.env --watch --import tsx services/instruments/src/server.ts",
+    "providers:dev": "node --env-file=.env --watch --import tsx services/providers/src/server.ts",
+    "market:dev": "node --env-file=.env --watch --import tsx services/market/src/server.ts",
+    "fundamentals:dev": "node --env-file=.env --watch --import tsx services/fundamentals/src/server.ts",
+    "events:dev": "node --env-file=.env --watch --import tsx services/events/src/server.ts",
+    "portfolio:dev": "node --env-file=.env --watch --import tsx services/portfolio/src/server.ts",
+    "insights:dev": "node --env-file=.env --watch --import tsx services/insights/src/server.ts",
+    "web:dev": "pnpm --filter @portfolio/web dev",
+    "build": "pnpm --filter @portfolio/web build",
+    "typecheck": "tsc --noEmit && pnpm --filter @portfolio/web typecheck"
+  },
+  "dependencies": {
+    "pg": "^8.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/pg": "^8.20.0",
+    "concurrently": "^9.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

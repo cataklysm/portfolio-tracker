@@ -1,0 +1,61 @@
+import type { Kysely } from 'kysely';
+import type { MarketDatabase } from '../../../platform/database/schema.js';
+import type { FxRateRecord, FxRepository } from '../application/ports.js';
+
+/** Kysely adapter for the `market.fx_rates` table (EUR-based daily rates). */
+export class KyselyFxRepository implements FxRepository {
+  constructor(private readonly db: Kysely<MarketDatabase>) {}
+
+  async getLatestEurRates(quoteCurrencies: string[]): Promise<Map<string, string>> {
+    const map = new Map<string, string>();
+    if (quoteCurrencies.length === 0) return map;
+    const rows = await this.db
+      .selectFrom('market.fx_rates')
+      .distinctOn('quote_currency')
+      .select(['quote_currency', 'rate'])
+      .where('base_currency', '=', 'EUR')
+      .where('quote_currency', 'in', quoteCurrencies)
+      .orderBy('quote_currency')
+      .orderBy('effective_date', 'desc')
+      .execute();
+    for (const row of rows) map.set(row.quote_currency, row.rate);
+    return map;
+  }
+
+  async getEurRateOnOrBefore(
+    quoteCurrency: string,
+    date: string,
+  ): Promise<{ date: string; rate: string } | null> {
+    const row = await this.db
+      .selectFrom('market.fx_rates')
+      .select(['effective_date', 'rate'])
+      .where('base_currency', '=', 'EUR')
+      .where('quote_currency', '=', quoteCurrency)
+      .where('effective_date', '<=', date)
+      .orderBy('effective_date', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+    return row ? { date: row.effective_date, rate: row.rate } : null;
+  }
+
+  async upsertRates(records: FxRateRecord[]): Promise<void> {
+    if (records.length === 0) return;
+    await this.db
+      .insertInto('market.fx_rates')
+      .values(
+        records.map((r) => ({
+          base_currency: r.baseCurrency,
+          quote_currency: r.quoteCurrency,
+          effective_date: r.effectiveDate,
+          rate: r.rate,
+          provider: r.provider,
+        })),
+      )
+      .onConflict((oc) =>
+        oc
+          .columns(['base_currency', 'quote_currency', 'effective_date', 'provider'])
+          .doUpdateSet({ rate: (eb) => eb.ref('excluded.rate'), retrieved_at: new Date() }),
+      )
+      .execute();
+  }
+}

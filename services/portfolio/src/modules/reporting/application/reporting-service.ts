@@ -4,9 +4,11 @@ import type { PositionView } from '../../positions/application/build-position-vi
 import type { PositionService } from '../../positions/application/position-service.js';
 import type { DatedRateRequest, FxReader, SettingsReader } from '../../positions/application/ports.js';
 import type { CashFlowRecord, CashFlowRepository } from '../../cash-flows/application/ports.js';
+import type { TaxEventRecord, TaxEventRepository } from '../../tax-events/application/ports.js';
 import { computeSummary, type PortfolioSummary } from '../domain/summary.js';
 import { computeHoldings, type HoldingGroup } from '../domain/holdings.js';
 import { computeAllocation, type AllocationReport } from '../domain/allocation.js';
+import { computeTaxReport, type ConvertedTaxEvent, type TaxReport } from '../domain/tax-report.js';
 
 export interface PortfolioNameReader {
   list(userId: string, includeArchived: boolean): Promise<{ id: string; name: string; preferred_headline_metric: string }[]>;
@@ -15,6 +17,7 @@ export interface PortfolioNameReader {
 export interface ReportingServiceDeps {
   positions: PositionService;
   cashFlows: CashFlowRepository;
+  taxEvents: TaxEventRepository;
   portfolios: PortfolioNameReader;
   fx: FxReader;
   settings: SettingsReader;
@@ -70,6 +73,29 @@ export class ReportingService {
     return computeAllocation(views, portfolioNames);
   }
 
+  /**
+   * Gross-versus-after-tax reporting. The gross realized P&L is taken from the
+   * authoritative summary (so the two never disagree); recorded broker tax events
+   * are converted at their booking-date FX and reconciled into net actual tax and
+   * realized P&L after actual tax. Gross figures keep their meaning unchanged.
+   */
+  async getTaxReport(userId: string, bearerToken: string, portfolioId?: string): Promise<TaxReport> {
+    const [summary, events] = await Promise.all([
+      this.getSummary(userId, bearerToken, portfolioId),
+      this.deps.taxEvents.listForUser(userId, { portfolioId }),
+    ]);
+
+    const convert = await this.taxConverter(events, summary.reporting_currency, bearerToken);
+    const converted: ConvertedTaxEvent[] = events.map((event) => ({
+      component: event.component,
+      direction: event.direction,
+      amount: convert(new Decimal(event.amount), event.currency, event.booking_date),
+      linked: event.transaction_id !== null || event.cash_flow_id !== null || event.position_id !== null,
+    }));
+
+    return computeTaxReport(new Decimal(summary.realized_pnl), converted, summary.reporting_currency);
+  }
+
   /** Total received dividends/cash-in-lieu in the reporting currency, at value-date FX. */
   private async sumDividends(
     flows: CashFlowRecord[],
@@ -114,6 +140,21 @@ export class ReportingService {
       out.set(instrumentId, (out.get(instrumentId) ?? new Decimal(0)).plus(converted));
     }
     return out;
+  }
+
+  /** A booking-date FX converter for the currencies/dates of the given tax events. */
+  private async taxConverter(
+    events: TaxEventRecord[],
+    reportingCurrency: string,
+    bearerToken: string,
+  ): Promise<(amount: Decimal, fromCurrency: string, bookingDate: string) => Decimal | null> {
+    const pairs: DatedRateRequest[] = [];
+    for (const event of events) {
+      pairs.push({ currency: event.currency, date: event.booking_date });
+      pairs.push({ currency: reportingCurrency, date: event.booking_date });
+    }
+    const rates = await this.deps.fx.getEurRatesAt(pairs, bearerToken);
+    return makeDatedConverter(rates, reportingCurrency);
   }
 
   /** A value-date FX converter for the value dates/currencies of the given flows. */

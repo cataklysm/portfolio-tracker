@@ -2,6 +2,10 @@ import { dec } from '../domain/money.js';
 import { makeConverter, makeDatedConverter } from '../domain/currency.js';
 import { computeRealization, type AccountingMethod } from '../domain/realization.js';
 import { computePerformance, type PerformanceMetrics } from '../domain/performance.js';
+import {
+  computeTransactionPerformance,
+  type TransactionPerformanceMetrics,
+} from '../domain/transaction-performance.js';
 import { deriveState, type PositionState } from '../domain/position-state.js';
 import type { ListingSummary, QuotePair, StoredTransaction } from './ports.js';
 
@@ -80,4 +84,29 @@ export function buildPositionView(args: BuildPositionViewArgs): PositionView {
     freshness_status: args.quote?.freshness ?? null,
     performance,
   };
+}
+
+/**
+ * Per-transaction P&L attribution for a position detail, keyed by transaction
+ * ID. Reuses the same realization replay and FX converters as the position view
+ * so a row's realized P&L reconciles with the position's realized P&L (and the
+ * open-lot unrealized P&L with the position's unrealized P&L under FIFO/LIFO).
+ */
+export function buildTransactionPerformance(
+  args: BuildPositionViewArgs,
+): Map<string, TransactionPerformanceMetrics> {
+  const listingCurrency = args.listing?.currency ?? 'EUR';
+  const realization = computeRealization(args.transactions, args.method);
+  const latestPrice = args.quote?.latest ? dec(args.quote.latest) : null;
+  const convertToReporting = makeConverter(args.eurRates, listingCurrency, args.reportingCurrency);
+  const convertAt = args.historicalRates
+    ? makeDatedConverter(args.historicalRates, args.reportingCurrency)
+    : undefined;
+
+  return computeTransactionPerformance({
+    byTransaction: realization.byTransaction,
+    latestPrice,
+    convertToReporting,
+    convertAt,
+  });
 }

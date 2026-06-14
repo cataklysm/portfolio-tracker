@@ -76,6 +76,13 @@ export function registerPositionRoutes(app: FastifyInstance, deps: PositionRoute
     return deps.service.getPosition(userId(request.user?.sub), bearer(request.headers.authorization), id);
   });
 
+  // The persisted realization allocations (which buy lots each sell consumed),
+  // for audit and tax export. Derived on every recalculation, not on read.
+  r.get('/positions/:id/allocations', { preHandler: read }, async (request) => {
+    const { id } = request.params as { id: string };
+    return deps.service.getRealizationAllocations(userId(request.user?.sub), id);
+  });
+
   r.post('/positions', { preHandler: write, schema: { body: CreatePositionBody } }, async (request, reply) => {
     const result = await deps.service.createPosition(userId(request.user?.sub), bearer(request.headers.authorization), {
       portfolioId: request.body.portfolio_id,

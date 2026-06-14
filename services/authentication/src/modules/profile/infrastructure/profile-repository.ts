@@ -14,6 +14,8 @@ export interface UserProfile {
     locale: string | null;
     timezone: string | null;
   };
+  /** Current (open-ended) primary tax residence; null until the user sets one. */
+  tax_residence: { country_code: string; valid_from: string } | null;
 }
 
 export interface PreferencesPatch {
@@ -55,6 +57,14 @@ export class KyselyProfileRepository {
       .where('user_id', '=', userId)
       .executeTakeFirst();
 
+    const residence = await this.db
+      .selectFrom('authentication.tax_residencies')
+      .select(['country_code', 'valid_from'])
+      .where('user_id', '=', userId)
+      .where('valid_until', 'is', null)
+      .where('is_primary', '=', true)
+      .executeTakeFirst();
+
     return {
       id: user.id,
       email: user.email,
@@ -68,6 +78,7 @@ export class KyselyProfileRepository {
         locale: prefs?.locale ?? null,
         timezone: prefs?.timezone ?? null,
       },
+      tax_residence: residence ? { country_code: residence.country_code, valid_from: dateStr(residence.valid_from) } : null,
     };
   }
 
@@ -91,6 +102,11 @@ export class KyselyProfileRepository {
       .where('id', '=', userId)
       .execute();
   }
+}
+
+/** `date` columns may arrive as a Date (driver-dependent); normalize to YYYY-MM-DD. */
+function dateStr(value: Date | string): string {
+  return typeof value === 'string' ? value.slice(0, 10) : value.toISOString().slice(0, 10);
 }
 
 /** Strip undefined keys so an upsert only writes the fields actually provided. */

@@ -76,6 +76,49 @@ export interface CashFlowsTable {
   updated_at: Timestamp;
 }
 
+export interface TaxEventsTable {
+  id: Generated<string>;
+  user_id: string;
+  component: 'capital_income' | 'solidarity' | 'church' | 'foreign_withholding' | 'generic';
+  direction: 'withheld' | 'refunded';
+  amount: Numeric;
+  currency: string;
+  booking_date: ColumnType<string, string, string>;
+  source: ColumnType<
+    'manual' | 'import' | 'broker_api' | 'provider' | 'corporate_action',
+    'manual' | 'import' | 'broker_api' | 'provider' | 'corporate_action' | undefined,
+    'manual' | 'import' | 'broker_api' | 'provider' | 'corporate_action'
+  >;
+  note: string | null;
+  transaction_id: string | null;
+  cash_flow_id: string | null;
+  position_id: string | null;
+  portfolio_id: string | null;
+  broker_account_id: string | null;
+  statement_id: string | null;
+  created_at: Generated<Date>;
+  updated_at: Timestamp;
+}
+
+export interface RealizationAllocationsTable {
+  id: Generated<string>;
+  sell_transaction_id: string;
+  buy_transaction_id: string;
+  quantity: Numeric;
+  accounting_method: 'fifo' | 'lifo';
+  calculation_version: string | number;
+  created_at: Generated<Date>;
+}
+
+export interface AverageCostRealizationsTable {
+  id: Generated<string>;
+  sell_transaction_id: string;
+  average_cost_basis: Numeric;
+  quantity: Numeric;
+  calculation_version: string | number;
+  created_at: Generated<Date>;
+}
+
 export interface WatchlistItemsTable {
   id: Generated<string>;
   user_id: string;
@@ -106,6 +149,9 @@ export interface PortfolioDatabase {
   'portfolio.positions': PositionsTable;
   'portfolio.transactions': TransactionsTable;
   'portfolio.cash_flows': CashFlowsTable;
+  'portfolio.tax_events': TaxEventsTable;
+  'portfolio.realization_allocations': RealizationAllocationsTable;
+  'portfolio.average_cost_realizations': AverageCostRealizationsTable;
   'portfolio.watchlist_items': WatchlistItemsTable;
   'portfolio.outbox_events': OutboxEventsTable;
 }

@@ -187,7 +187,7 @@ export default async function PositionDetailPage({ params }: Props) {
       <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="min-w-0 space-y-3">
           <Section title={t("positionDetail.transactions")} action={<AddTransactionModal positionId={pos.id} currency={listingCurrency} />}>
-            <TransactionsTable transactions={pos.transactions} locale={locale} positionId={pos.id} currency={listingCurrency} />
+            <TransactionsTable transactions={pos.transactions} locale={locale} positionId={pos.id} currency={listingCurrency} reportingCurrency={reporting} />
           </Section>
 
           {instrumentId ? (

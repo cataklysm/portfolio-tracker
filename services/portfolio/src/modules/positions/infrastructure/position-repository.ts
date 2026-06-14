@@ -6,6 +6,7 @@ import type {
   PositionRecord,
   PositionRepository,
   PositionWriteState,
+  RealizationAllocationView,
   StoredTransaction,
 } from '../application/ports.js';
 
@@ -162,21 +163,67 @@ export class KyselyPositionRepository implements PositionRepository {
 
   async applyPositionState(positionId: string, write: PositionWriteState): Promise<void> {
     if (write.calculatedValues !== null) {
-      // Successful recalculation: replace the last-valid values and bump the
-      // monotonic calculation version.
-      await this.db
-        .updateTable('portfolio.positions')
-        .set({
-          state: write.state,
-          last_valid_calculated_values: JSON.stringify(write.calculatedValues),
-          calculation_version: sql`calculation_version + 1`,
-          invalid_reason: null,
-          updated_at: new Date(),
-        })
-        .where('id', '=', positionId)
-        .execute();
+      // Successful recalculation: bump the monotonic calculation version and
+      // replace the derived realization allocations, all in one transaction so
+      // the persisted allocations always match the version on the position.
+      await this.db.transaction().execute(async (trx) => {
+        const updated = await trx
+          .updateTable('portfolio.positions')
+          .set({
+            state: write.state,
+            last_valid_calculated_values: JSON.stringify(write.calculatedValues),
+            calculation_version: sql`calculation_version + 1`,
+            invalid_reason: null,
+            updated_at: new Date(),
+          })
+          .where('id', '=', positionId)
+          .returning('calculation_version')
+          .executeTakeFirstOrThrow();
+
+        const txnRows = await trx
+          .selectFrom('portfolio.transactions')
+          .select('id')
+          .where('position_id', '=', positionId)
+          .execute();
+        const txnIds = txnRows.map((r) => r.id);
+        if (txnIds.length > 0) {
+          await trx.deleteFrom('portfolio.realization_allocations').where('sell_transaction_id', 'in', txnIds).execute();
+          await trx.deleteFrom('portfolio.average_cost_realizations').where('sell_transaction_id', 'in', txnIds).execute();
+        }
+
+        const realization = write.realization;
+        if (realization && realization.lotAllocations.length > 0) {
+          await trx
+            .insertInto('portfolio.realization_allocations')
+            .values(
+              realization.lotAllocations.map((a) => ({
+                sell_transaction_id: a.sellTransactionId,
+                buy_transaction_id: a.buyTransactionId,
+                quantity: a.quantity,
+                accounting_method: realization.method === 'lifo' ? ('lifo' as const) : ('fifo' as const),
+                calculation_version: updated.calculation_version,
+              })),
+            )
+            .execute();
+        }
+        if (realization && realization.averageCostRealizations.length > 0) {
+          await trx
+            .insertInto('portfolio.average_cost_realizations')
+            .values(
+              realization.averageCostRealizations.map((a) => ({
+                sell_transaction_id: a.sellTransactionId,
+                average_cost_basis: a.averageCostBasis,
+                quantity: a.quantity,
+                calculation_version: updated.calculation_version,
+              })),
+            )
+            .execute();
+        }
+      });
       return;
     }
+    // Invalid recalculation: flag the position only, retaining the last-valid
+    // values and the previously persisted allocations.
     await this.db
       .updateTable('portfolio.positions')
       .set({
@@ -186,6 +233,39 @@ export class KyselyPositionRepository implements PositionRepository {
       })
       .where('id', '=', positionId)
       .execute();
+  }
+
+  async getRealizationAllocations(positionId: string): Promise<RealizationAllocationView> {
+    const lots = await this.db
+      .selectFrom('portfolio.realization_allocations as ra')
+      .innerJoin('portfolio.transactions as t', 't.id', 'ra.sell_transaction_id')
+      .select(['ra.sell_transaction_id', 'ra.buy_transaction_id', 'ra.quantity', 'ra.accounting_method', 'ra.calculation_version'])
+      .where('t.position_id', '=', positionId)
+      .execute();
+    const avg = await this.db
+      .selectFrom('portfolio.average_cost_realizations as ar')
+      .innerJoin('portfolio.transactions as t', 't.id', 'ar.sell_transaction_id')
+      .select(['ar.sell_transaction_id', 'ar.average_cost_basis', 'ar.quantity', 'ar.calculation_version'])
+      .where('t.position_id', '=', positionId)
+      .execute();
+
+    const method = lots[0]?.accounting_method ?? (avg.length > 0 ? ('average_cost' as const) : null);
+    const version = lots[0]?.calculation_version ?? avg[0]?.calculation_version ?? null;
+    return {
+      position_id: positionId,
+      accounting_method: method,
+      calculation_version: version === null ? null : String(version),
+      lot_allocations: lots.map((l) => ({
+        sell_transaction_id: l.sell_transaction_id,
+        buy_transaction_id: l.buy_transaction_id,
+        quantity: l.quantity,
+      })),
+      average_cost_realizations: avg.map((a) => ({
+        sell_transaction_id: a.sell_transaction_id,
+        average_cost_basis: a.average_cost_basis,
+        quantity: a.quantity,
+      })),
+    };
   }
 
   async enqueuePositionOpened(input: {

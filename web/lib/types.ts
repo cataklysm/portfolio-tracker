@@ -13,6 +13,7 @@ export interface MeData {
     locale: string | null
     timezone: string | null
   }
+  tax_residence: { country_code: string; valid_from: string } | null
 }
 
 export interface Portfolio {
@@ -62,6 +63,27 @@ export interface PositionView {
   performance: PerformanceData
 }
 
+export interface TransactionPerformance {
+  consumed_cost_basis: string | null
+  realized_pnl: string | null
+  realized_pnl_reporting: string | null
+  remaining_quantity: string | null
+  unrealized_pnl: string | null
+  unrealized_pnl_reporting: string | null
+  attribution: "fifo" | "lifo" | "average_cost"
+}
+
+export interface TransactionTaxEvent {
+  id: string
+  transaction_id: string | null
+  component: TaxComponent
+  direction: TaxDirection
+  amount: string
+  currency: string
+  booking_date: string
+  note: string | null
+}
+
 export interface TransactionView {
   id: string
   side: "buy" | "sell"
@@ -73,6 +95,8 @@ export interface TransactionView {
   tax_relevant_value_date: string
   savings_plan: boolean
   note: string | null
+  performance: TransactionPerformance
+  tax_events: TransactionTaxEvent[]
 }
 
 export interface SparklinePoint {
@@ -83,6 +107,122 @@ export interface SparklinePoint {
 export interface PositionDetail extends PositionView {
   transactions: TransactionView[]
   sparkline: SparklinePoint[]
+}
+
+// ---- Reporting (portfolio service) -----------------------------------------
+
+export interface PortfolioReportSummary {
+  snapshot_at: string
+  reporting_currency: string
+  preferred_headline_metric: string | null
+  completeness: "complete" | "partial"
+  current_value: string
+  invested_capital: string
+  daily_change_amount: string
+  daily_change_pct: string | null
+  realized_pnl: string
+  unrealized_pnl: string
+  dividends: string
+  fees: string
+  total_pnl: string
+  simple_return_pct: string | null
+  total_return_pct: string | null
+  counts: { open: number; closed: number; invalid: number; stale: number; unavailable: number }
+}
+
+export interface ReportHoldingListing {
+  listing_id: string
+  currency: string
+  quantity: string
+  price: string | null
+  value_reporting: string
+}
+
+export interface ReportHolding {
+  instrument_id: string
+  symbol: string
+  name: string
+  asset_type: string
+  portfolios: { id: string; name: string }[]
+  listings: ReportHoldingListing[]
+  quantity: string
+  market_value: string
+  open_cost_basis: string
+  realized_pnl: string
+  unrealized_pnl: string
+  dividends: string
+  daily_change_amount: string
+  weight_pct: string | null
+}
+
+export interface AllocationSlice {
+  key: string
+  label: string
+  value: string
+  weight_pct: string
+}
+
+export interface AllocationReport {
+  reporting_currency: string
+  total_value: string
+  by_instrument: AllocationSlice[]
+  by_asset_type: AllocationSlice[]
+  by_portfolio: AllocationSlice[]
+  by_currency: AllocationSlice[]
+  intelligence: {
+    largest_concentration: { instrument_id: string; symbol: string; weight_pct: string; exceeds_threshold: boolean } | null
+    top_mover: { instrument_id: string; symbol: string; daily_change_amount: string; daily_change_pct: string | null } | null
+    concentration_threshold_pct: string
+  }
+}
+
+// ---- Tax (after-tax reporting + recorded broker tax) ------------------------
+
+export type TaxComponent = "capital_income" | "solidarity" | "church" | "foreign_withholding" | "generic"
+export type TaxDirection = "withheld" | "refunded"
+
+export interface TaxEvent {
+  id: string
+  component: TaxComponent
+  direction: TaxDirection
+  amount: string
+  currency: string
+  booking_date: string
+  source: string
+  note: string | null
+  transaction_id: string | null
+  cash_flow_id: string | null
+  position_id: string | null
+  portfolio_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface TaxReport {
+  reporting_currency: string
+  status: "unavailable" | "actual_partial" | "actual_complete"
+  gross_realized_pnl: string
+  actual_tax_withheld: string
+  actual_tax_refunded: string
+  net_actual_tax: string
+  realized_pnl_after_actual_tax: string
+  by_component: { component: TaxComponent; withheld: string; refunded: string; net: string }[]
+  event_count: number
+  unlinked_count: number
+}
+
+export interface TaxResidency {
+  id: string
+  country_code: string
+  valid_from: string
+  valid_until: string | null
+  is_primary: boolean
+  confirmed_at: string
+}
+
+export interface TaxResidencyView {
+  current: TaxResidency | null
+  history: TaxResidency[]
 }
 
 // ---- Instruments (instruments service) --------------------------------------

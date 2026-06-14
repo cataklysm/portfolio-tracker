@@ -77,6 +77,18 @@ export interface PersonalAccessTokensTable {
   revoked_at: Date | null;
 }
 
+export interface TaxResidenciesTable {
+  id: Generated<string>;
+  user_id: string;
+  country_code: string;
+  valid_from: ColumnType<string, string, string>;
+  valid_until: ColumnType<string | null, string | null | undefined, string | null>;
+  is_primary: ColumnType<boolean, boolean | undefined, boolean>;
+  confirmed_at: Generated<Date>;
+  created_at: Generated<Date>;
+  updated_at: Timestamp;
+}
+
 export interface UserPreferencesTable {
   user_id: string;
   reporting_currency: ColumnType<string, string | undefined, string>;
@@ -101,4 +113,5 @@ export interface AuthDatabase {
   'authentication.refresh_tokens': RefreshTokensTable;
   'authentication.personal_access_tokens': PersonalAccessTokensTable;
   'authentication.user_preferences': UserPreferencesTable;
+  'authentication.tax_residencies': TaxResidenciesTable;
 }

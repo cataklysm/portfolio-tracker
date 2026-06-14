@@ -1,417 +1,910 @@
-# Missing Features For The Adaptive Analyst Dashboard
+# Missing Features For The Portfolio Tracker
 
 ## Purpose
 
-This document compares the proposed **Adaptive Analyst** dashboard against the
-currently implemented services, public APIs, database schema, and frontend
-contracts.
+This document records the remaining gaps between the current services/web UI and
+the intended full-featured financial dashboard. It reflects the repository state
+as of June 14, 2026.
 
-The target dashboard contains:
+The platform now provides a strong current-state portfolio view. The largest
+remaining gaps are reliable multi-broker consolidation and reconciliation,
+historical portfolio performance, cross-portfolio activity, benchmark
+comparison, advanced risk analytics, and auditable transaction-level P&L
+attribution.
 
-- A combined or selected-portfolio header with current value, daily change,
-  invested capital, and total return.
-- A historical portfolio-performance chart with period selection and benchmark
-  comparison.
-- A portfolio-intelligence rail containing concentration, biggest mover,
-  dividend income, allocation, and later risk insights.
-- Holdings grouped by equities, crypto, and funds, with current values, returns,
-  and mini sparklines.
-- Allocation and cross-portfolio activity views.
-- A small watchlist view, global instrument search, market-session status,
-  light/dark mode, and a global add-transaction action.
+## Implemented Since The Original Audit
 
-The planned events service is a known future dependency. News, earnings,
-corporate-action suggestions, macro events, and the event timeline are listed
-as deferred dependencies rather than unexpected gaps.
+The following items previously listed as missing are now implemented.
 
-## Executive Summary
+| Capability | Current implementation |
+| --- | --- |
+| Authoritative portfolio summary | `GET /reporting/summary`, selected or combined portfolio scope |
+| Consolidated holdings by instrument | `GET /reporting/holdings`, including contributing portfolios and listing rows |
+| Allocation and basic intelligence | `GET /reporting/allocation`, by instrument, asset type, portfolio, and currency |
+| Reporting web UI | `/reports`, backed by the portfolio reporting endpoints |
+| Cash-flow CRUD | Portfolio-owned dividend, deposit, withdrawal, and cash-in-lieu endpoints |
+| Dividends in reporting | Summary and consolidated holdings include historically converted received dividends |
+| Historical FX for realized values | Realized P&L, transaction fees, and reporting dividends use tax-relevant value-date FX |
+| Exact daily-change arithmetic | Position performance uses held quantity multiplied by latest-versus-prior-day price |
+| Transaction-level P&L attribution | `GET /positions/:id` transactions carry a `performance` object: per-sell realized P&L (value-date FX) and per-buy open-lot unrealized P&L (FIFO/LIFO, latest FX); average-cost buy remainders are null |
+| Recorded broker tax + after-tax P&L | `portfolio.tax_events` ledger (`/tax-events` CRUD, per-component withheld/refunded, optional links), effective-dated tax residence (`/tax-residency`, auth-owned), and `GET /reporting/tax` reconciling gross realized P&L with net actual tax; web tax centre + residence settings |
+| Persisted realization allocations | Each recalculation writes FIFO/LIFO lot consumption + average-cost realizations to the audit tables (versioned, atomic replace); `GET /positions/:id/allocations` |
+| `fund` support | Supported by instruments, portfolio contracts, frontend contracts, and dashboard grouping |
+| Events service | Earnings, corporate actions, news, refresh workflows, and web pages are implemented |
+| Notifications service | Inbox, asset-scoped rules, alert evaluation, header badge, settings, and asset-detail UI |
+| Asset detail enrichment | Fundamentals, fair values, price targets, events, news, alerts, and selectable price-chart periods |
+| Theme support | Light/dark theme toggle using frontend persistence |
+| Global holdings search | Header search navigates to existing position details |
 
-The current platform can already render a useful current-state holdings
-dashboard. It has portfolios, positions, transactions, latest quotes, listing
-price series, FX rates, watchlist items, fundamentals, fair values, and price
-targets.
+## Current Authoritative Reporting Contracts
 
-The main gap is not raw market data. It is the absence of portfolio-level
-reporting read models and APIs. The frontend currently downloads individual
-positions and calculates a few totals itself. That is insufficient for
-historical portfolio performance, mathematically correct aggregate returns,
-combined holdings, dividends, benchmark comparison, or risk metrics.
+The portfolio service owns the current reporting snapshot:
 
-Before the full dashboard is built, the highest-priority work is:
+- `GET /reporting/summary`
+  - Current value, invested capital, daily change, realized/unrealized P&L,
+    dividends, fees, total P&L, returns, completeness, and state counts.
+- `GET /reporting/holdings`
+  - Instrument-grouped holdings across portfolios, listing rows, market value,
+    cost basis, P&L, dividends, daily impact, and weights.
+- `GET /reporting/allocation`
+  - Allocation by instrument, asset type, portfolio, and currency, plus largest
+    concentration and top mover.
 
-1. Correct the current portfolio accounting/reporting semantics.
-2. Add portfolio summary, historical series, and combined-holdings reporting.
-3. Implement portfolio cash-flow and dividend APIs.
-4. Support `fund` consistently across service and frontend contracts.
-5. Add benchmark, activity-feed, and dashboard-oriented batch reads.
+The dashboard still derives some values from raw positions for its interactive
+holding rows. The `/reports` page uses the authoritative reporting endpoints.
+The dashboard should progressively consume these report contracts where doing
+so removes duplicate calculations or avoids disagreement.
 
-## What Is Already Available
+## P0: Transaction-Level Realized And Unrealized P&L
 
-| Dashboard requirement | Current source | Current status |
-| --- | --- | --- |
-| Portfolio selector | `GET /portfolios` | Available |
-| Selected-portfolio positions | `GET /positions?portfolio_id=...` | Available |
-| Combined positions from active portfolios | `GET /positions` | Available as separate positions |
-| Current price and current position value | Portfolio position view enriched by market quotes | Available |
-| Open cost basis, realized P&L, unrealized P&L, fees, simple return, total return | Position performance calculation | Available per position, with correctness limitations below |
-| Listing price history | `GET /quotes/:listingId/series` | Available per listing, maximum 365 points |
-| Watchlist with latest quote | `GET /watchlist` | Available |
-| Instrument catalog search | `GET /instruments/search` | Available for confirmed catalog instruments |
-| Exchange timezone and regular session | `GET /exchanges` | Available |
-| Fundamentals | `GET /fundamentals` | Available |
-| Fair values and price targets | Insights APIs | Available |
-| Events, news, earnings, macro calendar | Planned events service | Deferred as expected |
+> **Status: implemented 2026-06-14 (derive-on-read).** The realization engine now
+> retains transaction identity and emits a per-transaction attribution
+> (`byTransaction`): per-sell realized P&L / consumed cost / consumed quantity,
+> and per-buy remaining quantity / remaining cost basis for FIFO/LIFO (null under
+> average cost). `GET /positions/:id` returns a nested `performance` object per
+> transaction (realized in value-date FX, open-lot unrealized in latest FX), and
+> the web transaction table shows Realized and Unrealized P&L columns in the
+> reporting currency. Persisting derived allocations (`realization_allocations`,
+> `average_cost_realizations`) and the after-tax extension below remain open.
 
-The current dashboard can derive current allocation percentages, a basic
-largest-position concentration warning, and percentage-based top movers from
-the existing position response. These are suitable as temporary frontend
-calculations, but should eventually come from the same reporting snapshot as
-the headline totals.
+### Current State
 
-## P0: Correctness And Domain Blockers
+The position accounting engine already calculates:
 
-These issues should be addressed before treating the dashboard totals as an
-authoritative portfolio report.
+- Position-level realized P&L under FIFO, LIFO, or average-cost accounting.
+- Position-level open quantity and open cost basis.
+- Position-level unrealized P&L using the latest price.
+- Historical reporting-currency conversion for each sell's realized P&L.
+- Historical reporting-currency conversion for each transaction fee.
 
-### 1. No Portfolio-Level Reporting Calculation
+However, `GET /positions/:id` returns raw transactions without P&L attribution:
 
-The portfolio service returns performance per position. The frontend sums
-selected monetary fields in `PortfolioSummary`, but there is no authoritative
-portfolio-level calculation for:
+```text
+id, side, effective_at, quantity, price, fee, currency,
+tax_relevant_value_date, savings_plan, note
+```
 
-- Current value.
-- Invested capital.
-- Daily change amount and percentage.
-- Realized, unrealized, dividend, fee, and total P&L.
-- Total return.
-- XIRR.
-- The configured preferred headline metric.
+The realization engine emits sell P&L events tagged only with currency and value
+date. It does not retain the originating transaction ID. Open lots also do not
+retain their buy transaction IDs. Therefore the web table cannot reliably map
+position-level values back to individual rows.
 
-Aggregate percentages must be calculated from their underlying cash amounts and
-denominators. They cannot be produced by summing or averaging position
-percentages without explicit weighting rules.
+### Correct Column Semantics
 
-**Needed:** a portfolio-owned reporting use case that returns one internally
-consistent snapshot for a selected portfolio or the combined active-portfolios
-view.
+#### Realized P&L
 
-### 2. Combined Holdings Are Not Aggregated By Instrument
+- Applies to sell transactions only.
+- Equals sell proceeds minus sell fee minus the cost basis consumed by that
+  sell under the selected accounting method.
+- Should be blank for buy transactions, not zero.
+- Should be returned in both transaction currency and reporting currency.
+- Reporting-currency realized P&L must use the sell transaction's
+  `tax_relevant_value_date`.
+- Dividends remain separate cash flows and must not be included in a sell row's
+  realized P&L.
 
-`GET /positions` returns one position per portfolio/listing. The combined
-dashboard currently renders those positions separately.
+#### Unrealized P&L
 
-The product specification requires the combined view to aggregate the same
-underlying instrument across portfolios while retaining:
+- Applies only to remaining open buy-lot quantity.
+- Should be blank for sell transactions and fully consumed buy lots.
+- Under FIFO/LIFO, it can be attributed authoritatively to each remaining buy
+  lot because lot identity is meaningful.
+- Under average-cost accounting, cost basis is pooled. A per-buy unrealized P&L
+  is not inherently authoritative. The UI should either:
+  1. Show unrealized P&L only at position level, which is recommended; or
+  2. Explicitly label a proportional per-buy allocation as informational.
 
-- Contributing portfolio badges.
-- Listing-specific price rows when multiple listings or currencies contribute.
-- Aggregate quantity, market value, realized/unrealized P&L, dividends, and
-  value-weighted daily movement.
+The recommended first implementation is:
 
-**Needed:** an instrument-grouped combined-holdings read model in the portfolio
-service. Accounting must remain listing-specific before the results are
-aggregated.
+- Realized P&L column on sell rows for all accounting methods.
+- Remaining quantity and unrealized P&L on buy rows only for FIFO/LIFO.
+- Blank per-transaction unrealized P&L under average-cost accounting, with the
+  authoritative total remaining in the position snapshot.
+- Recompute all row attribution when the user's accounting method changes.
 
-### 3. Historical FX Rules Are Not Applied To Realized Amounts
+### Recommended Backend Contract
 
-The current position view converts open cost basis, realized P&L, and fees with
-the latest available FX conversion. The specification requires historical
-realized P&L, fees, and dividends to use the official daily FX rate for their
-tax-relevant value date, falling back to the most recent preceding ECB rate.
+Extend each transaction returned by `GET /positions/:id` with a nested derived
+object:
 
-Transactions contain `booking_fx_rate` and `tax_relevant_value_date`, and the
-market service stores historical FX rates, but the position calculation does
-not use them.
+```json
+{
+  "performance": {
+    "remaining_quantity": "5.00000000",
+    "consumed_cost_basis": "1005.00",
+    "realized_pnl": "490.00",
+    "realized_pnl_reporting": "392.00",
+    "unrealized_pnl": "147.50",
+    "unrealized_pnl_reporting": "136.30",
+    "attribution": "fifo"
+  }
+}
+```
 
-**Needed:** historical conversion during ledger realization and portfolio
-reporting, with explicit tests for weekends, holidays, partial sells, and mixed
-currencies.
+Fields that do not apply should be `null`. Returning `null` lets the frontend
+render an empty cell, matching the current transaction-table convention.
 
-### 4. Daily Change Is Not A Reliable Prior-Close Calculation
+### Required Accounting Changes
 
-The market quote repository defines `previous` as the second-most-recent stored
-quote. That point is not guaranteed to be the prior trading-session close. It
-may be another intraday tick.
+1. Add transaction identity to the realization input and derived output.
+   - `LedgerTransaction` needs an optional/required transaction ID.
+   - `DatedAmount` or a new sell-realization record needs `transactionId`.
+2. Return per-sell results from `computeRealization`.
+   - Realized P&L.
+   - Consumed cost basis.
+   - Consumed quantity.
+   - Accounting method.
+3. Preserve open-lot ownership for FIFO/LIFO.
+   - `OpenLot` needs the originating buy transaction ID.
+   - Return remaining quantity and remaining cost basis by buy transaction.
+4. Compute lot-level unrealized P&L when a latest price exists.
+   - Latest value minus remaining lot cost.
+   - Convert open values using latest FX, consistent with position-level
+     unrealized P&L.
+5. Join the derived results into `PositionDetail.transactions`.
+6. Extend `TransactionView` and add the two columns to `TransactionsTable`.
 
-The current dashboard also estimates absolute daily movement by multiplying
-current value by the percentage change. Exact daily P&L should be based on
-quantity multiplied by the difference between latest price and the appropriate
-prior close, converted to reporting currency.
+### Required Frontend Changes
 
-**Needed:** market-level prior-close semantics based on listing exchange,
-timezone, trading session, and holiday calendar; then expose exact daily
-change amount and percentage through portfolio reporting.
+- Add `performance` to `TransactionView`.
+- Pass the position reporting currency to `TransactionsTable`; the table
+  currently receives only the listing/transaction currency.
+- Add `Realized P&L` and `Unrealized P&L` columns with reporting currency shown
+  in the header or values.
+- Render `null` as an empty cell, not a dash or zero.
+- Use positive/negative semantic colors.
+- Keep the native-currency value and accounting method available in a tooltip or
+  row details if the main cells display reporting-currency values.
+- Increase the table minimum width and preserve horizontal scrolling so the note
+  column is not compressed.
+- Explain in the column tooltip that unrealized P&L is unavailable per
+  transaction under average-cost accounting.
 
-### 5. Dividends And Other Cash Flows Have No Service Implementation
+### Derive On Read Versus Persist
 
-The database contains `portfolio.cash_flows`, but the portfolio service has no
-cash-flow repository mapping, application module, or public endpoints.
-Consequently, the dashboard cannot report:
+**Derive on read first:** recommended for the initial feature.
 
-- Received dividends.
-- Annual or trailing-twelve-month dividend income.
-- Yield on cost or income return.
-- Deposits and withdrawals.
-- Correct total return including dividends.
-- XIRR or time-weighted returns using external cash flows.
-- Cash-flow items in recent activity.
+- Reuses the current deterministic ledger replay.
+- Avoids migration and recalculation-version complexity.
+- Guarantees the row values use the user's current accounting method.
+- Is acceptable for a single position detail response.
 
-**Needed:** portfolio-owned CRUD/read APIs for dividends, deposits,
-withdrawals, and cash-in-lieu, plus integration into reporting calculations.
-The future events service may suggest objective dividend facts, but user
-receipt confirmation remains owned by portfolio.
+**Persist derived allocations later:** recommended for audit/export workflows.
 
-### 6. `fund` Is In The Database But Rejected By Implemented Contracts
+- The schema already contains `portfolio.realization_allocations` and
+  `portfolio.average_cost_realizations`.
+- These tables are not currently populated by the portfolio service.
+- Persistence requires replacing derived rows after every transaction
+  create/edit/delete and tracking `calculation_version`.
 
-The database allows `equity`, `fund`, and `crypto`, and the development seed
-contains funds. However, the instruments domain, portfolio listing summaries,
-watchlist views, frontend types, and manual add-position form only support
-`equity | crypto`.
+### Required Tests
 
-**Needed:** add `fund` to all service contracts, validation, frontend types,
-filters, visual themes, formatting behavior, tests, and discovery/create flows.
+- Multiple sells on the same date, proving transaction ID rather than date is
+  used for attribution.
+- FIFO and LIFO partial-lot consumption.
+- One sell consuming multiple buy lots.
+- Average-cost realized P&L.
+- Buy and sell fee treatment.
+- Historical FX conversion on sell rows.
+- Latest-FX conversion on open-lot unrealized P&L.
+- Fully consumed buy lots and closed positions.
+- Invalid ledgers after transaction edits.
+- Reconciliation:
+  - Sum of transaction realized P&L equals position realized P&L.
+  - Sum of open-lot unrealized P&L equals position unrealized P&L for FIFO/LIFO.
 
-### 7. Derived Accounting Records Are Schema-Only
+### Estimated Scope
 
-The schema contains realization allocations, average-cost realization
-snapshots, position transfers, and corporate-action applications. The current
-portfolio service does not expose or persist these through implemented modules.
+This is a medium-sized portfolio-service change, not a frontend-only column
+addition. The accounting changes are localized, but they affect a core
+financial calculation and require thorough tests before exposing the values.
 
-This does not block a first visual dashboard, but it blocks a complete,
-auditable reporting implementation and correct historical reconstruction after
-transfers or corporate actions.
+## P0: Recorded Broker Tax And After-Tax P&L
 
-## P1: Missing Dashboard Read Models And APIs
+> **Status: implemented 2026-06-14 (v1).** `portfolio.tax_events` records actual
+> broker-booked tax per component (capital income / solidarity / church / foreign
+> withholding / generic), direction (withheld/refunded), currency, booking date,
+> and optional links to a transaction / cash flow / position / portfolio
+> (`/tax-events` CRUD). Effective-dated tax residence lives in the authentication
+> service (`GET`/`POST /tax-residency`) and controls labels only — never
+> calculation. `GET /reporting/tax` reconciles gross realized P&L (from the
+> authoritative summary) with net actual tax at booking-date FX into
+> `realized_pnl_after_actual_tax`, with `actual_complete`/`actual_partial`/
+> `unavailable` status; gross fields are unchanged. Web: a tax centre on `/reports`
+> (after-tax metrics, per-component breakdown, event CRUD) and a tax-residence card
+> in settings. Tax events linked to a transaction are joined onto that row in
+> `GET /positions/:id` (shown under the note), and the current residence is exposed
+> on `/me`. **Deferred:** broker-account/statement links (columns exist, unused) and
+> statement import.
 
-### Portfolio Summary Snapshot
+### Current State
 
-Add a portfolio reporting response for either a selected portfolio or all
-active portfolios. It should include:
+The current platform stores `withholding_tax` only for dividend and
+cash-in-lieu cash flows. Trade transactions do not store broker-withheld tax or
+tax refunds. Existing realized and unrealized P&L are therefore gross pre-tax
+values.
 
-- Snapshot timestamp, reporting currency, quote freshness, and completeness.
-- Current value and invested capital.
-- Daily change amount and percentage.
-- Realized P&L, unrealized P&L, dividends, fees, and total P&L.
-- Simple return, total return, and XIRR.
-- Preferred headline metric and preferred benchmark.
-- Counts of open, closed, invalid, stale, and unavailable positions.
+This is correct for the existing fields, but insufficient for after-tax
+reporting.
 
-This response should be authoritative and shared by the header, allocation
-view, and intelligence rail.
+### Required Semantic Separation
+
+Gross realized P&L must remain an accounting value independent of tax:
+
+```text
+gross realized P&L = sell proceeds - fees - consumed cost basis
+```
+
+Tax must be exposed as separate information. The product should distinguish:
+
+- **Gross realized P&L:** authoritative trade result before tax.
+- **Actually withheld/refunded tax:** entered manually or imported from the
+  broker's booking/statement.
+- **Net realized P&L after actual tax:** gross realized P&L minus attributable
+  actual tax, when attribution is known.
+
+Unrealized P&L has no deducted tax and should remain a gross value. The system
+should not estimate hypothetical tax on unrealized gains.
+
+### Scope
+
+The system should not reproduce German tax calculation rules. The broker is the
+source of truth for deducted/refunded tax and already accounts for applicable
+exemption orders, loss pots, fund rules, foreign-tax credits, church tax, and
+later corrections.
+
+The tracker only records what happened and calculates after-tax reporting from
+those actual bookings. A zero recorded tax means no tax was recorded as
+deducted; it must not imply that no tax liability exists outside the tracker.
+
+Tax behavior must be selected from the user's country of **tax residence**, not
+from citizenship, locale, currency, or broker country. A US citizen may have
+additional US filing obligations while residing elsewhere, and a user can have
+more than one tax residence. The initial product can require one primary tax
+residence while keeping the contract extensible to multiple jurisdictions.
+
+Tax residency must not cause the tracker to calculate local tax automatically.
+It should control jurisdiction-specific labels, supported statement-import
+mappings, disclosures, and whether a recorded-tax feature is applicable.
+
+### Required Data Model
+
+Add explicit tax records instead of adding one ambiguous tax amount directly to
+P&L:
+
+- Effective-dated user tax residency:
+  - ISO country/jurisdiction code.
+  - Valid-from and optional valid-until dates.
+  - Primary-residence flag.
+  - User-confirmed timestamp.
+- Capital income tax withheld/refunded.
+- Solidarity surcharge withheld/refunded.
+- Church tax withheld/refunded.
+- Foreign withholding tax.
+- Generic broker tax or correction when the component breakdown is unavailable.
+- Source, booking date, currency, note, and optional links to transaction, cash
+  flow, position, portfolio, broker/account, and imported statement.
+
+One tax event may relate to a transaction, dividend, year-end broker correction,
+or several earlier events. Links must therefore be optional and must not assume
+every tax amount belongs to exactly one sell.
+
+Broker/account identity is useful for imports and reconciliation, but tax
+profiles, loss pots, exemption-order balances, and tax-policy engines are out of
+scope.
+
+Tax residency belongs to the authentication/user-profile service. Tax events
+and after-tax reporting remain owned by the portfolio service.
+
+### Required Reporting Contracts
+
+Keep existing gross fields and add separate tax reporting:
+
+- `actual_tax_withheld`
+- `actual_tax_refunded`
+- `net_actual_tax`
+- `realized_pnl_after_actual_tax`
+- Tax completeness/status:
+  - `actual_complete`
+  - `actual_partial`
+  - `unavailable`
+
+The report must reconcile gross P&L, actual tax events, and net-after-tax values
+without changing the meaning of the existing gross realized/unrealized fields.
+
+### Required Web Changes
+
+- Ask for the user's primary country of tax residence during setup or before
+  enabling tax reporting.
+- Allow tax residence to be reviewed and changed in settings with an effective
+  date.
+- Do not infer tax residence from browser locale, reporting currency,
+  citizenship, or broker.
+- Show gross P&L and after-tax P&L as separate values.
+- Label recorded broker tax visibly.
+- Add a tax summary/report page with:
+  - Tax withheld and refunded.
+  - Component breakdown where supplied by the broker.
+  - Unlinked broker tax corrections.
+- Show transaction-level actual tax only when an imported/manual tax event is
+  explicitly linked to that transaction.
+- Provide a tax-event/correction workflow and statement-import path.
+- Explain that recorded tax is broker-reported information and not a tax
+  liability calculation.
+
+### Required Tests
+
+- Missing tax residence and explicit setup prompt.
+- Effective-dated tax-residence changes.
+- A US citizen/resident configuration never receiving German-specific labels
+  merely because a German broker or EUR reporting currency is used.
+- Sell with linked withheld tax.
+- Sell with zero recorded tax.
+- Later broker tax refund/correction.
+- Tax event linked to a dividend cash flow.
+- Unlinked year-end or broker-level correction.
+- Multiple tax components and currencies.
+- Reconciliation of gross P&L, tax events, refunds, and after-tax P&L.
+
+### Recommended Delivery Order
+
+1. Add broker/account identity and actual tax-event ledger.
+2. Add effective-dated user tax residency.
+3. Allow manual entry/import of broker-withheld taxes and refunds.
+4. Add gross-versus-actual-after-tax reporting.
+
+## P1: Remaining Core Dashboard Features
 
 ### Historical Portfolio Performance Series
 
-The market service provides price history per listing, but no service rebuilds
-the portfolio's value through time.
+There is still no portfolio-owned historical performance endpoint. The market
+service stores listing price history, but no service reconstructs portfolio
+value and return through time.
 
-The chart needs a portfolio-owned historical series that replays:
+Required inputs and behavior:
 
-- Buys and sells.
-- Position closures and reopened positions.
-- Historical listing prices.
-- Historical FX rates.
-- Dividends, deposits, and withdrawals.
-- Transfers and applied corporate actions when those modules are implemented.
+- Buys, sells, position closures, and reopened positions.
+- Historical prices and historical FX.
+- Deposits, withdrawals, dividends, and cash-in-lieu.
+- Transfers and applied corporate actions once implemented.
+- Periods such as `1W`, `1M`, `YTD`, `1Y`, and `ALL`.
+- Market value, contributed capital, cumulative P&L, and return per point.
+- XIRR and preferably time-weighted return.
 
-It should support at least `1W`, `1M`, `YTD`, `1Y`, and `ALL`, with extensible
-periods and downsampling. Each point should distinguish market value,
-contributed capital, cumulative P&L, and return so the UI does not infer one
-from another.
-
-### Benchmark Catalog, Series, And Comparison
-
-Preferred benchmark columns already exist in the database, but:
-
-- Portfolio list responses omit `preferred_benchmark`.
-- User profile responses omit `combined_benchmark`.
-- No endpoint updates a portfolio's headline metric or benchmark.
-- No benchmark catalog or market-series mapping exists.
-- No portfolio-versus-benchmark calculation exists.
-
-**Needed:** benchmark identifiers and listing mappings, benchmark history,
-preference read/write contracts, and period-relative comparison calculations.
-Initial benchmarks are MSCI World, S&P 500, DAX, and NASDAQ-100.
-
-### Allocation Breakdown
-
-Current holding allocation by market value can be derived in the frontend, but
-the full allocation tab needs a reporting breakdown by:
-
-- Instrument.
-- Asset type.
-- Portfolio.
-- Currency.
-- Optionally geography, sector, or industry when reliable classification data
-  is introduced.
-
-Allocation responses should be based on the same snapshot and completeness
-rules as the portfolio summary.
-
-### Portfolio Intelligence Metrics
-
-The proposed right rail needs the following calculations:
-
-| Intelligence item | Current feasibility | Missing work |
-| --- | --- | --- |
-| Largest-position concentration | Derivable from current position values | Server-side reporting value and configurable warning thresholds |
-| Biggest daily mover | Partially derivable from daily percentage | Correct prior-close semantics, absolute impact, and grouped-instrument handling |
-| Dividend income | Not available | Cash-flow service and income aggregation |
-| Asset allocation | Derivable at a basic level | Authoritative grouped reporting response |
-| Volatility, drawdown, Sharpe, best/worst period | Not available | Historical portfolio return series and risk calculator |
-| Benchmark-relative return | Not available | Benchmark data and comparison calculator |
-| Closed-position win rate | Not available | Portfolio-level realization aggregation |
+This endpoint is required before the dashboard's main chart can represent
+portfolio performance rather than an individual asset price or current snapshot.
 
 ### Cross-Portfolio Activity Feed
 
-Transactions are only returned inside one position detail response. There is no
-user- or portfolio-level recent activity endpoint.
+Transactions are available only inside a position detail response. Cash flows
+are available only under an individual portfolio. There is no chronological,
+paginated user/portfolio activity endpoint combining:
 
-**Needed:** a chronological, paginated portfolio activity read model containing
-buys, sells, dividends, deposits, withdrawals, transfers, and applied/reversed
-corporate actions. Future events/news should remain a separate feed unless the
-frontend deliberately combines them.
+- Buys and sells.
+- Dividends, deposits, withdrawals, and cash-in-lieu.
+- Transfers.
+- Applied/reversed corporate actions.
 
-### Holdings Dashboard Read
+The dashboard Activity tab remains a placeholder until this read model exists.
 
-The current position list is a reasonable base, but the grouped holdings table
-would benefit from one dashboard-oriented response containing:
+### Benchmark Comparison
 
-- Combined instrument groups and contributing portfolios.
-- Listing-specific prices and currencies.
-- Allocation and absolute daily impact.
-- Short price series or precomputed sparkline points.
-- Relevant freshness and invalid-state details.
-- Optional fair-value/target summary without one request per instrument.
+Benchmark preference columns exist in the database, but the product still lacks:
 
-Without this response, the frontend must issue many per-listing and
-per-instrument requests to render sparklines and insights.
+- Public preference read/write support for portfolio and combined benchmarks.
+- A benchmark catalog and listing mappings.
+- Benchmark historical series.
+- Period-relative portfolio-versus-benchmark calculations.
 
-### Watchlist Dashboard Read
+### Cash-Flow Web UI
 
-The current watchlist response includes the latest price and daily percentage,
-but not sparkline data, fair-value summary, next event, or target distance.
-A dashboard widget would otherwise require multiple calls per row.
+Cash-flow CRUD and reporting integration exist in the portfolio service, but
+there is no frontend workflow to create, edit, inspect, or delete dividends,
+deposits, withdrawals, or cash-in-lieu.
 
-## P2: Supporting Information And Product Polish
+### Consistent Reporting Snapshot
 
-### Global Search And Add Transaction
+Summary, holdings, and allocation endpoints each calculate their own response.
+They are internally correct, but separate requests can observe slightly
+different quote or cash-flow states.
 
-Catalog search exists, but it only searches already confirmed instruments. The
-provider-backed discovery flow is internal and is not composed into a complete
-public frontend workflow.
+For strict report consistency, add either:
 
-The global add-transaction control also needs a workflow that can search
-positions/listings and then create a buy or sell without first navigating to a
-position detail page.
+- A combined reporting endpoint returning summary, holdings, and allocation
+  under one snapshot timestamp; or
+- A snapshot/version identifier shared across report reads.
 
-### Market Session Status
+## P2: Accounting And Portfolio Operations
 
-Exchange regular hours and timezones are available. A reliable `Open`,
-`Pre-market`, `Closed`, or `Holiday` indicator is not.
+### Derived Accounting Persistence
 
-Missing pieces include:
+> **Status: implemented 2026-06-14.** Every recalculation now persists the derived
+> allocations into `portfolio.realization_allocations` (FIFO/LIFO lot consumption)
+> and `portfolio.average_cost_realizations`, stamped with the position's
+> `calculation_version` and replaced atomically on each mutation.
+> `GET /positions/:id/allocations` exposes the current snapshot. Remaining:
+> correction/change history (Phase A-2 in [backend-roadmap.md](backend-roadmap.md)).
 
-- Holiday-calendar evaluation.
-- Explicit session-state calculation.
-- Listing exchange information in the position summary.
-- Defined behavior for crypto venues that trade continuously.
+The schema contained these records but the service previously derived accounting
+only in memory. Persistence gives durable audit trails, tax exports, and explains
+exactly which buy lots a sell consumed without replaying the current ledger.
 
-### Asset Logos And Classification Metadata
+### Position Transfers
 
-There is no logo/image source or stable asset metadata for sector, industry,
-country, or fund category. Logos are visual polish; classification metadata is
-required before allocation can be broken down beyond asset type, portfolio,
-and currency.
+The schema contains `portfolio.position_transfers`, but there is no implemented
+service module or frontend workflow.
 
-### Theme Preference
+### Corporate-Action Application
 
-The frontend is currently dark-only and hardcodes slate colors. Light/dark mode
-can initially be implemented entirely in the frontend with semantic design
-tokens and local storage.
+The events service exposes objective corporate actions, and the schema contains
+position corporate-action applications. There is no signed apply/reverse
+workflow that changes portfolio accounting.
 
-If theme should follow the user across devices, add a theme preference to the
-authentication profile contract and persistence.
+### Market Prior-Close And Session Semantics
 
-## Known Events-Service Dependency
+The market service now avoids using an intraday tick as the previous close by
+selecting an earlier UTC calendar day. It is not yet exchange-timezone,
+session-calendar, or holiday aware.
 
-The events schema already describes earnings, corporate actions, news, and
-macro events, but the service is not implemented yet, as expected.
+Remaining work:
 
-Once implemented, the dashboard can add:
+- Exchange-local prior session close.
+- Holiday calendars.
+- Explicit open/pre-market/closed/holiday state.
+- Defined continuous-session behavior for crypto.
 
-- Upcoming earnings and dividend dates.
-- Corporate-action alerts and application workflows.
-- Instrument news and sentiment.
-- Macro calendar items.
-- An event timeline in position details.
+## P3: Intelligence And Enrichment
 
-The portfolio dashboard should not block its initial reporting implementation
-on the events service. Its data contracts should leave clear extension points
-for upcoming events and event-linked activity.
+### Advanced Risk Analytics
 
-## Recommended Service Ownership
+Still missing:
 
-The existing architecture states that the frontend performs dashboard
-composition and that a dedicated query/BFF service should not be introduced
-without measured need. The missing capabilities should therefore remain with
-their owning services:
+- Volatility.
+- Maximum drawdown.
+- Sharpe/Sortino ratios.
+- Best/worst periods.
+- Closed-position win rate.
+- Benchmark-relative risk and return.
 
-| Capability | Owning service |
-| --- | --- |
-| Portfolio summary, historical performance, allocation, combined holdings, activity, income, and risk metrics | `portfolio` |
-| Historical quotes, prior close, benchmark price series, FX rates, and session-derived market facts | `market` |
-| Instrument/listing/fund support, exchange metadata, and future classifications | `instruments` |
-| User combined benchmark, headline metric, and optional cross-device theme preference | `authentication` |
-| Portfolio preferred benchmark and preferred headline metric | `portfolio` |
-| Earnings, corporate actions, news, and macro calendar | future `events` |
-| Fair-value and price-target summaries | `insights` |
+These depend primarily on the historical portfolio series and auditable
+realization data.
 
-The frontend can compose these public APIs in parallel. Dashboard-oriented
-batch endpoints should be added where the alternative creates N+1 requests or
-risks inconsistent snapshots.
+### Allocation Classification
+
+Allocation by instrument, asset type, portfolio, and currency is implemented.
+Sector, industry, geography, and fund-category allocation require reliable
+classification metadata.
+
+### Holdings And Watchlist Batch Enrichment
+
+The dashboard and watchlist would benefit from batched reads containing short
+sparklines, event summaries, fair-value/target summaries, and freshness data.
+Without these, richer rows require N+1 requests.
+
+### Automatic DCF Intrinsic Value
+
+The insights service can currently calculate and store a transparent DCF
+intrinsic value, but only after a user manually enters every assumption.
+Automatic DCF calculation should run when sufficient reliable information is
+available.
+
+#### Current Inputs
+
+The DCF model requires:
+
+- Base annual free cash flow.
+- Projection growth rate.
+- Projection years.
+- Discount rate/WACC.
+- Terminal growth rate.
+- Diluted shares outstanding.
+- Net debt.
+
+Fundamentals currently exposes typed `shares_outstanding`, `net_debt`,
+`revenue_growth`, and `earnings_growth`. It does not expose free cash flow as a
+typed field. Provider raw payloads may contain free-cash-flow data, but relying
+on untyped provider-specific fields would make automatic calculations fragile.
+
+Growth, discount rate, projection horizon, and terminal growth are assumptions,
+not objective facts. Automatic calculation therefore needs a documented,
+versioned assumption policy rather than silently treating provider data as
+certain.
+
+#### Missing Data Inventory
+
+The following DCF-relevant information is not currently collected as a typed,
+normalized input:
+
+| Input | Current status | Required source/use |
+| --- | --- | --- |
+| Free cash flow | Not typed or normalized | Required base DCF cash flow; collect TTM and annual values with currency and period |
+| Historical free cash flow | Not exposed through the fundamentals contract | Needed to estimate sustainable growth and detect volatility/outliers |
+| Operating cash flow and capital expenditure | Not typed | Useful for deriving and validating free cash flow |
+| Cash and cash equivalents | Not typed | Needed if net debt must be derived rather than trusted directly |
+| Total debt and debt maturity/cost | Only aggregate net debt is typed | Needed for transparent net-debt validation and a future WACC calculation |
+| Effective/cash tax rate | Not typed | Needed for after-tax cost of debt and normalized cash-flow assumptions |
+| Beta | Not collected | Needed for a CAPM-based cost of equity |
+| Risk-free rate | Not collected | Needed for CAPM/WACC; should come from a versioned market/macro reference series |
+| Equity risk premium | Not collected | Needed for CAPM/WACC; should be a versioned valuation-policy input |
+| Cost of debt / credit spread | Not collected | Needed for WACC when debt is material |
+| Debt/equity capital weights | Not stored as DCF inputs | Can be derived from market capitalization and debt when both are reliable |
+| Historical revenue and earnings series | Only latest normalized values are served | Useful as fallback evidence for growth assumptions, not a substitute for FCF |
+| Fiscal-period metadata | Not consistently exposed with normalized fundamentals | Needed to distinguish annual, quarterly, and TTM inputs |
+| Sector/industry classification | Not collected | Useful for eligibility rules and sector-specific assumption policies |
+| Country/region | Not collected | Useful for currency, tax, risk-free-rate, and equity-risk-premium selection |
+
+Some of these values may exist inside provider `raw_payload`, but automatic DCF
+must not depend directly on unstable provider-specific field names. Required
+inputs should be normalized, typed, dated, and covered by provider mapping
+tests.
+
+Not every missing item is required for the first automatic DCF version. A
+minimal defensible version requires typed recent free cash flow, shares
+outstanding, net debt, currency, and a transparent versioned default-assumption
+policy. A full WACC-driven model requires the additional market, debt, tax, and
+classification inputs listed above.
+
+#### Eligibility Rules
+
+Generate an automatic DCF only when:
+
+- The instrument type is suitable for DCF valuation. Ordinary operating
+  companies are eligible; crypto assets and most funds are not.
+- Currency is known and consistent across cash flow, debt, and output value.
+- Positive diluted shares outstanding are available.
+- A recent, positive free-cash-flow figure is available.
+- Net debt is available or an explicit zero/default policy is allowed.
+- The selected growth and discount assumptions pass the DCF model's validation.
+- The fundamentals snapshot is within an accepted freshness window.
+
+When eligibility is not met, no automatic value should be produced. The UI
+should explain which required inputs are missing.
+
+#### Required Fundamentals Changes
+
+- Add typed free-cash-flow fields, including effective date and currency.
+- Prefer trailing-twelve-month or latest annual free cash flow, with the chosen
+  basis explicitly identified.
+- Preserve enough history to derive a capped multi-year FCF growth rate where
+  possible.
+- Include the normalized DCF-relevant values in
+  `fundamentals.snapshot.updated`, or expose an internal batch read for the
+  insights service.
+
+#### Required Insights Changes
+
+- Consume `fundamentals.snapshot.updated` events and evaluate DCF eligibility.
+- Introduce a versioned automatic-assumption policy, for example:
+  - Growth derived from historical FCF/revenue/earnings growth and capped to a
+    conservative range.
+  - A configurable projection horizon.
+  - Discount rate from a documented default or later a proper WACC model.
+  - Terminal growth capped below the discount rate.
+- Store the exact source fundamentals, assumption policy version, assumptions,
+  computation breakdown, and calculation timestamp with every result.
+- Recalculate when relevant fundamentals or policy versions change.
+- Make refresh idempotent: replace or supersede the current automatic result
+  instead of appending duplicates on every event.
+- Never overwrite or delete a user's manually created DCF.
+
+The current database contract permits `dcf` records only when `user_id` is set.
+A global system-generated DCF therefore requires a schema/contract change. The
+recommended distinction is:
+
+- `dcf`: user-owned manual model.
+- `auto_dcf`: system-generated model with `user_id = NULL`.
+- `analyst`: provider analyst mean target.
+
+#### Required Web Changes
+
+- Display automatic DCF separately from user DCF and analyst value.
+- Label it clearly as a model estimate, including its effective date and policy
+  version.
+- Show the source fundamentals and full assumption breakdown.
+- Explain why automatic DCF is unavailable when required information is
+  missing.
+- Allow a user to use the automatic assumptions as a starting point for a
+  separate editable personal DCF.
+- Show stale or incomplete automatic estimates as such rather than presenting
+  them as current intrinsic value.
+
+#### Required Tests
+
+- Eligible and ineligible instruments.
+- Missing, zero, negative, stale, and currency-mismatched inputs.
+- Assumption caps and `discount_rate > terminal_growth`.
+- Idempotent recalculation on repeated fundamentals events.
+- Policy-version changes creating a newly traceable result.
+- Manual user DCF values remaining untouched.
+- Automatic DCF records exposing reproducible inputs and breakdowns.
+
+### Asset Logos
+
+There is no stable logo/image source for instruments.
+
+### Macro Events
+
+Earnings, corporate actions, and news are implemented. Macro-event storage
+exists in the schema, but there is no macro-event service API or web calendar.
+
+### Cross-Device Theme Preference
+
+Light/dark mode is implemented with frontend persistence. A user-profile theme
+preference is still needed only if theme choice should follow the user across
+devices.
+
+## Universal Tracker Expansion Gaps
+
+The features above complete the currently designed dashboard. The following
+capabilities are additionally needed before the product can serve as a
+trustworthy universal tracker instead of primarily a manually maintained
+portfolio viewer.
+
+### P0: Broker Accounts, Imports, And Reconciliation
+
+Positions and transactions are currently entered manually. CSV and JSON imports
+are planned extension points, but there is no implemented broker-account model,
+import workflow, or reconciliation process.
+
+Add:
+
+- Broker and account records separate from user-defined portfolios, including
+  account name, broker, base currency, account type, and optional external ID.
+- Broker-specific statement adapters plus a configurable generic CSV importer.
+- Import preview with validation, instrument matching, and explicit confirmation
+  before financial records are changed.
+- Import batches with source file hash, source record IDs, parser version,
+  imported-at timestamp, warnings, and errors.
+- Idempotent re-import and duplicate detection.
+- Safe rollback of an import batch without deleting unrelated manual changes.
+- A reconciliation view comparing tracker holdings, transactions, cash, taxes,
+  fees, and dividends against a broker statement or connection.
+- A discrepancy queue for unresolved instruments, missing bookings, quantity
+  differences, and cash differences.
+
+Direct broker APIs can follow after statement imports. Imports are the more
+portable first implementation because broker API availability and licensing
+vary significantly.
+
+### P0: Cash Balances And Complete Account Value
+
+Deposits, withdrawals, dividends, and cash-in-lieu are stored as cash flows, but
+the tracker does not maintain an authoritative cash balance per broker account
+and currency. Consequently, portfolio value does not necessarily represent the
+complete account value.
+
+Add:
+
+- A per-account, per-currency cash ledger and current balance.
+- Trade settlement and cash-flow effects with clear booking/value dates.
+- Optional manual cash-balance adjustments with a reason and audit record.
+- Reconciliation against broker-reported cash.
+- Separate invested value, available cash, and complete account net value.
+
+### P0: Source Provenance, Audit Trail, And Corrections
+
+Financial records need to explain where they came from and how they changed.
+The current domain supports idempotency and some reversible operations, but
+transactions, cash flows, taxes, and manual valuations do not share a complete
+user-visible provenance and correction model.
+
+Add:
+
+- Source metadata on every financial booking: manual, import batch, broker API,
+  provider, or generated corporate action.
+- Immutable change history recording who changed what, when, and why.
+- Correction/reversal workflows instead of silent destructive edits where
+  financial history would otherwise become ambiguous.
+- Drill-down from every report total to its contributing source records.
+- Data-quality status and visible completeness warnings for missing prices, FX,
+  unclassified instruments, unresolved imports, and stale provider data.
+
+This foundation is also required for dependable tax exports, reconciliation,
+and support investigations.
+
+### P1: Instrument Identity And Lifecycle
+
+The instrument catalog supports ISINs, listings, and provider identifiers, but a
+universal tracker must also survive real-world identity changes and imperfect
+provider coverage.
+
+Add:
+
+- Additional identifiers where available, such as FIGI, CUSIP, and SEDOL.
+- User-assisted resolution and duplicate-instrument merge workflows.
+- Symbol, exchange, ISIN, and provider-identifier history.
+- Delisting and inactive-listing handling without losing portfolio history.
+- Mergers, acquisitions, spin-offs, rights issues, tender offers, and return of
+  capital in addition to existing split/dividend workflows.
+- Explicit provider fallback and a visible active valuation source.
+- Full web/API support for existing user-owned manual valuations when no
+  reliable market quote exists.
+
+### P1: Targets, Rebalancing, And Goals
+
+The tracker shows current allocation but cannot define the intended allocation
+or help the user act on drift.
+
+Add:
+
+- Target allocations by portfolio, asset type, instrument, tag, or custom
+  group.
+- Drift thresholds and allocation-drift alerts.
+- Rebalancing suggestions using new contributions first, with optional
+  buy-only, minimum-trade, exclusion, and cash-reserve constraints.
+- Goal tracking with target amount, target date, and progress.
+- Position-size and concentration limits.
+
+Recommendations must remain clearly separated from authoritative accounting
+data and must show the assumptions used.
+
+### P1: Income Forecasting And Dividend Intelligence
+
+Reporting includes received dividends, but it does not yet provide a complete
+income-planning view.
+
+Add:
+
+- Upcoming ex-dividend and payment calendar.
+- Expected dividend income by month and year, with confidence/source labels.
+- Trailing income, dividend growth, yield on cost, and payout history.
+- Dividend increase, cut, suspension, and missed-payment alerts.
+- Reconciliation of expected dividends against actual broker cash flows.
+
+### P1: FX Attribution And Performance Explainability
+
+Historical FX conversion is implemented for important realized values, but
+users cannot see how much return came from the asset versus currency movement.
+
+Add:
+
+- Investment return and FX return attribution.
+- Local-currency and reporting-currency performance side by side.
+- Contribution-to-return by holding, asset type, portfolio, and currency.
+- A report drill-down that reconciles start value, external cash flows,
+  investment return, FX return, fees, taxes, income, and end value.
+
+### P1: Alerts, Digests, And Delivery Channels
+
+The notifications service currently supports an in-app inbox and rules for
+price, daily move, earnings lead time, cost-basis move, and target zones.
+
+Add:
+
+- Rules for allocation drift, concentration, dividend changes, corporate
+  actions, stale/missing data, import failures, and reconciliation differences.
+- Daily and weekly portfolio digests with a concise "what changed" summary.
+- Optional email, push, and webhook delivery with per-rule channel selection.
+- Quiet hours, timezone-aware schedules, delivery history, and retry status.
+
+### P2: Organization, Saved Views, And Household Tracking
+
+As the number of holdings grows, a single watchlist and fixed dashboard become
+insufficient.
+
+Add:
+
+- Multiple named watchlists.
+- User-defined tags, strategies, sectors, and custom groups.
+- Saved filters, table layouts, report views, and dashboard preferences.
+- Investment thesis, conviction, review date, and notes per holding.
+- Optional household/shared views with explicit read or edit permissions.
+- A "changed since last visit" view across holdings and watchlists.
+
+### P2: Broader Asset Coverage
+
+The current instrument model supports `equity`, `fund`, and `crypto`. This is
+enough for the product's current focus, but not for a complete net-worth or
+all-asset tracker.
+
+Potential later extensions include:
+
+- Cash-equivalent instruments and money-market products.
+- Bonds and other fixed-income securities, including coupons and maturity.
+- Options and other derivatives with contract metadata and expiration.
+- Commodities, private assets, real estate, employee equity, and liabilities
+  using manual valuations where market data is unavailable.
+
+Each asset class needs its own correct accounting and reporting semantics.
+Adding generic labels without those semantics would make totals misleading.
+
+### P2: Export, Portability, And External Integrations
+
+Add:
+
+- CSV and JSON export for transactions, cash flows, taxes, holdings, lots, and
+  report results.
+- Annual statements and accountant-oriented realized-gain/tax exports.
+- Complete per-user data export and documented restore/import workflow.
+- Read-only integration endpoints and scoped API tokens for external tools.
+- Optional read-only shareable reports with explicit expiration and revocation.
+
+Deployment-level database backups remain necessary, but they do not replace
+user-level data portability.
+
+### P2: Mobile, Accessibility, And Localization
+
+Add:
+
+- Installable responsive PWA behavior for quick portfolio checks and alerts.
+- Accessible keyboard navigation, focus handling, chart alternatives, and
+  contrast verification.
+- Complete locale-aware date/number formatting and timezone handling.
+- Clear support for different reporting currencies and account currencies
+  throughout imports, forms, and reports.
 
 ## Recommended Implementation Order
 
-### Phase 1: Reliable Current-State Dashboard
+### Phase 1: Trustworthy Consolidation And Explainable Transactions
 
-1. Add consistent `fund` support.
-2. Correct prior-close and daily-change calculations.
-3. Apply historical FX rules to realized amounts and fees.
-4. Implement cash-flow/dividend APIs.
-5. Add authoritative portfolio summary and combined-holdings reporting.
-6. Add grouped allocation and top-mover values from the same snapshot.
+1. Add broker accounts, import batches, source provenance, and reconciliation.
+2. Add authoritative account cash balances.
+3. Add per-sell realized P&L attribution to the realization engine.
+4. Add FIFO/LIFO open-lot unrealized attribution.
+5. Extend position-detail transaction contracts and the transaction table.
+6. Add actual tax-event tracking and effective-dated user tax residency.
+7. Add gross-versus-after-tax reporting.
+8. Add cash-flow management UI.
+9. Persist realization allocations and correction history for audit/export.
 
-### Phase 2: Historical And Comparative Dashboard
+### Phase 2: Historical And Comparative Reporting
 
-1. Implement historical portfolio reconstruction and period series.
-2. Implement XIRR and period-based total returns.
-3. Expose and update portfolio/user benchmark preferences.
-4. Add benchmark catalog, series, and relative-return calculations.
-5. Add the cross-portfolio activity feed.
+1. Build the historical portfolio performance series.
+2. Add XIRR and time-weighted returns.
+3. Add a paginated cross-portfolio activity feed.
+4. Add benchmark preferences, catalog, series, and comparison.
+5. Add a consistent combined reporting snapshot/version.
 
-### Phase 3: Intelligence And Enrichment
+### Phase 3: Operations And Intelligence
 
-1. Add volatility, drawdown, Sharpe, best/worst period, and win-rate metrics.
-2. Add dividend-income views and projections.
-3. Add batched holdings/watchlist sparklines and insight summaries.
-4. Integrate the future events service.
-5. Add classifications, logos, session status, and cross-device theme
-   preference where useful.
+1. Implement transfers and corporate-action apply/reverse workflows.
+2. Add typed DCF fundamentals and automatic intrinsic-value calculation.
+3. Add risk analytics and closed-position win rate.
+4. Add session-aware prior-close and market-session status.
+5. Add classifications, logos, macro events, and batched enrichment reads.
 
-## Minimum Backend Contract Before Building The Full Visual Design
+### Phase 4: Universal Portfolio Workflows
 
-The Adaptive Analyst dashboard can be implemented without placeholders once
-the frontend can obtain, for a selected or combined portfolio scope:
+1. Add target allocations, drift alerts, rebalancing, and goals.
+2. Add income forecasting and dividend reconciliation.
+3. Add instrument lifecycle workflows and FX return attribution.
+4. Add richer alerts, digests, and external delivery channels.
+5. Add saved views, tags, exports, portability, and integrations.
+6. Extend asset classes only where correct accounting semantics are defined.
 
-1. One authoritative current summary snapshot.
-2. One grouped holdings response.
-3. One allocation/intelligence response derived from that snapshot.
-4. One period-based historical portfolio series.
-5. One paginated activity response.
-6. Watchlist rows with batched short series.
-7. Benchmark preferences and optional benchmark comparison.
+## Recommended Service Ownership
 
-Until those contracts exist, the visual design can still be introduced
-incrementally, but the performance chart, dividend income, benchmark
-comparison, activity tab, and advanced intelligence panels would require
-placeholders or potentially incorrect frontend-derived values.
+| Capability | Owning service |
+| --- | --- |
+| Broker accounts, imports, reconciliation, cash ledger, transaction-level P&L attribution, tax-event ledger, after-tax reporting, cash flows, activity, transfers, targets, and portfolio history | `portfolio` |
+| Historical quotes, prior close, benchmark prices, FX, market sessions, and manual valuations | `market` |
+| Instrument identity/lifecycle, classifications, listings, exchanges, and asset metadata | `instruments` |
+| Typed free cash flow and other objective DCF input facts | `fundamentals` |
+| User-wide preferences, tax residency, combined benchmark, and optional theme | `authentication` |
+| Earnings, corporate actions, news, and future macro calendar | `events` |
+| Manual/automatic DCF models, fair values, and price targets | `insights` |
+| Alert rules, notification inbox, digests, and external delivery channels | `notifications` |
+
+The frontend should compose these public APIs in parallel. Dashboard-oriented
+batch endpoints are appropriate when composition otherwise creates N+1 reads or
+inconsistent financial snapshots.

@@ -27,6 +27,11 @@ import {
   KyselyProfileRepository,
   registerProfileRoutes,
 } from './modules/profile/index.js';
+import {
+  TaxResidencyService,
+  KyselyTaxResidencyRepository,
+  registerTaxResidencyRoutes,
+} from './modules/tax-residency/index.js';
 
 export interface BuiltService {
   app: FastifyInstance;
@@ -72,6 +77,7 @@ export async function buildApp(config: AuthConfig): Promise<BuiltService> {
   });
 
   const profileService = new ProfileService(new KyselyProfileRepository(db));
+  const taxResidencyService = new TaxResidencyService(new KyselyTaxResidencyRepository(db));
 
   const apiTokenService = new ApiTokenService({
     repo: new KyselyApiTokenRepository(db),
@@ -103,6 +109,11 @@ export async function buildApp(config: AuthConfig): Promise<BuiltService> {
   registerApiTokenRoutes(app, { service: apiTokenService, authenticate: verifier.authenticate });
   registerProfileRoutes(app, {
     service: profileService,
+    authenticate: verifier.authenticate,
+    requireScope: (scope) => verifier.requireScope(scope),
+  });
+  registerTaxResidencyRoutes(app, {
+    service: taxResidencyService,
     authenticate: verifier.authenticate,
     requireScope: (scope) => verifier.requireScope(scope),
   });

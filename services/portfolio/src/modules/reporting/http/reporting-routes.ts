@@ -31,6 +31,10 @@ export function registerReportingRoutes(app: FastifyInstance, deps: ReportingRou
   r.get('/reporting/allocation', { preHandler: read, schema: { querystring: ScopeQuery } }, async (request) =>
     deps.service.getAllocation(uid(request.user?.sub), bearer(request.headers.authorization), request.query.portfolio_id),
   );
+
+  r.get('/reporting/tax', { preHandler: read, schema: { querystring: ScopeQuery } }, async (request) =>
+    deps.service.getTaxReport(uid(request.user?.sub), bearer(request.headers.authorization), request.query.portfolio_id),
+  );
 }
 
 function uid(sub: string | undefined): string {

@@ -36,6 +36,11 @@ import {
   KyselyCashFlowRepository,
   registerCashFlowRoutes,
 } from './modules/cash-flows/index.js';
+import {
+  TaxEventService,
+  KyselyTaxEventRepository,
+  registerTaxEventRoutes,
+} from './modules/tax-events/index.js';
 import { ReportingService, registerReportingRoutes } from './modules/reporting/index.js';
 
 export interface BuiltService {
@@ -68,6 +73,7 @@ export async function buildApp(config: PortfolioConfig): Promise<BuiltService> {
 
   const portfolioRepo = new KyselyPortfolioRepository(db);
   const cashFlowRepo = new KyselyCashFlowRepository(db);
+  const taxEventRepo = new KyselyTaxEventRepository(db);
   const portfolioService = new PortfolioService(portfolioRepo);
   const watchlistService = new WatchlistService({
     repo: new KyselyWatchlistRepository(db),
@@ -80,11 +86,14 @@ export async function buildApp(config: PortfolioConfig): Promise<BuiltService> {
     quotes: quoteClient,
     fx: fxClient,
     settings: settingsClient,
+    taxEvents: taxEventRepo,
   });
   const cashFlowService = new CashFlowService(cashFlowRepo);
+  const taxEventService = new TaxEventService(taxEventRepo);
   const reportingService = new ReportingService({
     positions: positionService,
     cashFlows: cashFlowRepo,
+    taxEvents: taxEventRepo,
     portfolios: portfolioRepo,
     fx: fxClient,
     settings: settingsClient,
@@ -110,6 +119,7 @@ export async function buildApp(config: PortfolioConfig): Promise<BuiltService> {
   registerPositionRoutes(app, { service: positionService, ...authDeps });
   registerWatchlistRoutes(app, { service: watchlistService, ...authDeps });
   registerCashFlowRoutes(app, { service: cashFlowService, ...authDeps });
+  registerTaxEventRoutes(app, { service: taxEventService, ...authDeps });
   registerReportingRoutes(app, { service: reportingService, ...authDeps });
 
   // Redis is a required dependency for the event bus: connect last so wiring

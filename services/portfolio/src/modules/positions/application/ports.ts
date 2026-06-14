@@ -32,10 +32,42 @@ export interface StoredTransaction extends LedgerTransaction {
   note: string | null;
 }
 
+/** A buy lot consumed by a sell, ready to persist to realization_allocations. */
+export interface PersistedLotAllocation {
+  sellTransactionId: string;
+  buyTransactionId: string;
+  quantity: string;
+}
+
+/** A per-sell average-cost realization, ready to persist. */
+export interface PersistedAverageCostRealization {
+  sellTransactionId: string;
+  averageCostBasis: string;
+  quantity: string;
+}
+
+/** The derived realization to persist alongside a successful recalculation. */
+export interface PersistedRealization {
+  method: AccountingMethod;
+  lotAllocations: PersistedLotAllocation[];
+  averageCostRealizations: PersistedAverageCostRealization[];
+}
+
 export interface PositionWriteState {
   state: 'open' | 'closed' | 'invalid';
   calculatedValues: unknown | null;
   invalidReason: unknown | null;
+  /** Derived allocations to persist on success; null on an invalid recalculation. */
+  realization: PersistedRealization | null;
+}
+
+/** The persisted realization allocations for a position, at its current version. */
+export interface RealizationAllocationView {
+  position_id: string;
+  accounting_method: AccountingMethod | null;
+  calculation_version: string | null;
+  lot_allocations: { sell_transaction_id: string; buy_transaction_id: string; quantity: string }[];
+  average_cost_realizations: { sell_transaction_id: string; average_cost_basis: string; quantity: string }[];
 }
 
 export interface PositionRepository {
@@ -52,6 +84,8 @@ export interface PositionRepository {
   deleteTransaction(txId: string): Promise<void>;
   deletePosition(positionId: string): Promise<void>;
   applyPositionState(positionId: string, write: PositionWriteState): Promise<void>;
+  /** The persisted realization allocations for a position, at its current version. */
+  getRealizationAllocations(positionId: string): Promise<RealizationAllocationView>;
   /** Writes a position-opened event to the transactional outbox. */
   enqueuePositionOpened(input: {
     positionId: string;
@@ -114,4 +148,21 @@ export interface UserSettings {
 
 export interface SettingsReader {
   getUserSettings(bearerToken: string): Promise<UserSettings>;
+}
+
+/** A recorded broker tax event linked to a specific transaction, for the detail view. */
+export interface TransactionTaxEvent {
+  id: string;
+  transaction_id: string | null;
+  component: 'capital_income' | 'solidarity' | 'church' | 'foreign_withholding' | 'generic';
+  direction: 'withheld' | 'refunded';
+  amount: string;
+  currency: string;
+  booking_date: string;
+  note: string | null;
+}
+
+export interface TaxEventReader {
+  /** Tax events the user owns that are linked to any of the given transactions. */
+  listForTransactions(userId: string, transactionIds: string[]): Promise<TransactionTaxEvent[]>;
 }

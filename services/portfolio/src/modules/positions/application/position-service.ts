@@ -1,16 +1,21 @@
 import { AppError } from '@portfolio/platform';
-import { computeRealization, type AccountingMethod } from '../domain/realization.js';
+import { computeRealization, type AccountingMethod, type RealizationResult } from '../domain/realization.js';
+import type { TransactionPerformanceMetrics } from '../domain/transaction-performance.js';
 import { deriveState } from '../domain/position-state.js';
-import { buildPositionView, type PositionView } from './build-position-view.js';
+import { buildPositionView, buildTransactionPerformance, type PositionView } from './build-position-view.js';
 import type {
   DatedRateRequest,
   FxReader,
   ListingReader,
   NewTransaction,
+  PersistedRealization,
   PositionRepository,
   QuoteReader,
+  RealizationAllocationView,
   SettingsReader,
   StoredTransaction,
+  TaxEventReader,
+  TransactionTaxEvent,
 } from './ports.js';
 
 export interface PositionServiceDeps {
@@ -19,6 +24,7 @@ export interface PositionServiceDeps {
   quotes: QuoteReader;
   fx: FxReader;
   settings: SettingsReader;
+  taxEvents: TaxEventReader;
 }
 
 export interface CreatePositionInput {
@@ -39,6 +45,9 @@ export interface PositionDetail extends PositionView {
     tax_relevant_value_date: string;
     savings_plan: boolean;
     note: string | null;
+    performance: TransactionPerformanceMetrics;
+    /** Recorded broker tax events linked to this transaction (empty when none). */
+    tax_events: TransactionTaxEvent[];
   }[];
   sparkline: { time: string; price: string }[];
 }
@@ -102,12 +111,14 @@ export class PositionService {
 
     const listing = listings.get(position.listing_id);
     const currencies = collectCurrencies(listings.values(), reportingCurrency);
-    const [eurRates, historicalRates] = await Promise.all([
+    const [eurRates, historicalRates, taxEvents] = await Promise.all([
       this.deps.fx.getEurRates(currencies, bearerToken),
       this.deps.fx.getEurRatesAt(collectDatedRatePairs(transactions, reportingCurrency), bearerToken),
+      this.deps.taxEvents.listForTransactions(userId, transactions.map((tx) => tx.id)),
     ]);
+    const taxEventsByTransaction = groupByTransaction(taxEvents);
 
-    const view = buildPositionView({
+    const viewArgs = {
       position,
       transactions,
       listing,
@@ -116,11 +127,18 @@ export class PositionService {
       historicalRates,
       reportingCurrency,
       method: accountingMethod,
-    });
+    };
+    const view = buildPositionView(viewArgs);
+    const txPerformance = buildTransactionPerformance(viewArgs);
+    // An invalid ledger yields no attribution; fall back to an empty record
+    // tagged with the user's accounting method so the row renders blank cells.
+    const emptyPerformance = emptyTxPerformance(accountingMethod);
 
     return {
       ...view,
-      transactions: transactions.map(serializeTransaction),
+      transactions: transactions.map((tx) =>
+        serializeTransaction(tx, txPerformance.get(tx.id) ?? emptyPerformance, taxEventsByTransaction.get(tx.id) ?? []),
+      ),
       sparkline: series.map((point) => ({ time: point.time.toISOString(), price: point.price })),
     };
   }
@@ -265,11 +283,12 @@ export class PositionService {
     const state = deriveState(realization);
 
     if (state === 'invalid') {
-      // Retain the last successfully calculated values; only flag the position.
+      // Retain the last successfully calculated values and allocations; only flag.
       await this.deps.repo.applyPositionState(positionId, {
         state: 'invalid',
         calculatedValues: null,
         invalidReason: { code: 'ledger_inconsistent', reason: 'A sell exceeded available quantity' },
+        realization: null,
       });
       return;
     }
@@ -283,7 +302,14 @@ export class PositionService {
         accounting_method: accountingMethod,
       },
       invalidReason: null,
+      realization: toPersistedRealization(realization, accountingMethod),
     });
+  }
+
+  /** Persisted realization allocations for an owned position (audit/export). */
+  async getRealizationAllocations(userId: string, positionId: string): Promise<RealizationAllocationView> {
+    await this.requireOwnedPosition(positionId, userId);
+    return this.deps.repo.getRealizationAllocations(positionId);
   }
 
   private async requireOwnedPosition(positionId: string, userId: string) {
@@ -323,7 +349,24 @@ function collectDatedRatePairs(
   return pairs;
 }
 
-function serializeTransaction(tx: StoredTransaction): PositionDetail['transactions'][number] {
+/** Per-transaction attribution is absent only for an invalid (inconsistent) ledger. */
+function emptyTxPerformance(method: AccountingMethod): TransactionPerformanceMetrics {
+  return {
+    consumed_cost_basis: null,
+    realized_pnl: null,
+    realized_pnl_reporting: null,
+    remaining_quantity: null,
+    unrealized_pnl: null,
+    unrealized_pnl_reporting: null,
+    attribution: method,
+  };
+}
+
+function serializeTransaction(
+  tx: StoredTransaction,
+  performance: TransactionPerformanceMetrics,
+  taxEvents: TransactionTaxEvent[],
+): PositionDetail['transactions'][number] {
   return {
     id: tx.id,
     side: tx.side,
@@ -335,7 +378,47 @@ function serializeTransaction(tx: StoredTransaction): PositionDetail['transactio
     tax_relevant_value_date: tx.tax_relevant_value_date,
     savings_plan: tx.savings_plan,
     note: tx.note,
+    performance,
+    tax_events: taxEvents,
   };
+}
+
+/**
+ * Maps the in-memory realization replay to the durable allocation rows. FIFO/LIFO
+ * yield per-(sell, buy) lot consumptions; average cost yields per-sell consumed
+ * cost basis (basis is pooled, so there is no buy-lot identity to persist).
+ */
+function toPersistedRealization(r: RealizationResult, method: AccountingMethod): PersistedRealization {
+  return {
+    method,
+    lotAllocations: r.lotConsumptions.map((c) => ({
+      sellTransactionId: c.sellTransactionId,
+      buyTransactionId: c.buyTransactionId,
+      quantity: c.quantity.toFixed(8),
+    })),
+    averageCostRealizations:
+      method === 'average_cost'
+        ? r.byTransaction
+            .filter((b) => b.side === 'sell' && b.consumedCostBasis !== null && b.consumedQuantity !== null)
+            .map((b) => ({
+              sellTransactionId: b.transactionId,
+              averageCostBasis: b.consumedCostBasis!.toFixed(8),
+              quantity: b.consumedQuantity!.toFixed(8),
+            }))
+        : [],
+  };
+}
+
+/** Groups tax events by their linked transaction ID (skipping unlinked ones). */
+function groupByTransaction(events: TransactionTaxEvent[]): Map<string, TransactionTaxEvent[]> {
+  const out = new Map<string, TransactionTaxEvent[]>();
+  for (const event of events) {
+    if (!event.transaction_id) continue;
+    const list = out.get(event.transaction_id) ?? [];
+    list.push(event);
+    out.set(event.transaction_id, list);
+  }
+  return out;
 }
 
 export type { AccountingMethod };

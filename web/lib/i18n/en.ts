@@ -24,6 +24,7 @@ export const en = {
 
   nav: {
     portfolio: "Portfolio",
+    reports: "Reports",
     watchlist: "Watchlist",
     notifications: "Notifications",
     news: "News",
@@ -216,6 +217,12 @@ export const en = {
     plan: "plan",
     edit: "Edit",
     editTitle: "Edit transaction",
+    realizedPnl: "Realized P&L",
+    unrealizedPnl: "Unrealized P&L",
+    pnlInReporting: "Realized on sells (value-date FX), unrealized on open lots (latest FX), in {currency}.",
+    avgCostNoUnrealized: "Per-transaction unrealized P&L is unavailable under average-cost accounting; see the position total.",
+    tax: "Tax",
+    linkedTax: "Recorded broker tax linked to this transaction (withheld shown negative, refunded positive).",
   },
 
   transactionModal: {

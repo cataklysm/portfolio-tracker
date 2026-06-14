@@ -12,8 +12,9 @@ never depend synchronously on an external provider.
 - Official daily ECB FX reference rates (`fx_rates`) with last-available-rate
   fallback for weekends/holidays.
 - Provider discovery (Yahoo symbol search) for the instruments service.
-- Consolidated refresh-interest projection (`refresh_interests`) built from
-  portfolio events, plus a periodic refresh scheduler (`data_refresh_state`).
+- Periodic refresh scheduler (`data_refresh_state`) driven by the canonical
+  watch set owned by the instruments service (consumed in-memory, not a local
+  projection).
 
 Provider adapters (Yahoo, ECB) sit behind ports; Yahoo/ECB-specific shapes
 never leak into business logic.
@@ -25,7 +26,7 @@ never leak into business logic.
 | `quotes` | Store/read normalized quotes; on-demand & scheduled provider refresh |
 | `fx` | Store/read ECB EUR-based daily rates; provider refresh |
 | `discovery` | Yahoo symbol search for instrument discovery |
-| `refresh` | Interest projection, scheduler, and the portfolio-stream consumer |
+| `refresh` | Refresh scheduler over the shared watch set; records `data_refresh_state` |
 
 ## Public HTTP contracts
 
@@ -45,14 +46,15 @@ restricted; they move to service-token auth when that is introduced.
 
 ## Events
 
-Consumes the `portfolio` Redis stream (group `market`) for
-`portfolio.position.opened/closed` and `portfolio.watchlist.added/removed`,
-maintaining `refresh_interests` idempotently (stale aggregate versions ignored).
+Hydrates the watched-listing set from the instruments service
+(`GET /internal/watch-set`) and stays current by consuming `instruments.watch.*`
+deltas off the `instruments` Redis stream (group `market-watch`), held in memory.
+No longer consumes the `portfolio` stream directly.
 
 ## Persistence ownership
 
 Owns `market.*`: `price_quotes`, `fx_rates`, `manual_valuations`,
-`data_refresh_state`, `refresh_interests`, `outbox_events`.
+`data_refresh_state`, `outbox_events`.
 
 ## External dependencies
 

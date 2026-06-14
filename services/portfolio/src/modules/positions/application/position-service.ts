@@ -115,6 +115,29 @@ export class PositionService {
     };
   }
 
+  /**
+   * Average open cost per held listing for a user, in the listing's native
+   * currency, for the notifications cost-basis alert. Uses average-cost basis
+   * (method-agnostic, and a %-from-cost alert is naturally an average measure),
+   * so no user token / accounting-method lookup is needed. No quotes involved.
+   */
+  async getOpenPositionCostBases(userId: string): Promise<{ listing_id: string; avg_cost: string }[]> {
+    const positions = (await this.deps.repo.listPositionsForUser(userId)).filter((p) => p.state === 'open');
+    if (positions.length === 0) return [];
+    const txMap = await this.deps.repo.listTransactionsForPositions(positions.map((p) => p.id));
+
+    const out: { listing_id: string; avg_cost: string }[] = [];
+    for (const position of positions) {
+      const realization = computeRealization(txMap.get(position.id) ?? [], 'average_cost');
+      if (realization.invalid || !realization.openQuantity.gt(0)) continue;
+      out.push({
+        listing_id: position.listing_id,
+        avg_cost: realization.openCostBasis.div(realization.openQuantity).toString(),
+      });
+    }
+    return out;
+  }
+
   async createPosition(
     userId: string,
     bearerToken: string,

@@ -16,8 +16,6 @@ export interface MarketConfig {
     intervalMs: number;
     heldQuoteMaxAgeMs: number;
   };
-  /** Reads the portfolio interest stream to maintain the refresh projection. */
-  consumeInterestStream: boolean;
 }
 
 export function loadConfig(): MarketConfig {
@@ -40,6 +38,5 @@ export function loadConfig(): MarketConfig {
       intervalMs: intEnv('MARKET_REFRESH_INTERVAL_MS', 15 * 60 * 1000),
       heldQuoteMaxAgeMs: intEnv('MARKET_HELD_QUOTE_MAX_AGE_MS', 15 * 60 * 1000),
     },
-    consumeInterestStream: boolEnv('MARKET_CONSUME_INTEREST_STREAM', true),
   };
 }

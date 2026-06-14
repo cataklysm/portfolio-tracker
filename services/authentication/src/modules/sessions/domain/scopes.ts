@@ -17,6 +17,8 @@ const USER_SCOPES = [
   'events:read',
   'insights:read',
   'insights:write',
+  'notifications:read',
+  'notifications:write',
 ] as const;
 
 const ADMIN_SCOPES = [...USER_SCOPES, 'users:read', 'users:write', 'system:admin'] as const;

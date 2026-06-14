@@ -7,7 +7,7 @@ import {
   createRedis,
   createService,
   OutboxPublisher,
-  StreamConsumer,
+  WatchSet,
   UserTokenVerifier,
   type RedisClientType,
 } from '@portfolio/platform';
@@ -27,7 +27,7 @@ import {
   ProvidersDiscoveryProvider,
   registerDiscoveryRoutes,
 } from './modules/discovery/index.js';
-import { RefreshService, KyselyRefreshInterestRepository, RefreshScheduler } from './modules/refresh/index.js';
+import { RefreshService, KyselyRefreshStateRepository, RefreshScheduler } from './modules/refresh/index.js';
 import { AnalystService, ProvidersAnalystProvider, KyselyAnalystEventStore } from './modules/analyst/index.js';
 
 export interface BuiltService {
@@ -52,6 +52,16 @@ export async function buildApp(config: MarketConfig): Promise<BuiltService> {
 
   const resolver = new InstrumentsListingResolver(config.instrumentsBaseUrl, logger);
 
+  // The deduped watched-listing set, owned by the instruments service: hydrated
+  // from its snapshot and kept live via instruments.watch.* deltas.
+  const watchSet = new WatchSet({
+    snapshotUrl: new URL('/internal/watch-set', config.instrumentsBaseUrl).toString(),
+    redis,
+    group: 'market-watch',
+    consumer: `market-watch-${process.pid}`,
+    logger,
+  });
+
   const quoteService = new QuoteService({
     repo: new KyselyQuoteRepository(db),
     provider: new ProvidersQuoteProvider(providers),
@@ -67,7 +77,8 @@ export async function buildApp(config: MarketConfig): Promise<BuiltService> {
     logger,
   });
   const refreshService = new RefreshService({
-    interests: new KyselyRefreshInterestRepository(db),
+    watchSet,
+    refreshState: new KyselyRefreshStateRepository(db),
     quotes: quoteService,
     fx: fxService,
     analyst: analystService,
@@ -106,29 +117,21 @@ export async function buildApp(config: MarketConfig): Promise<BuiltService> {
   });
   publisher.start();
 
-  // Pass 2: consume portfolio interest events into the refresh projection and
-  // drive the periodic refresh cycle.
+  // Hydrate the watch set from the instruments snapshot before the first refresh
+  // cycle, then drive the periodic refresh. The watch set only feeds the refresh
+  // cycle, so it shares the refresh on/off switch.
   const scheduler = new RefreshScheduler(refreshService, config.refresh.intervalMs, logger);
-  let consumer: StreamConsumer | undefined;
-  if (config.consumeInterestStream) {
-    consumer = new StreamConsumer({
-      redis,
-      stream: 'portfolio',
-      group: 'market',
-      consumer: `market-${process.pid}`,
-      handler: (envelope) => refreshService.applyInterestEvent(envelope),
-      logger,
-    });
-    await consumer.start();
+  if (config.refresh.enabled) {
+    await watchSet.start();
+    scheduler.start();
   }
-  if (config.refresh.enabled) scheduler.start();
 
   return {
     app,
     shutdown: async () => {
       scheduler.stop();
       publisher.stop();
-      if (consumer) await consumer.stop();
+      await watchSet.stop();
       await app.close();
       await redis.quit();
       await pool.end();

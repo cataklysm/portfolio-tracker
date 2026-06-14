@@ -80,6 +80,11 @@ export class AssessmentService {
     return this.repo.listPriceTargets(instrumentId, userId);
   }
 
+  /** A user's own target zones across instruments (for the notifications worker). */
+  listOwnTargetsForInstruments(userId: string, instrumentIds: string[]): Promise<PriceTargetRecord[]> {
+    return this.repo.listOwnTargetsForInstruments(userId, instrumentIds);
+  }
+
   async createPriceTarget(userId: string, input: CreatePriceTargetInput): Promise<PriceTargetRecord> {
     const low = input.zoneLow ?? null;
     const high = input.zoneHigh ?? null;

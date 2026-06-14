@@ -57,6 +57,12 @@ export function registerQuoteRoutes(app: FastifyInstance, deps: QuoteRouteDeps):
     const stored = await deps.service.refreshListings(request.body.listing_ids, from);
     return { refreshed: stored };
   });
+
+  // Internal: latest stored quotes for background workers (no user token), e.g.
+  // the notifications evaluator. Network/gateway restricted; serves stored data.
+  r.get('/internal/quotes', { schema: { querystring: QuotesQuery } }, async (request) =>
+    deps.service.getLatestQuotes(splitIds(request.query.listing_ids)),
+  );
 }
 
 function splitIds(raw: string): string[] {

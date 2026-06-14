@@ -61,6 +61,15 @@ export interface ListingProviderIdentifiersTable {
   updated_at: Timestamp;
 }
 
+export interface WatchInterestsTable {
+  interest_id: string;
+  listing_id: string;
+  interest_type: 'position' | 'watchlist';
+  active: boolean;
+  aggregate_version: string | number;
+  updated_at: Timestamp;
+}
+
 export interface OutboxEventsTable {
   id: Generated<string>;
   event_type: string;
@@ -83,5 +92,6 @@ export interface InstrumentsDatabase {
   'instruments.instruments': InstrumentsTable;
   'instruments.listings': ListingsTable;
   'instruments.listing_provider_identifiers': ListingProviderIdentifiersTable;
+  'instruments.watch_interests': WatchInterestsTable;
   'instruments.outbox_events': OutboxEventsTable;
 }

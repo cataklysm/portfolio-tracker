@@ -51,15 +51,6 @@ export interface DataRefreshStateTable {
   consecutive_failures: ColumnType<number, number | undefined, number>;
 }
 
-export interface RefreshInterestsTable {
-  interest_id: string;
-  listing_id: string;
-  interest_type: 'position' | 'watchlist';
-  active: boolean;
-  aggregate_version: string | number;
-  updated_at: Timestamp;
-}
-
 export interface OutboxEventsTable {
   id: Generated<string>;
   event_type: string;
@@ -81,6 +72,5 @@ export interface MarketDatabase {
   'market.manual_valuations': ManualValuationsTable;
   'market.fx_rates': FxRatesTable;
   'market.data_refresh_state': DataRefreshStateTable;
-  'market.refresh_interests': RefreshInterestsTable;
   'market.outbox_events': OutboxEventsTable;
 }

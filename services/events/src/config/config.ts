@@ -21,8 +21,6 @@ export interface EventsConfig {
     /** Skip an instrument refreshed more recently than this. */
     minAgeMs: number;
   };
-  /** Reads the portfolio interest stream to maintain the refresh projection. */
-  consumeInterestStream: boolean;
 }
 
 export function loadConfig(): EventsConfig {
@@ -45,6 +43,5 @@ export function loadConfig(): EventsConfig {
       intervalMs: intEnv('EVENTS_REFRESH_INTERVAL_MS', 60 * 60 * 1000),
       minAgeMs: intEnv('EVENTS_MIN_AGE_MS', 6 * 60 * 60 * 1000),
     },
-    consumeInterestStream: boolEnv('EVENTS_CONSUME_INTEREST_STREAM', true),
   };
 }

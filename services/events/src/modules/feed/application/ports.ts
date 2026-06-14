@@ -137,9 +137,17 @@ export interface StoredNews {
 
 // ---- Repositories -----------------------------------------------------------
 
+/** The next upcoming reported-earnings date for an instrument. */
+export interface UpcomingEarnings {
+  instrument_id: string;
+  report_date: string;
+}
+
 export interface EarningsRepository {
   upsert(rows: EarningsRow[]): Promise<void>;
   listByInstrument(instrumentId: string): Promise<StoredEarnings[]>;
+  /** Earliest not-yet-reported earnings (report_date >= today) per instrument. */
+  listUpcomingForInstruments(instrumentIds: string[]): Promise<UpcomingEarnings[]>;
 }
 
 export interface CorporateActionsRepository {

@@ -39,6 +39,15 @@ export class StreamConsumer {
   constructor(private readonly options: StreamConsumerOptions) {
     // Blocking reads monopolize a connection, so use a dedicated duplicate.
     this.client = options.redis.duplicate();
+    // A duplicated client does NOT inherit the parent's event listeners. Without
+    // an 'error' listener, a transient socket reset (ECONNRESET on standby/wake,
+    // a network blip, or a Redis restart) is re-emitted as an unhandled 'error'
+    // and crashes the whole process. Log it and let the inherited reconnect
+    // strategy heal the connection; the read loop's try/catch covers in-flight
+    // commands meanwhile.
+    this.client.on('error', (err) => {
+      options.logger.error({ err, error_code: 'stream_redis_error' }, 'Stream consumer Redis error');
+    });
     this.blockMs = options.blockMs ?? 5000;
     this.count = options.count ?? 50;
     this.claimMinIdleMs = options.claimMinIdleMs ?? 60_000;

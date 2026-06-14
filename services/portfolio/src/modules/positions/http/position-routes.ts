@@ -30,6 +30,8 @@ const ListPositionsQuery = Type.Object({
   portfolio_id: Type.Optional(Type.String({ format: 'uuid' })),
 });
 
+const InternalPositionsQuery = Type.Object({ user_id: Type.String({ format: 'uuid' }) });
+
 type TransactionBodyType = Static<typeof TransactionBody>;
 
 function toNewTransaction(body: TransactionBodyType): NewTransaction {
@@ -131,6 +133,13 @@ export function registerPositionRoutes(app: FastifyInstance, deps: PositionRoute
     await deps.service.deletePosition(userId(request.user?.sub), id);
     return { ok: true };
   });
+
+  // Internal: per-user open-position average cost (native currency) for the
+  // notifications cost-basis alert evaluator (no user token). Network/gateway
+  // restricted; no quotes/cross-service reads involved.
+  r.get('/internal/positions', { schema: { querystring: InternalPositionsQuery } }, async (request) =>
+    deps.service.getOpenPositionCostBases(request.query.user_id),
+  );
 }
 
 function userId(sub: string | undefined): string {

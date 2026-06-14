@@ -17,13 +17,13 @@ TRUNCATE
     instruments.listings,
     instruments.instruments,
     instruments.exchanges,
+    instruments.watch_interests,
     instruments.outbox_events,
 
     market.price_quotes,
     market.fx_rates,
     market.data_refresh_state,
     market.manual_valuations,
-    market.refresh_interests,
     market.outbox_events,
 
     portfolio.transactions,

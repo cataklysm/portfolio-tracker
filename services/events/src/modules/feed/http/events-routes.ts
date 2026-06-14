@@ -11,6 +11,7 @@ const NewsQuery = Type.Object({
 const RefreshBody = Type.Object({
   listing_ids: Type.Array(Type.String({ format: 'uuid' }), { minItems: 1, maxItems: 100 }),
 });
+const InstrumentIdsQuery = Type.Object({ instrument_ids: Type.String({ minLength: 1, maxLength: 4000 }) });
 
 export interface EventsRouteDeps {
   service: EventsService;
@@ -42,5 +43,12 @@ export function registerEventsRoutes(app: FastifyInstance, deps: EventsRouteDeps
   r.post('/events/refresh', { preHandler: read, schema: { body: RefreshBody } }, async (request) => {
     const refreshed = await deps.service.refreshListings(request.body.listing_ids, true);
     return { refreshed };
+  });
+
+  // Internal: upcoming earnings per instrument for background workers (no user
+  // token), e.g. the notifications evaluator. Network/gateway restricted.
+  r.get('/internal/earnings', { schema: { querystring: InstrumentIdsQuery } }, async (request) => {
+    const ids = request.query.instrument_ids.split(',').map((s) => s.trim()).filter((s) => s.length > 0);
+    return deps.service.getUpcomingEarnings(ids);
   });
 }

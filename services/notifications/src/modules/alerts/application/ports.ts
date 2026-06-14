@@ -1,0 +1,107 @@
+export type NotificationType =
+  | 'daily_move'
+  | 'earnings_upcoming'
+  | 'target_zone'
+  | 'price_threshold'
+  | 'cost_basis_move';
+export type Severity = 'info' | 'warning' | 'critical';
+
+export type RuleKind = 'price_threshold' | 'daily_move' | 'earnings_lead' | 'cost_basis_move' | 'target_zone';
+export type RuleScope = 'instrument' | 'all_holdings';
+
+export interface NewNotification {
+  userId: string;
+  type: NotificationType;
+  severity: Severity;
+  title: string;
+  body: string | null;
+  instrumentId: string | null;
+  listingId: string | null;
+  data: Record<string, unknown>;
+}
+
+/** A stored notification as served to the owner. */
+export interface StoredNotification {
+  id: string;
+  type: NotificationType;
+  severity: Severity;
+  title: string;
+  body: string | null;
+  instrument_id: string | null;
+  listing_id: string | null;
+  data: unknown;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface NotificationRepository {
+  insert(notification: NewNotification): Promise<string>;
+  listForUser(userId: string, limit: number): Promise<StoredNotification[]>;
+  unreadCount(userId: string): Promise<number>;
+  markRead(userId: string, id: string): Promise<boolean>;
+  markAllRead(userId: string): Promise<number>;
+}
+
+export interface AlertStateRepository {
+  /** Last fired dedupe signature for (user, listing, alert_type), or null. */
+  get(userId: string, listingId: string, alertType: string): Promise<string | null>;
+  set(userId: string, listingId: string, alertType: string, dedupeKey: string): Promise<void>;
+  clear(userId: string, listingId: string, alertType: string): Promise<void>;
+  /** Removes all state rows for an alert type (used when a rule is deleted). */
+  clearByAlertType(userId: string, alertType: string): Promise<void>;
+}
+
+export interface NotificationEventStore {
+  enqueueCreated(input: { notificationId: string; userId: string; type: NotificationType }): Promise<void>;
+}
+
+// ---- User-defined alert rules ----------------------------------------------
+
+export interface AlertRule {
+  id: string;
+  user_id: string;
+  kind: RuleKind;
+  scope: RuleScope;
+  instrument_id: string | null;
+  listing_id: string | null;
+  params: Record<string, unknown>;
+  label: string | null;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NewAlertRule {
+  userId: string;
+  kind: RuleKind;
+  scope: RuleScope;
+  instrumentId: string | null;
+  listingId: string | null;
+  params: Record<string, unknown>;
+  label: string | null;
+}
+
+export interface UpdateAlertRule {
+  params?: Record<string, unknown>;
+  label?: string | null;
+  enabled?: boolean;
+}
+
+export interface AlertRuleRepository {
+  create(input: NewAlertRule): Promise<AlertRule>;
+  listByUser(userId: string): Promise<AlertRule[]>;
+  listEnabled(userId: string): Promise<AlertRule[]>;
+  update(userId: string, id: string, patch: UpdateAlertRule): Promise<AlertRule | null>;
+  delete(userId: string, id: string): Promise<boolean>;
+}
+
+// ---- Default-rule seeding --------------------------------------------------
+
+export interface SeedRepository {
+  /**
+   * Atomically claims the right to seed default rules for a user. Returns true
+   * the first time it's called for a user (the caller should then create the
+   * defaults) and false on every subsequent call.
+   */
+  claim(userId: string): Promise<boolean>;
+}

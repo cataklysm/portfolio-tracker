@@ -5,6 +5,10 @@ import { AppError } from '@portfolio/platform';
 import type { AssessmentService } from '../application/assessment-service.js';
 
 const InstrumentQuery = Type.Object({ instrument_id: Type.String({ format: 'uuid' }) });
+const InternalTargetsQuery = Type.Object({
+  user_id: Type.String({ format: 'uuid' }),
+  instrument_ids: Type.String({ minLength: 1, maxLength: 4000 }),
+});
 
 const Horizon = Type.Union([Type.Literal('short'), Type.Literal('medium'), Type.Literal('long')]);
 
@@ -116,6 +120,14 @@ export function registerAssessmentRoutes(app: FastifyInstance, deps: AssessmentR
   r.delete('/price-targets/:id', { preHandler: write }, async (request) => {
     await deps.service.deletePriceTarget(uid(request.user?.sub), (request.params as { id: string }).id);
     return { ok: true };
+  });
+
+  // Internal: a user's own target zones across instruments, for background
+  // workers (no user token) like the notifications evaluator. Network/gateway
+  // restricted.
+  r.get('/internal/price-targets', { schema: { querystring: InternalTargetsQuery } }, async (request) => {
+    const ids = request.query.instrument_ids.split(',').map((s) => s.trim()).filter((s) => s.length > 0);
+    return deps.service.listOwnTargetsForInstruments(request.query.user_id, ids);
   });
 }
 

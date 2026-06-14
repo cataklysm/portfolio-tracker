@@ -1,18 +1,9 @@
-export interface InterestUpsert {
-  interestId: string;
-  listingId: string;
-  interestType: 'position' | 'watchlist';
-  active: boolean;
-  aggregateVersion: string | number;
-}
-
-export interface RefreshInterestRepository {
-  /**
-   * Idempotently applies an interest change. Stale or out-of-order updates
-   * (lower aggregate version than stored) are ignored.
-   */
-  upsertInterest(input: InterestUpsert): Promise<void>;
-  /** Distinct listing IDs with at least one active interest. */
-  listActiveListingIds(): Promise<string[]>;
+/**
+ * Records per-listing refresh scheduling state in `market.data_refresh_state`.
+ * The watched-listing set itself now comes from the shared in-memory WatchSet
+ * (hydrated from the instruments watch-set snapshot + deltas), not a local
+ * projection table.
+ */
+export interface RefreshStateRepository {
   recordRefresh(listingIds: string[], provider: string, nextDueAt: Date): Promise<void>;
 }

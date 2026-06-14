@@ -66,15 +66,6 @@ export interface NewsTable {
   created_at: Generated<Date>;
 }
 
-export interface RefreshInterestsTable {
-  interest_id: string;
-  listing_id: string;
-  interest_type: 'position' | 'watchlist';
-  active: boolean;
-  aggregate_version: ColumnType<string, string | number, string | number>;
-  updated_at: ColumnType<Date, Date | string | undefined, Date | string>;
-}
-
 export interface RefreshStateTable {
   instrument_id: string;
   last_refreshed_at: ColumnType<Date, Date | string | undefined, Date | string>;
@@ -100,7 +91,6 @@ export interface EventsDatabase {
   'events.earnings': EarningsTable;
   'events.corporate_actions': CorporateActionsTable;
   'events.news': NewsTable;
-  'events.refresh_interests': RefreshInterestsTable;
   'events.refresh_state': RefreshStateTable;
   'events.outbox_events': OutboxEventsTable;
 }

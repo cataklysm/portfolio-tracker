@@ -28,3 +28,4 @@ export {
   type StreamConsumerOptions,
   type EventHandler,
 } from './stream-consumer.js';
+export { WatchSet, type WatchSetEntry, type WatchSetOptions } from './watch-set.js';

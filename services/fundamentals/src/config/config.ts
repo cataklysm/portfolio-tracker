@@ -20,8 +20,6 @@ export interface FundamentalsConfig {
     /** Skip an instrument whose newest snapshot is younger than this. */
     minAgeMs: number;
   };
-  /** Reads the portfolio interest stream to maintain the refresh projection. */
-  consumeInterestStream: boolean;
 }
 
 export function loadConfig(): FundamentalsConfig {
@@ -44,6 +42,5 @@ export function loadConfig(): FundamentalsConfig {
       intervalMs: intEnv('FUNDAMENTALS_REFRESH_INTERVAL_MS', 60 * 60 * 1000),
       minAgeMs: intEnv('FUNDAMENTALS_MIN_AGE_MS', 20 * 60 * 60 * 1000),
     },
-    consumeInterestStream: boolEnv('FUNDAMENTALS_CONSUME_INTEREST_STREAM', true),
   };
 }

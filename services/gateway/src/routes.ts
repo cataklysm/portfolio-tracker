@@ -32,4 +32,5 @@ export const GATEWAY_ROUTES: GatewayRoute[] = [
   { prefix: '/price-targets', upstream: 'insights', protected: true },
   { prefix: '/fundamentals', upstream: 'fundamentals', protected: true },
   { prefix: '/events', upstream: 'events', protected: true },
+  { prefix: '/notifications', upstream: 'notifications', protected: true },
 ];

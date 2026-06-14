@@ -66,6 +66,18 @@ export class KyselyAssessmentRepository implements AssessmentRepository {
     return rows.map(toPriceTarget);
   }
 
+  async listOwnTargetsForInstruments(userId: string, instrumentIds: string[]): Promise<PriceTargetRecord[]> {
+    if (instrumentIds.length === 0) return [];
+    const rows = await this.db
+      .selectFrom('insights.price_targets')
+      .selectAll()
+      .where('user_id', '=', userId)
+      .where('source', '=', 'own')
+      .where('instrument_id', 'in', instrumentIds)
+      .execute();
+    return rows.map(toPriceTarget);
+  }
+
   async insertPriceTarget(input: NewPriceTarget): Promise<PriceTargetRecord> {
     const row = await this.db
       .insertInto('insights.price_targets')

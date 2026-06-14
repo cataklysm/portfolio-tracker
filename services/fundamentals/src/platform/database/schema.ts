@@ -30,15 +30,6 @@ export interface FundamentalsTable {
   created_at: Generated<Date>;
 }
 
-export interface RefreshInterestsTable {
-  interest_id: string;
-  listing_id: string;
-  interest_type: 'position' | 'watchlist';
-  active: boolean;
-  aggregate_version: ColumnType<string, string | number, string | number>;
-  updated_at: ColumnType<Date, Date | string | undefined, Date | string>;
-}
-
 export interface OutboxEventsTable {
   id: Generated<string>;
   event_type: string;
@@ -57,6 +48,5 @@ export interface OutboxEventsTable {
 
 export interface FundamentalsDatabase {
   'fundamentals.fundamentals': FundamentalsTable;
-  'fundamentals.refresh_interests': RefreshInterestsTable;
   'fundamentals.outbox_events': OutboxEventsTable;
 }

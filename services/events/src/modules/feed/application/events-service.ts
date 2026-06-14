@@ -11,6 +11,7 @@ import type {
   StoredCorporateAction,
   StoredEarnings,
   StoredNews,
+  UpcomingEarnings,
 } from './ports.js';
 
 export interface EventsServiceDeps {
@@ -46,6 +47,11 @@ export class EventsService {
 
   getNews(instrumentId: string, limit?: number): Promise<StoredNews[]> {
     return this.deps.news.listByInstrument(instrumentId, limit ?? this.deps.newsReadLimit);
+  }
+
+  /** Next upcoming earnings date per instrument (for the notifications worker). */
+  getUpcomingEarnings(instrumentIds: string[]): Promise<UpcomingEarnings[]> {
+    return this.deps.earnings.listUpcomingForInstruments(instrumentIds);
   }
 
   /**

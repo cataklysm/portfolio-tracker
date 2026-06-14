@@ -186,6 +186,42 @@ export interface ApiTokenCreated extends ApiToken {
   token: string
 }
 
+export type AlertRuleKind = "price_threshold" | "daily_move" | "earnings_lead" | "cost_basis_move" | "target_zone"
+
+/** A user-defined alert rule. */
+export interface AlertRule {
+  id: string
+  user_id: string
+  kind: AlertRuleKind
+  scope: "instrument" | "all_holdings"
+  instrument_id: string | null
+  listing_id: string | null
+  params: Record<string, unknown>
+  label: string | null
+  enabled: boolean
+  created_at: string
+  updated_at: string
+}
+
+/** A user-visible notification (alert). */
+export interface NotificationItem {
+  id: string
+  type: "daily_move" | "earnings_upcoming" | "target_zone" | "price_threshold" | "cost_basis_move"
+  severity: "info" | "warning" | "critical"
+  title: string
+  body: string | null
+  instrument_id: string | null
+  listing_id: string | null
+  data: unknown
+  read_at: string | null
+  created_at: string
+}
+
+export interface NotificationInbox {
+  unread_count: number
+  notifications: NotificationItem[]
+}
+
 /** A reported or upcoming earnings period for an instrument. */
 export interface EarningsRow {
   instrument_id: string

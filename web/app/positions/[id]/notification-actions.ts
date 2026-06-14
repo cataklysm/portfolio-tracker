@@ -1,0 +1,98 @@
+"use server"
+
+import { revalidatePath } from "next/cache"
+import { apiFetch, problemDetail } from "@/lib/api"
+import type { AlertRuleKind } from "@/lib/types"
+
+type Result = string | null
+
+function revalidateNotifications(positionId: string) {
+  revalidatePath(`/positions/${positionId}`)
+  revalidatePath("/notifications")
+  revalidatePath("/notifications/settings")
+  revalidatePath("/", "layout")
+}
+
+export async function createAssetAlertAction(
+  positionId: string,
+  instrumentId: string,
+  listingId: string,
+  _prevState: Result,
+  formData: FormData,
+): Promise<Result> {
+  const kind = formData.get("kind") as AlertRuleKind
+  const number = (key: string) => Number(formData.get(key))
+
+  let params: Record<string, unknown>
+  switch (kind) {
+    case "price_threshold":
+      params = { direction: formData.get("direction"), price: number("price") }
+      break
+    case "daily_move":
+      params = { threshold_pct: number("threshold_pct") }
+      break
+    case "earnings_lead":
+      params = { days: number("days") }
+      break
+    case "cost_basis_move":
+      params = { direction: formData.get("direction"), threshold_pct: number("threshold_pct") }
+      break
+    case "target_zone":
+      params = {}
+      break
+    default:
+      return "Unknown alert type."
+  }
+
+  const body: Record<string, unknown> = {
+    kind,
+    scope: "instrument",
+    instrument_id: instrumentId,
+    listing_id: listingId,
+    params,
+  }
+  const label = (formData.get("label") as string)?.trim()
+  if (label) body.label = label
+
+  try {
+    const resp = await apiFetch("/notifications/rules", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+    if (!resp.ok) return problemDetail(resp, "Failed to create the alert.")
+  } catch {
+    return "Cannot reach the gateway."
+  }
+
+  revalidateNotifications(positionId)
+  return null
+}
+
+export async function toggleAssetAlertAction(positionId: string, id: string, enabled: boolean): Promise<Result> {
+  try {
+    const resp = await apiFetch(`/notifications/rules/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    })
+    if (!resp.ok) return problemDetail(resp, "Failed to update the alert.")
+  } catch {
+    return "Cannot reach the gateway."
+  }
+
+  revalidateNotifications(positionId)
+  return null
+}
+
+export async function deleteAssetAlertAction(positionId: string, id: string): Promise<Result> {
+  try {
+    const resp = await apiFetch(`/notifications/rules/${id}`, { method: "DELETE" })
+    if (!resp.ok) return problemDetail(resp, "Failed to delete the alert.")
+  } catch {
+    return "Cannot reach the gateway."
+  }
+
+  revalidateNotifications(positionId)
+  return null
+}

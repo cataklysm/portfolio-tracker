@@ -2,12 +2,12 @@
 import { useEffect, useState } from "react"
 import { usePathname } from "next/navigation"
 import { Sidebar } from "./Sidebar"
-import { ThemeToggle } from "./ThemeToggle"
-import type { MeData } from "@/lib/types"
+import { AppHeader } from "./AppHeader"
+import type { MeData, PositionView } from "@/lib/types"
 
 const NO_SIDEBAR = ["/login"]
 
-export function AppShell({ children, me }: { children: React.ReactNode; me: MeData | null }) {
+export function AppShell({ children, me, unreadCount = 0, positions = [] }: { children: React.ReactNode; me: MeData | null; unreadCount?: number; positions?: PositionView[] }) {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
   const [ready, setReady] = useState(false)
@@ -32,12 +32,10 @@ export function AppShell({ children, me }: { children: React.ReactNode; me: MeDa
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar collapsed={collapsed} onToggle={toggle} animate={ready} me={me} />
-      <main className="min-w-0 flex-1 overflow-y-auto">
-        <div className="sticky top-0 z-30 flex h-14 items-center justify-end border-b border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-bg)_88%,transparent)] px-4 backdrop-blur-xl lg:hidden">
-          <ThemeToggle />
-        </div>
-        {children}
+      <Sidebar collapsed={collapsed} onToggle={toggle} animate={ready} me={me} unreadCount={unreadCount} />
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <AppHeader me={me} unreadCount={unreadCount} positions={positions} />
+        <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
       </main>
     </div>
   )

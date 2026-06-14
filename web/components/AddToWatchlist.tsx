@@ -6,7 +6,7 @@ import { useTranslations } from "@/lib/i18n"
 import type { InstrumentWithListings } from "@/lib/types"
 
 const inputClass =
-  "w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
+  "w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-raised)] px-3 py-2 text-sm text-[var(--app-text)] placeholder-[var(--app-text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--app-accent)]"
 
 export function AddToWatchlist() {
   const t = useTranslations()
@@ -45,7 +45,7 @@ export function AddToWatchlist() {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="rounded-lg border border-sky-500/30 bg-sky-500/15 px-3 py-1.5 text-sm font-medium text-sky-200 hover:bg-sky-500/20"
+        className="rounded-lg bg-[var(--app-accent)] px-3 py-1.5 text-sm font-medium text-white hover:brightness-110"
       >
         {t("watchlist.addButton")}
       </button>
@@ -53,10 +53,10 @@ export function AddToWatchlist() {
   }
 
   return (
-    <div className="w-full max-w-md rounded-xl border border-slate-700/50 bg-slate-900/70 p-3">
+    <div className="app-panel w-full max-w-md rounded-xl p-3">
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-xs font-medium text-slate-400">{t("watchlist.searchCatalog")}</span>
-        <button onClick={() => setOpen(false)} className="text-xs text-slate-500 hover:text-slate-300">
+        <span className="text-xs font-medium text-[var(--app-text-muted)]">{t("watchlist.searchCatalog")}</span>
+        <button onClick={() => setOpen(false)} className="text-xs text-[var(--app-text-faint)] hover:text-[var(--app-text)]">
           {t("common.close")}
         </button>
       </div>
@@ -80,19 +80,19 @@ export function AddToWatchlist() {
           type="button"
           onClick={doSearch}
           disabled={isSearching}
-          className="shrink-0 rounded-lg border border-slate-700 px-3 text-sm text-slate-300 hover:border-slate-600 disabled:opacity-50"
+          className="shrink-0 rounded-lg border border-[var(--app-border)] px-3 text-sm text-[var(--app-text-muted)] hover:bg-[var(--app-surface-hover)] disabled:opacity-50"
         >
           {isSearching ? t("addPosition.searching") : t("common.search")}
         </button>
       </div>
 
-      {searched && results.length === 0 && <p className="mt-2 text-xs text-slate-500">{t("common.noMatches")}</p>}
+      {searched && results.length === 0 && <p className="mt-2 text-xs text-[var(--app-text-faint)]">{t("common.noMatches")}</p>}
 
       <div className="mt-2 max-h-64 space-y-2 overflow-y-auto">
         {results.map((inst) => (
-          <div key={inst.id} className="rounded-lg border border-slate-800 bg-slate-900/60 p-2">
-            <p className="mb-1 text-sm text-slate-200">
-              {inst.name} <span className="text-slate-500">· {inst.asset_type}</span>
+          <div key={inst.id} className="app-muted-panel rounded-lg p-2">
+            <p className="mb-1 text-sm text-[var(--app-text)]">
+              {inst.name} <span className="text-[var(--app-text-faint)]">· {inst.asset_type}</span>
             </p>
             <div className="flex flex-wrap gap-1.5">
               {inst.listings.map((l) => (
@@ -101,12 +101,12 @@ export function AddToWatchlist() {
                   type="button"
                   disabled={isAdding}
                   onClick={() => add(l.id)}
-                  className="rounded-md border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-300 hover:border-sky-500/50 hover:text-sky-200 disabled:opacity-50"
+                  className="rounded-md border border-[var(--app-border)] bg-[var(--app-surface-raised)] px-2 py-1 text-xs text-[var(--app-text-muted)] hover:border-[var(--app-border-strong)] hover:text-[var(--app-accent)] disabled:opacity-50"
                 >
                   {l.symbol} · {l.exchange_mic ?? "?"} · {l.currency}
                 </button>
               ))}
-              {inst.listings.length === 0 && <span className="text-xs text-slate-600">{t("common.noListings")}</span>}
+              {inst.listings.length === 0 && <span className="text-xs text-[var(--app-text-faint)]">{t("common.noListings")}</span>}
             </div>
           </div>
         ))}

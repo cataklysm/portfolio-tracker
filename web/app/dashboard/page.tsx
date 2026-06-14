@@ -3,7 +3,6 @@ import { apiFetch } from "@/lib/api"
 import { getLocale } from "@/lib/locale"
 import { DashboardOverview } from "@/components/DashboardOverview"
 import { CreatePortfolioForm } from "@/components/CreatePortfolioForm"
-import { ThemeToggle } from "@/components/ThemeToggle"
 import { getTranslations } from "@/lib/i18n"
 import type { PositionView, Portfolio, MeData } from "@/lib/types"
 
@@ -60,7 +59,6 @@ export default async function DashboardPage({ searchParams }: Props) {
         </div>
         <div className="flex items-center gap-2">
           {latestQuote && <span className="text-[9px] text-[var(--app-text-faint)]">{t("dashboard.quotesAsOf", { time: new Date(latestQuote).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" }) })}</span>}
-          <ThemeToggle />
           <Link href="/positions/add" className="rounded-lg bg-[var(--app-accent)] px-3 py-2 text-xs font-semibold text-white transition hover:brightness-110">{t("dashboard.addPosition")}</Link>
         </div>
       </header>

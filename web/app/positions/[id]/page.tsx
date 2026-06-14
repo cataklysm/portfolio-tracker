@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import type { CorporateAction, EarningsRow, FairValueEstimate, Fundamentals, ListingDetail, NewsItem, PositionDetail, PriceTarget, SparklinePoint } from "@/lib/types"
+import type { AlertRule, CorporateAction, EarningsRow, FairValueEstimate, Fundamentals, ListingDetail, NewsItem, NotificationInbox, NotificationItem, PositionDetail, PriceTarget, SparklinePoint } from "@/lib/types"
 import { apiFetch } from "@/lib/api"
 import { getLocale } from "@/lib/locale"
 import { getTranslations } from "@/lib/i18n"
@@ -11,9 +11,10 @@ import { AddTransactionModal } from "@/components/AddTransactionModal"
 import { ListingSettings } from "@/components/ListingSettings"
 import { FairValueSection } from "@/components/FairValueSection"
 import { FundamentalsSection } from "@/components/FundamentalsSection"
-import { EventsSection } from "@/components/EventsSection"
+import { EventsSection, NewsSection } from "@/components/EventsSection"
 import { PriceTargetsSection } from "@/components/PriceTargetsSection"
 import { DeletePositionButton } from "@/components/DeletePositionButton"
+import { AssetAlerts } from "@/components/AssetAlerts"
 
 async function fetchInsights<T>(instrumentId: string | null, path: string): Promise<T[]> {
   if (!instrumentId) return []
@@ -47,6 +48,32 @@ async function fetchEventsData(instrumentId: string | null): Promise<EventsData>
     earnings: e.ok ? ((await e.json()) as EarningsRow[]) : [],
     corporateActions: c.ok ? ((await c.json()) as CorporateAction[]) : [],
     news: n.ok ? ((await n.json()) as NewsItem[]) : [],
+  }
+}
+
+interface NotificationData {
+  rules: AlertRule[]
+  notifications: NotificationItem[]
+}
+
+/** Configured rules and recent fired notifications scoped to an instrument. */
+async function fetchNotificationData(instrumentId: string | null): Promise<NotificationData> {
+  if (!instrumentId) return { rules: [], notifications: [] }
+  try {
+    const [rulesResp, inboxResp] = await Promise.all([
+      apiFetch("/notifications/rules", { cache: "no-store" }),
+      apiFetch("/notifications?limit=100", { cache: "no-store" }),
+    ])
+    const rules = rulesResp.ok ? ((await rulesResp.json()) as AlertRule[]) : []
+    const inbox: NotificationInbox = inboxResp.ok
+      ? ((await inboxResp.json()) as NotificationInbox)
+      : { unread_count: 0, notifications: [] }
+    return {
+      rules: rules.filter((rule) => rule.instrument_id === instrumentId),
+      notifications: inbox.notifications.filter((notification) => notification.instrument_id === instrumentId),
+    }
+  } catch {
+    return { rules: [], notifications: [] }
   }
 }
 
@@ -90,13 +117,14 @@ export default async function PositionDetailPage({ params }: Props) {
 
   const pos = (await resp.json()) as PositionDetail
   const instrumentId = pos.listing?.instrument_id ?? null
-  const [listingResp, seriesResp, fairValues, priceTargets, fundamentals, events] = await Promise.all([
+  const [listingResp, seriesResp, fairValues, priceTargets, fundamentals, events, notificationData] = await Promise.all([
     apiFetch(`/listings/${pos.listing_id}`, { cache: "no-store" }),
     apiFetch(`/quotes/${pos.listing_id}/series?limit=365`, { cache: "no-store" }),
     fetchInsights<FairValueEstimate>(instrumentId, "fair-values"),
     fetchInsights<PriceTarget>(instrumentId, "price-targets"),
     fetchFundamentals(instrumentId),
     fetchEventsData(instrumentId),
+    fetchNotificationData(instrumentId),
   ])
   const listing = listingResp.ok ? ((await listingResp.json()) as ListingDetail) : null
   const chartSeries = seriesResp.ok ? ((await seriesResp.json()) as SparklinePoint[]) : pos.sparkline
@@ -169,7 +197,8 @@ export default async function PositionDetailPage({ params }: Props) {
                 <Section title={t("positionDetail.fairValue")}><FairValueSection positionId={pos.id} instrumentId={instrumentId} currency={listingCurrency} currentPrice={price} items={fairValues} /></Section>
                 <Section title={t("positionDetail.priceTargets")}><PriceTargetsSection positionId={pos.id} instrumentId={instrumentId} currency={listingCurrency} currentPrice={price} items={priceTargets} /></Section>
               </div>
-              <Section title={t("positionDetail.events")}><EventsSection earnings={events.earnings} corporateActions={events.corporateActions} news={events.news} currency={listingCurrency} locale={locale} /></Section>
+              <Section title={t("positionDetail.events")}><EventsSection earnings={events.earnings} corporateActions={events.corporateActions} currency={listingCurrency} locale={locale} /></Section>
+              <Section title={t("events.newsTitle")}><NewsSection news={events.news} locale={locale} /></Section>
             </>
           ) : null}
         </div>
@@ -184,6 +213,22 @@ export default async function PositionDetailPage({ params }: Props) {
             <FactRow label="Quote status" value={pos.freshness_status ?? "unknown"} tone={pos.freshness_status === "fresh" ? "positive" : "warning"} />
             <FactRow label="Quote as of" value={pos.quote_as_of ? new Date(pos.quote_as_of).toLocaleDateString(locale) : "—"} />
           </Section>
+
+          {instrumentId ? (
+            <Section title="Asset alerts">
+              <AssetAlerts
+                positionId={pos.id}
+                instrumentId={instrumentId}
+                listingId={pos.listing_id}
+                symbol={pos.listing?.symbol ?? pos.listing_id}
+                currency={listingCurrency}
+                currentPrice={price}
+                locale={locale}
+                rules={notificationData.rules}
+                notifications={notificationData.notifications}
+              />
+            </Section>
+          ) : null}
 
           {listing ? <Section title={t("positionDetail.instrumentAndData")}><ListingSettings positionId={pos.id} listing={listing} instrumentName={pos.listing?.name ?? ""} firstTransactionDate={firstTransactionDate} /></Section> : null}
 

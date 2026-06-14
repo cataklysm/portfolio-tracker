@@ -9,6 +9,20 @@ export interface LedgerTransaction {
   quantity: string;
   price: string;
   fee: string;
+  /**
+   * Trade currency and tax-relevant value date. Optional on the minimal ledger
+   * contract, but always present on stored transactions; used to convert
+   * realized amounts and fees at the historical FX rate of their value date.
+   */
+  currency?: string;
+  tax_relevant_value_date?: string;
+}
+
+/** An amount tagged with the currency and value date at which it was realized. */
+export interface DatedAmount {
+  amount: Decimal;
+  currency: string;
+  valueDate: string;
 }
 
 export interface RealizationResult {
@@ -32,6 +46,10 @@ export interface RealizationResult {
   grossSellProceeds: Decimal;
   /** All buy and sell fees combined. */
   totalFees: Decimal;
+  /** Realized P&L per sell, tagged with the sell's currency + value date. */
+  realizedByDate: DatedAmount[];
+  /** Fee per transaction (buy and sell), tagged with currency + value date. */
+  feesByDate: DatedAmount[];
 }
 
 interface OpenLot {
@@ -62,12 +80,15 @@ function fifoLifo(transactions: LedgerTransaction[], method: 'fifo' | 'lifo'): R
   let totalContributedCapital = new D(0);
   let grossSellProceeds = new D(0);
   let totalFees = new D(0);
+  const realizedByDate: DatedAmount[] = [];
+  const feesByDate: DatedAmount[] = [];
 
   for (const tx of transactions) {
     const qty = dec(tx.quantity);
     const price = dec(tx.price);
     const fee = dec(tx.fee);
     totalFees = totalFees.plus(fee);
+    if (fee.gt(0)) feesByDate.push(datedAmount(fee, tx));
 
     if (tx.side === 'buy') {
       totalContributedCapital = totalContributedCapital.plus(qty.times(price));
@@ -96,8 +117,10 @@ function fifoLifo(transactions: LedgerTransaction[], method: 'fifo' | 'lifo'): R
       }
     }
     // Realized P&L = proceeds - sell fee - cost of consumed lots.
-    realizedPnl = realizedPnl.plus(qty.times(price).minus(fee).minus(consumedCost));
+    const sellRealized = qty.times(price).minus(fee).minus(consumedCost);
+    realizedPnl = realizedPnl.plus(sellRealized);
     realizedCostBasis = realizedCostBasis.plus(consumedCost);
+    realizedByDate.push(datedAmount(sellRealized, tx));
   }
 
   const openQuantity = lots.reduce((s, l) => s.plus(l.quantity), new D(0));
@@ -112,6 +135,8 @@ function fifoLifo(transactions: LedgerTransaction[], method: 'fifo' | 'lifo'): R
     totalContributedCapital,
     grossSellProceeds,
     totalFees,
+    realizedByDate,
+    feesByDate,
   };
 }
 
@@ -123,12 +148,15 @@ function averageCost(transactions: LedgerTransaction[]): RealizationResult {
   let totalContributedCapital = new D(0);
   let grossSellProceeds = new D(0);
   let totalFees = new D(0);
+  const realizedByDate: DatedAmount[] = [];
+  const feesByDate: DatedAmount[] = [];
 
   for (const tx of transactions) {
     const qty = dec(tx.quantity);
     const price = dec(tx.price);
     const fee = dec(tx.fee);
     totalFees = totalFees.plus(fee);
+    if (fee.gt(0)) feesByDate.push(datedAmount(fee, tx));
 
     if (tx.side === 'buy') {
       totalContributedCapital = totalContributedCapital.plus(qty.times(price));
@@ -143,8 +171,10 @@ function averageCost(transactions: LedgerTransaction[]): RealizationResult {
     }
     const avgUnitCost = openQuantity.gt(0) ? openCostBasis.div(openQuantity) : new D(0);
     const consumedCost = qty.times(avgUnitCost);
-    realizedPnl = realizedPnl.plus(qty.times(price).minus(fee).minus(consumedCost));
+    const sellRealized = qty.times(price).minus(fee).minus(consumedCost);
+    realizedPnl = realizedPnl.plus(sellRealized);
     realizedCostBasis = realizedCostBasis.plus(consumedCost);
+    realizedByDate.push(datedAmount(sellRealized, tx));
     openQuantity = openQuantity.minus(qty);
     openCostBasis = openCostBasis.minus(consumedCost);
   }
@@ -158,7 +188,14 @@ function averageCost(transactions: LedgerTransaction[]): RealizationResult {
     totalContributedCapital,
     grossSellProceeds,
     totalFees,
+    realizedByDate,
+    feesByDate,
   };
+}
+
+/** Tags an amount with the transaction's trade currency and value date. */
+function datedAmount(amount: Decimal, tx: LedgerTransaction): DatedAmount {
+  return { amount, currency: tx.currency ?? '', valueDate: tx.tax_relevant_value_date ?? '' };
 }
 
 function invalidResult(
@@ -175,5 +212,7 @@ function invalidResult(
     totalContributedCapital,
     grossSellProceeds,
     totalFees,
+    realizedByDate: [],
+    feesByDate: [],
   };
 }

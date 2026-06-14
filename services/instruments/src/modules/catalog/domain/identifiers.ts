@@ -4,7 +4,7 @@
  * constraints behave consistently regardless of how the value was entered.
  */
 
-export const ASSET_TYPES = ['equity', 'crypto'] as const;
+export const ASSET_TYPES = ['equity', 'crypto', 'fund'] as const;
 export type AssetType = (typeof ASSET_TYPES)[number];
 
 export function normalizeSymbol(symbol: string): string {

@@ -1,5 +1,5 @@
 import { dec } from '../domain/money.js';
-import { makeConverter } from '../domain/currency.js';
+import { makeConverter, makeDatedConverter } from '../domain/currency.js';
 import { computeRealization, type AccountingMethod } from '../domain/realization.js';
 import { computePerformance, type PerformanceMetrics } from '../domain/performance.js';
 import { deriveState, type PositionState } from '../domain/position-state.js';
@@ -14,7 +14,7 @@ export interface PositionView {
     instrument_id: string;
     symbol: string;
     name: string;
-    asset_type: 'equity' | 'crypto';
+    asset_type: 'equity' | 'crypto' | 'fund';
     currency: string;
   } | null;
   quote_as_of: string | null;
@@ -28,6 +28,8 @@ export interface BuildPositionViewArgs {
   listing: ListingSummary | undefined;
   quote: QuotePair | undefined;
   eurRates: Map<string, string>;
+  /** Historical EUR-based rates keyed `${currency}@${date}` for value-date conversion. */
+  historicalRates?: Map<string, string>;
   reportingCurrency: string;
   method: AccountingMethod;
 }
@@ -46,6 +48,9 @@ export function buildPositionView(args: BuildPositionViewArgs): PositionView {
   const latestPrice = args.quote?.latest ? dec(args.quote.latest) : null;
   const previousPrice = args.quote?.previous ? dec(args.quote.previous) : null;
   const convertToReporting = makeConverter(args.eurRates, listingCurrency, args.reportingCurrency);
+  const convertAt = args.historicalRates
+    ? makeDatedConverter(args.historicalRates, args.reportingCurrency)
+    : undefined;
 
   const performance = computePerformance({
     realization,
@@ -54,6 +59,7 @@ export function buildPositionView(args: BuildPositionViewArgs): PositionView {
     listingCurrency,
     reportingCurrency: args.reportingCurrency,
     convertToReporting,
+    convertAt,
   });
 
   return {

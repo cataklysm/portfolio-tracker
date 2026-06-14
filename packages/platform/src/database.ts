@@ -11,6 +11,11 @@ pg.types.setTypeParser(pg.types.builtins.NUMERIC, (value) => value);
 // int8/bigint as string as well — creation sequences and aggregate versions
 // can exceed Number.MAX_SAFE_INTEGER over time.
 pg.types.setTypeParser(pg.types.builtins.INT8, (value) => value);
+// DATE columns as the raw 'YYYY-MM-DD' string. The default driver parses them
+// into a Date at local midnight, which then shifts a day when reserialized to
+// ISO/UTC. Every schema types date columns (tax_relevant_value_date,
+// payment_date, …) as strings, so keep the calendar date verbatim.
+pg.types.setTypeParser(pg.types.builtins.DATE, (value) => value);
 
 export interface DatabaseOptions {
   connectionString: string;

@@ -3,6 +3,7 @@ import { computeRealization, type AccountingMethod } from '../domain/realization
 import { deriveState } from '../domain/position-state.js';
 import { buildPositionView, type PositionView } from './build-position-view.js';
 import type {
+  DatedRateRequest,
   FxReader,
   ListingReader,
   NewTransaction,
@@ -68,7 +69,11 @@ export class PositionService {
     ]);
 
     const currencies = collectCurrencies(listings.values(), reportingCurrency);
-    const eurRates = await this.deps.fx.getEurRates(currencies, bearerToken);
+    const allTxns = [...txnsByPosition.values()].flat();
+    const [eurRates, historicalRates] = await Promise.all([
+      this.deps.fx.getEurRates(currencies, bearerToken),
+      this.deps.fx.getEurRatesAt(collectDatedRatePairs(allTxns, reportingCurrency), bearerToken),
+    ]);
 
     return positions.map((position) =>
       buildPositionView({
@@ -77,6 +82,7 @@ export class PositionService {
         listing: listings.get(position.listing_id),
         quote: quotes.get(position.listing_id),
         eurRates,
+        historicalRates,
         reportingCurrency,
         method: accountingMethod,
       }),
@@ -96,7 +102,10 @@ export class PositionService {
 
     const listing = listings.get(position.listing_id);
     const currencies = collectCurrencies(listings.values(), reportingCurrency);
-    const eurRates = await this.deps.fx.getEurRates(currencies, bearerToken);
+    const [eurRates, historicalRates] = await Promise.all([
+      this.deps.fx.getEurRates(currencies, bearerToken),
+      this.deps.fx.getEurRatesAt(collectDatedRatePairs(transactions, reportingCurrency), bearerToken),
+    ]);
 
     const view = buildPositionView({
       position,
@@ -104,6 +113,7 @@ export class PositionService {
       listing,
       quote: quotes.get(position.listing_id),
       eurRates,
+      historicalRates,
       reportingCurrency,
       method: accountingMethod,
     });
@@ -291,6 +301,26 @@ function collectCurrencies(
   for (const listing of listings) set.add(listing.currency);
   set.delete('EUR');
   return [...set];
+}
+
+/**
+ * The (currency, value-date) pairs whose historical EUR rate is needed to convert
+ * each transaction's realized P&L and fees: the trade currency and the reporting
+ * currency, both at the transaction's tax-relevant value date. Deduped (and EUR
+ * dropped) by the FX client.
+ */
+function collectDatedRatePairs(
+  transactions: StoredTransaction[],
+  reportingCurrency: string,
+): DatedRateRequest[] {
+  const pairs: DatedRateRequest[] = [];
+  for (const tx of transactions) {
+    const date = tx.tax_relevant_value_date;
+    if (!date) continue;
+    pairs.push({ currency: tx.currency, date });
+    pairs.push({ currency: reportingCurrency, date });
+  }
+  return pairs;
 }
 
 function serializeTransaction(tx: StoredTransaction): PositionDetail['transactions'][number] {

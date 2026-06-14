@@ -22,6 +22,11 @@ const TYPE_THEME: Record<string, TypeTheme> = {
     pillActive: "border-violet-300/80 shadow-[0_0_22px_rgba(167,139,250,0.55)]",
     avatarText: "text-violet-300",
   },
+  fund: {
+    pill: "border-emerald-400/55 bg-emerald-500/10 text-emerald-200 shadow-[0_0_14px_rgba(52,211,153,0.28)]",
+    pillActive: "border-emerald-300/80 shadow-[0_0_22px_rgba(52,211,153,0.55)]",
+    avatarText: "text-emerald-300",
+  },
 }
 const FALLBACK_THEME: TypeTheme = {
   pill: "border-slate-500/50 bg-slate-500/10 text-slate-200",

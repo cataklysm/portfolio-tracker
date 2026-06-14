@@ -115,6 +115,7 @@ export const en = {
     type: "Type",
     equity: "Equity",
     crypto: "Crypto",
+    fund: "Fund",
     symbol: "Symbol",
     symbolPlaceholder: "e.g. AAPL",
     exchange: "Exchange",

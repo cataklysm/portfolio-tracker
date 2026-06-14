@@ -117,6 +117,7 @@ export function AddPositionForm({ portfolios, exchanges }: { portfolios: Portfol
               <select id="asset_type" name="asset_type" className={inputClass}>
                 <option value="equity">{t("addPosition.equity")}</option>
                 <option value="crypto">{t("addPosition.crypto")}</option>
+                <option value="fund">{t("addPosition.fund")}</option>
               </select>
             </div>
             <div>

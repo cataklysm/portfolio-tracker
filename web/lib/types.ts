@@ -32,6 +32,7 @@ export interface PerformanceData {
   reporting_currency: string
   current_price: string | null
   daily_change_pct: string | null
+  daily_change_amount_reporting: string | null
   open_cost_basis_reporting: string | null
   current_value_reporting: string | null
   unrealized_pnl_reporting: string | null
@@ -46,7 +47,7 @@ export interface ListingSummary {
   instrument_id: string
   symbol: string
   name: string
-  asset_type: "equity" | "crypto"
+  asset_type: "equity" | "crypto" | "fund"
   currency: string
 }
 
@@ -106,7 +107,7 @@ export interface InstrumentListing {
 export interface InstrumentWithListings {
   id: string
   name: string
-  asset_type: "equity" | "crypto"
+  asset_type: "equity" | "crypto" | "fund"
   isin: string | null
   primary_listing_id: string | null
   listings: InstrumentListing[]
@@ -294,7 +295,7 @@ export interface WatchlistItemView {
     instrument_id: string
     symbol: string
     name: string
-    asset_type: "equity" | "crypto"
+    asset_type: "equity" | "crypto" | "fund"
     currency: string
   } | null
   current_price: string | null

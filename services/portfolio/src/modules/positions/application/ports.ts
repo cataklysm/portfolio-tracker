@@ -67,7 +67,7 @@ export interface ListingSummary {
   instrument_id: string;
   symbol: string;
   name: string;
-  asset_type: 'equity' | 'crypto';
+  asset_type: 'equity' | 'crypto' | 'fund';
   currency: string;
 }
 
@@ -91,9 +91,20 @@ export interface QuoteReader {
   getSeries(listingId: string, limit: number, bearerToken: string): Promise<{ time: Date; price: string }[]>;
 }
 
+/** A (currency, value date) pair to resolve a historical EUR-based rate for. */
+export interface DatedRateRequest {
+  currency: string;
+  date: string;
+}
+
 export interface FxReader {
   /** Latest EUR-based rates (units of currency per 1 EUR) for the given currencies. */
   getEurRates(currencies: string[], bearerToken: string): Promise<Map<string, string>>;
+  /**
+   * Historical EUR-based rates for specific value dates, keyed `${currency}@${date}`
+   * (on-or-before the requested date). EUR is implicit (rate 1) and not returned.
+   */
+  getEurRatesAt(requests: DatedRateRequest[], bearerToken: string): Promise<Map<string, string>>;
 }
 
 export interface UserSettings {

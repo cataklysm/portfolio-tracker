@@ -32,7 +32,7 @@ export interface ExchangesTable {
 export interface InstrumentsTable {
   id: Generated<string>;
   name: string;
-  asset_type: 'equity' | 'crypto';
+  asset_type: 'equity' | 'crypto' | 'fund';
   isin: string | null;
   underlying_identifier: string | null;
   primary_listing_id: string | null;

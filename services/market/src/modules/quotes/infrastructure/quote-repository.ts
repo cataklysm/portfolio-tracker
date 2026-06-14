@@ -10,25 +10,44 @@ export class KyselyQuoteRepository implements QuoteRepository {
     const map = new Map<string, StoredQuotePair>();
     if (listingIds.length === 0) return map;
 
-    const ranked = this.db
-      .selectFrom('market.price_quotes')
-      .select(['listing_id', 'time', 'price', 'currency'])
-      .select(sql<number>`row_number() over (partition by listing_id order by time desc)`.as('rn'))
-      .where('listing_id', 'in', listingIds);
+    // `latest` is the most recent tick. `previous` is the **prior session close**:
+    // the most recent quote on an earlier calendar day than the latest tick — so
+    // a day's intraday ticks never count as "previous". The calendar day is taken
+    // in UTC (deterministic, no exchange-tz dependency); full exchange-session /
+    // holiday-aware boundaries are deferred (see the market session-status work).
+    // When no earlier-day quote exists, `previous` is null and the daily change is
+    // genuinely unknown rather than an intraday delta.
+    const rows = await sql<{
+      listing_id: string;
+      time: Date;
+      price: string;
+      currency: string;
+      is_latest: boolean;
+    }>`
+      WITH base AS (
+        SELECT listing_id, time, price, currency,
+               max(time) OVER (PARTITION BY listing_id) AS latest_time
+        FROM market.price_quotes
+        WHERE listing_id = ANY(${sql.val(listingIds)})
+      ),
+      ranked AS (
+        SELECT *,
+               (time = latest_time) AS is_latest,
+               ((time AT TIME ZONE 'UTC')::date < (latest_time AT TIME ZONE 'UTC')::date) AS is_prior_day,
+               row_number() OVER (
+                 PARTITION BY listing_id
+                 ORDER BY ((time AT TIME ZONE 'UTC')::date < (latest_time AT TIME ZONE 'UTC')::date) DESC, time DESC
+               ) AS r
+        FROM base
+      )
+      SELECT listing_id, time, price, currency, is_latest
+      FROM ranked
+      WHERE is_latest OR (is_prior_day AND r = 1)
+    `.execute(this.db);
 
-    const rows = await this.db
-      .selectFrom(ranked.as('q'))
-      .select(['q.listing_id as listing_id', 'q.time as time', 'q.price as price', 'q.currency as currency', 'q.rn as rn'])
-      .where('q.rn', '<=', 2)
-      .orderBy('q.listing_id')
-      .orderBy('q.rn')
-      .execute();
-
-    for (const row of rows) {
+    for (const row of rows.rows) {
       const existing = map.get(row.listing_id) ?? { latest: null, previous: null, currency: null, latestAt: null };
-      // row_number() is bigint, which the pg int8 type parser returns as a
-      // string — so coerce before comparing (a strict `=== 1` is always false).
-      if (Number(row.rn) === 1) {
+      if (row.is_latest) {
         existing.latest = row.price;
         existing.currency = row.currency;
         existing.latestAt = row.time;

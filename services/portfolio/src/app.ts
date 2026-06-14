@@ -31,6 +31,12 @@ import {
   KyselyWatchlistRepository,
   registerWatchlistRoutes,
 } from './modules/watchlist/index.js';
+import {
+  CashFlowService,
+  KyselyCashFlowRepository,
+  registerCashFlowRoutes,
+} from './modules/cash-flows/index.js';
+import { ReportingService, registerReportingRoutes } from './modules/reporting/index.js';
 
 export interface BuiltService {
   app: FastifyInstance;
@@ -60,7 +66,9 @@ export async function buildApp(config: PortfolioConfig): Promise<BuiltService> {
   const fxClient = new MarketFxClient(config.marketBaseUrl, logger);
   const settingsClient = new AuthSettingsClient(config.authBaseUrl);
 
-  const portfolioService = new PortfolioService(new KyselyPortfolioRepository(db));
+  const portfolioRepo = new KyselyPortfolioRepository(db);
+  const cashFlowRepo = new KyselyCashFlowRepository(db);
+  const portfolioService = new PortfolioService(portfolioRepo);
   const watchlistService = new WatchlistService({
     repo: new KyselyWatchlistRepository(db),
     listings: listingClient,
@@ -70,6 +78,14 @@ export async function buildApp(config: PortfolioConfig): Promise<BuiltService> {
     repo: new KyselyPositionRepository(db),
     listings: listingClient,
     quotes: quoteClient,
+    fx: fxClient,
+    settings: settingsClient,
+  });
+  const cashFlowService = new CashFlowService(cashFlowRepo);
+  const reportingService = new ReportingService({
+    positions: positionService,
+    cashFlows: cashFlowRepo,
+    portfolios: portfolioRepo,
     fx: fxClient,
     settings: settingsClient,
   });
@@ -93,6 +109,8 @@ export async function buildApp(config: PortfolioConfig): Promise<BuiltService> {
   registerPortfolioRoutes(app, { service: portfolioService, ...authDeps });
   registerPositionRoutes(app, { service: positionService, ...authDeps });
   registerWatchlistRoutes(app, { service: watchlistService, ...authDeps });
+  registerCashFlowRoutes(app, { service: cashFlowService, ...authDeps });
+  registerReportingRoutes(app, { service: reportingService, ...authDeps });
 
   // Redis is a required dependency for the event bus: connect last so wiring
   // and route-registration errors surface before the fail-fast dependency check.

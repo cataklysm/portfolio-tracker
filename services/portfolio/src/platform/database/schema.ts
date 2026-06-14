@@ -56,6 +56,26 @@ export interface TransactionsTable {
   updated_at: Timestamp;
 }
 
+export interface CashFlowsTable {
+  id: Generated<string>;
+  user_id: string;
+  portfolio_id: string;
+  position_id: string | null;
+  corporate_action_id: string | null;
+  corporate_action_application_id: string | null;
+  type: 'dividend' | 'deposit' | 'withdrawal' | 'cash_in_lieu';
+  gross_amount: Numeric;
+  withholding_tax: ColumnType<string, string | number | undefined, string | number>;
+  fee: ColumnType<string, string | number | undefined, string | number>;
+  net_amount: Numeric;
+  currency: string;
+  payment_date: ColumnType<string, string, string>;
+  tax_relevant_value_date: ColumnType<string, string, string>;
+  note: string | null;
+  created_at: Generated<Date>;
+  updated_at: Timestamp;
+}
+
 export interface WatchlistItemsTable {
   id: Generated<string>;
   user_id: string;
@@ -85,6 +105,7 @@ export interface PortfolioDatabase {
   'portfolio.portfolios': PortfoliosTable;
   'portfolio.positions': PositionsTable;
   'portfolio.transactions': TransactionsTable;
+  'portfolio.cash_flows': CashFlowsTable;
   'portfolio.watchlist_items': WatchlistItemsTable;
   'portfolio.outbox_events': OutboxEventsTable;
 }

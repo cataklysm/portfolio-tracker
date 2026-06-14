@@ -22,6 +22,7 @@ export const GATEWAY_ROUTES: GatewayRoute[] = [
   { prefix: '/me', upstream: 'authentication', protected: true },
   { prefix: '/portfolios', upstream: 'portfolio', protected: true },
   { prefix: '/positions', upstream: 'portfolio', protected: true },
+  { prefix: '/reporting', upstream: 'portfolio', protected: true },
   { prefix: '/watchlist', upstream: 'portfolio', protected: true },
   { prefix: '/instruments', upstream: 'instruments', protected: true },
   { prefix: '/exchanges', upstream: 'instruments', protected: true },

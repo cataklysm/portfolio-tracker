@@ -6,7 +6,7 @@ interface ListingResponseItem {
   instrument_id: string;
   symbol: string;
   name: string;
-  asset_type: 'equity' | 'crypto';
+  asset_type: 'equity' | 'crypto' | 'fund';
   currency: string;
 }
 

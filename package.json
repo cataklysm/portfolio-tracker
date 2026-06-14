@@ -24,7 +24,9 @@
     "insights:dev": "node --env-file=.env --watch --import tsx services/insights/src/server.ts",
     "web:dev": "pnpm --filter @portfolio/web dev",
     "build": "pnpm --filter @portfolio/web build",
-    "typecheck": "tsc --noEmit && pnpm --filter @portfolio/web typecheck"
+    "typecheck": "tsc --noEmit && pnpm --filter @portfolio/web typecheck",
+    "test": "node --import tsx --test \"services/**/*.test.ts\" \"packages/**/*.test.ts\"",
+    "test:watch": "node --import tsx --test --watch \"services/**/*.test.ts\" \"packages/**/*.test.ts\""
   },
   "dependencies": {
     "pg": "^8.21.0"

@@ -200,11 +200,23 @@ export class PositionService {
   async getOpenPositionCostBases(userId: string): Promise<{ listing_id: string; avg_cost: string }[]> {
     const positions = (await this.deps.repo.listPositionsForUser(userId)).filter((p) => p.state === 'open');
     if (positions.length === 0) return [];
-    const txMap = await this.deps.repo.listTransactionsForPositions(positions.map((p) => p.id));
+    const positionIds = positions.map((p) => p.id);
+    const [txMap, splitsByPosition] = await Promise.all([
+      this.deps.repo.listTransactionsForPositions(positionIds),
+      this.activeSplits(positionIds),
+    ]);
+    const asOf = todayIso();
 
     const out: { listing_id: string; avg_cost: string }[] = [];
     for (const position of positions) {
-      const realization = computeRealization(txMap.get(position.id) ?? [], 'average_cost');
+      // Replay any applied splits so the open quantity (and hence per-share avg
+      // cost) is restated to today's share count, matching the live snapshot.
+      const realization = computeRealization(
+        txMap.get(position.id) ?? [],
+        'average_cost',
+        splitsByPosition.get(position.id) ?? [],
+        asOf,
+      );
       if (realization.invalid || !realization.openQuantity.gt(0)) continue;
       out.push({
         listing_id: position.listing_id,

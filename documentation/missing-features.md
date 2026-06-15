@@ -29,6 +29,7 @@ The following items previously listed as missing are now implemented.
 | Transaction-level P&L attribution | `GET /positions/:id` transactions carry a `performance` object: per-sell realized P&L (value-date FX) and per-buy open-lot unrealized P&L (FIFO/LIFO, latest FX); average-cost buy remainders are null |
 | Recorded broker tax + after-tax P&L | `portfolio.tax_events` ledger (`/tax-events` CRUD, per-component withheld/refunded, optional links), effective-dated tax residence (`/tax-residency`, auth-owned), and `GET /reporting/tax` reconciling gross realized P&L with net actual tax; web tax centre + residence settings |
 | Persisted realization allocations | Each recalculation writes FIFO/LIFO lot consumption + average-cost realizations to the audit tables (versioned, atomic replace); `GET /positions/:id/allocations` |
+| Source provenance + change history | `source` on transactions/cash flows/tax events + append-only `portfolio.booking_changes` (who/what/when, before/after) recorded on every create/update/delete; `GET /changes` |
 | `fund` support | Supported by instruments, portfolio contracts, frontend contracts, and dashboard grouping |
 | Events service | Earnings, corporate actions, news, refresh workflows, and web pages are implemented |
 | Notifications service | Inbox, asset-scoped rules, alert evaluation, header badge, settings, and asset-detail UI |
@@ -237,6 +238,34 @@ financial calculation and require thorough tests before exposing the values.
 > on `/me`. **Deferred:** broker-account/statement links (columns exist, unused) and
 > statement import.
 
+### Remaining Position-Scoped Reporting Gap
+
+Portfolio-wide and single-portfolio tax reporting is authoritative through
+`GET /reporting/tax`, but there is no equivalent position-scoped tax-report
+contract. The asset-detail frontend currently has to:
+
+- Combine tax events explicitly linked to the position with tax events joined
+  to its transactions.
+- Deduplicate those events by ID.
+- Fetch booking-date FX rates and calculate net recorded tax and after-tax
+  realized P&L itself.
+
+Add an authoritative position-scoped report, preferably
+`GET /positions/:id/tax-report`, returning the same core semantics as
+`GET /reporting/tax`:
+
+- `actual_tax_withheld`
+- `actual_tax_refunded`
+- `net_actual_tax`
+- `realized_pnl_after_actual_tax`
+- `status`, component breakdown, and event count
+
+It must include all attributable position, transaction, and position-linked
+cash-flow tax events, convert them at booking-date FX, deduplicate events, and
+preserve signed net tax semantics. A negative `net_actual_tax` represents a net
+refund or tax credit, including loss-harvesting effects. This removes duplicate
+financial calculation logic and booking-date FX N+1 reads from the frontend.
+
 ### Current State
 
 The current platform stores `withholding_tax` only for dividend and
@@ -442,8 +471,32 @@ For strict report consistency, add either:
 > allocations into `portfolio.realization_allocations` (FIFO/LIFO lot consumption)
 > and `portfolio.average_cost_realizations`, stamped with the position's
 > `calculation_version` and replaced atomically on each mutation.
-> `GET /positions/:id/allocations` exposes the current snapshot. Remaining:
-> correction/change history (Phase A-2 in [backend-roadmap.md](backend-roadmap.md)).
+> `GET /positions/:id/allocations` exposes the current snapshot.
+
+Remaining backend hardening:
+
+- Add an idempotent backfill/repair workflow for legacy or imported positions
+  that existed before allocation persistence and still have
+  `calculation_version = 0`, empty calculated values, or no derived allocation
+  rows.
+- The workflow must replay each position using the owning user's current
+  accounting method, persist calculated position state and allocations through
+  the normal atomic recalculation path, and avoid creating booking-change audit
+  entries because no authoritative transaction changed.
+- Run it explicitly after the allocation-persistence migration and make it safe
+  to rerun. A startup scan may report remaining stale positions, but should not
+  silently perform a potentially large repair on every service start.
+- Expose enough status to distinguish:
+  - A position with no sells and therefore legitimately no allocation rows.
+  - A position not yet recalculated/backfilled.
+  - An invalid ledger that could not be repaired.
+- Add tests for open and closed FIFO/LIFO positions, average-cost positions,
+  partial lot consumption, positions with no sells, invalid ledgers, and
+  idempotent reruns.
+
+Until the backfill is complete, the web UI derives missing display allocations
+from the ordered transaction ledger as a compatibility fallback. Persisted
+allocations remain the authoritative source when available.
 
 The schema contained these records but the service previously derived accounting
 only in memory. Persistence gives durable audit trails, tax exports, and explains
@@ -702,6 +755,13 @@ Add:
 - Separate invested value, available cash, and complete account net value.
 
 ### P0: Source Provenance, Audit Trail, And Corrections
+
+> **Partially implemented 2026-06-14 (foundation).** `source` metadata now exists
+> on transactions, cash flows, and tax events, and `portfolio.booking_changes` is
+> an append-only audit log (who/what/when, before/after) populated on every
+> create/update/delete, surfaced at `GET /changes`. **Still open:** explicit
+> correction/reversal workflows (vs. plain edits), report-total → source drill-down
+> in the UI, manual-valuation provenance, and data-quality/completeness warnings.
 
 Financial records need to explain where they came from and how they changed.
 The current domain supports idempotency and some reversible operations, but

@@ -16,6 +16,7 @@ import type {
   RealizationAllocationView,
   SettingsReader,
   StoredTransaction,
+  StoredTransfer,
   TaxEventReader,
   TransactionTaxEvent,
 } from './ports.js';
@@ -34,6 +35,27 @@ export interface CreatePositionInput {
   portfolioId: string;
   listingId: string;
   transaction: NewTransaction;
+}
+
+/** A recorded position transfer, serialized for the API. */
+export interface SerializedTransfer {
+  id: string;
+  position_id: string;
+  source_portfolio_id: string;
+  destination_portfolio_id: string;
+  effective_at: string;
+  created_at: string;
+}
+
+function serializeTransfer(transfer: StoredTransfer): SerializedTransfer {
+  return {
+    id: transfer.id,
+    position_id: transfer.position_id,
+    source_portfolio_id: transfer.source_portfolio_id,
+    destination_portfolio_id: transfer.destination_portfolio_id,
+    effective_at: transfer.effective_at.toISOString(),
+    created_at: transfer.created_at.toISOString(),
+  };
 }
 
 /** One position's authoritative ledger plus its listing's native currency. */
@@ -395,6 +417,44 @@ export class PositionService {
   async getRealizationAllocations(userId: string, positionId: string): Promise<RealizationAllocationView> {
     await this.requireOwnedPosition(positionId, userId);
     return this.deps.repo.getRealizationAllocations(positionId);
+  }
+
+  /**
+   * Moves a position (with its full ledger) to another portfolio the user owns,
+   * preserving cost basis and history. If the destination already holds the
+   * listing the two ledgers merge into one position; otherwise the position is
+   * reassigned. Derived state is recomputed for the surviving position.
+   */
+  async transferPosition(
+    userId: string,
+    bearerToken: string,
+    positionId: string,
+    input: { destinationPortfolioId: string; effectiveAt?: Date },
+  ): Promise<{ transfer_id: string; position_id: string; merged: boolean }> {
+    const position = await this.requireOwnedPosition(positionId, userId);
+    if (position.portfolio_id === input.destinationPortfolioId) {
+      throw AppError.badRequest('transfer_same_portfolio', 'The position is already in that portfolio');
+    }
+    const ownsDestination = await this.deps.repo.assertPortfolioOwned(input.destinationPortfolioId, userId);
+    if (!ownsDestination) throw AppError.notFound('portfolio_not_found', 'Destination portfolio not found');
+
+    const result = await this.deps.repo.transferPosition({
+      positionId: position.id,
+      listingId: position.listing_id,
+      sourcePortfolioId: position.portfolio_id,
+      destinationPortfolioId: input.destinationPortfolioId,
+      effectiveAt: input.effectiveAt ?? new Date(),
+    });
+    // The merged/destination ledger changed; re-derive its state and allocations.
+    await this.recalculate(result.resultingPositionId, bearerToken);
+    return { transfer_id: result.transferId, position_id: result.resultingPositionId, merged: result.merged };
+  }
+
+  /** Recorded transfers affecting an owned position, most recent first. */
+  async listTransfers(userId: string, positionId: string): Promise<SerializedTransfer[]> {
+    await this.requireOwnedPosition(positionId, userId);
+    const transfers = await this.deps.repo.listTransfers(positionId);
+    return transfers.map(serializeTransfer);
   }
 
   private async requireOwnedPosition(positionId: string, userId: string) {

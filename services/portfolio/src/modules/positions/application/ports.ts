@@ -70,12 +70,49 @@ export interface RealizationAllocationView {
   average_cost_realizations: { sell_transaction_id: string; average_cost_basis: string; quantity: string }[];
 }
 
+/** A recorded move of a position between portfolios. */
+export interface StoredTransfer {
+  id: string;
+  position_id: string;
+  source_portfolio_id: string;
+  destination_portfolio_id: string;
+  effective_at: Date;
+  created_at: Date;
+}
+
+export interface TransferInput {
+  positionId: string;
+  listingId: string;
+  sourcePortfolioId: string;
+  destinationPortfolioId: string;
+  effectiveAt: Date;
+}
+
+export interface TransferResult {
+  transferId: string;
+  /** The surviving position after the move (same id, or the merged-into id). */
+  resultingPositionId: string;
+  /** True when the destination already held the listing and ledgers were merged. */
+  merged: boolean;
+}
+
 export interface PositionRepository {
   listPositionsForUser(userId: string, portfolioId?: string): Promise<PositionRecord[]>;
   getOwnedPosition(positionId: string, userId: string): Promise<PositionRecord | null>;
   assertPortfolioOwned(portfolioId: string, userId: string): Promise<boolean>;
+  /** The position for (portfolio, listing), if one exists. */
+  getPositionByListing(portfolioId: string, listingId: string): Promise<{ id: string } | null>;
   /** Insert or return the existing position for (portfolio, listing). */
   upsertPosition(portfolioId: string, listingId: string): Promise<{ id: string; created: boolean }>;
+  /**
+   * Moves a position to another portfolio, atomically. If the destination has no
+   * position for the listing the position is reassigned; otherwise the source
+   * ledger is re-pointed into the destination position (merge) and the empty
+   * source position removed. Records the move in `position_transfers`.
+   */
+  transferPosition(input: TransferInput): Promise<TransferResult>;
+  /** Recorded transfers affecting a position, most recent first. */
+  listTransfers(positionId: string): Promise<StoredTransfer[]>;
   listTransactions(positionId: string): Promise<StoredTransaction[]>;
   listTransactionsForPositions(positionIds: string[]): Promise<Map<string, StoredTransaction[]>>;
   /** A single transaction by ID (for audit before-snapshots), or null. */

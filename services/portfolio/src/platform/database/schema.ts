@@ -153,6 +153,16 @@ export interface AverageCostRealizationsTable {
   created_at: Generated<Date>;
 }
 
+export interface PositionTransfersTable {
+  id: Generated<string>;
+  position_id: string;
+  source_portfolio_id: string;
+  destination_portfolio_id: string;
+  effective_at: ColumnType<Date, Date | string, Date | string>;
+  creation_sequence: Generated<string>;
+  created_at: Generated<Date>;
+}
+
 export interface BookingChangesTable {
   id: Generated<string>;
   user_id: string;
@@ -203,6 +213,7 @@ export interface PortfolioDatabase {
   'portfolio.user_tax_settings': UserTaxSettingsTable;
   'portfolio.realization_allocations': RealizationAllocationsTable;
   'portfolio.average_cost_realizations': AverageCostRealizationsTable;
+  'portfolio.position_transfers': PositionTransfersTable;
   'portfolio.booking_changes': BookingChangesTable;
   'portfolio.watchlist_items': WatchlistItemsTable;
   'portfolio.outbox_events': OutboxEventsTable;

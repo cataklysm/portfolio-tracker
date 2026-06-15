@@ -8,6 +8,9 @@ import type {
   PositionWriteState,
   RealizationAllocationView,
   StoredTransaction,
+  StoredTransfer,
+  TransferInput,
+  TransferResult,
 } from '../application/ports.js';
 
 /**
@@ -48,6 +51,72 @@ export class KyselyPositionRepository implements PositionRepository {
       .where('archived_at', 'is', null)
       .executeTakeFirst();
     return row !== undefined;
+  }
+
+  async getPositionByListing(portfolioId: string, listingId: string): Promise<{ id: string } | null> {
+    const row = await this.db
+      .selectFrom('portfolio.positions')
+      .select('id')
+      .where('portfolio_id', '=', portfolioId)
+      .where('listing_id', '=', listingId)
+      .executeTakeFirst();
+    return row ?? null;
+  }
+
+  async transferPosition(input: TransferInput): Promise<TransferResult> {
+    return this.db.transaction().execute(async (trx) => {
+      const existing = await trx
+        .selectFrom('portfolio.positions')
+        .select('id')
+        .where('portfolio_id', '=', input.destinationPortfolioId)
+        .where('listing_id', '=', input.listingId)
+        .executeTakeFirst();
+
+      let resultingPositionId = input.positionId;
+      let merged = false;
+      if (existing) {
+        // Merge: re-point the source ledger into the destination position, then
+        // drop the now-empty source position. The transactions (and their ids)
+        // survive, so re-derivation over the combined ledger preserves history.
+        await trx
+          .updateTable('portfolio.transactions')
+          .set({ position_id: existing.id })
+          .where('position_id', '=', input.positionId)
+          .execute();
+        await trx.deleteFrom('portfolio.positions').where('id', '=', input.positionId).execute();
+        resultingPositionId = existing.id;
+        merged = true;
+      } else {
+        await trx
+          .updateTable('portfolio.positions')
+          .set({ portfolio_id: input.destinationPortfolioId, updated_at: new Date() })
+          .where('id', '=', input.positionId)
+          .execute();
+      }
+
+      const transfer = await trx
+        .insertInto('portfolio.position_transfers')
+        .values({
+          position_id: resultingPositionId,
+          source_portfolio_id: input.sourcePortfolioId,
+          destination_portfolio_id: input.destinationPortfolioId,
+          effective_at: input.effectiveAt,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      return { transferId: transfer.id, resultingPositionId, merged };
+    });
+  }
+
+  async listTransfers(positionId: string): Promise<StoredTransfer[]> {
+    return this.db
+      .selectFrom('portfolio.position_transfers')
+      .select(['id', 'position_id', 'source_portfolio_id', 'destination_portfolio_id', 'effective_at', 'created_at'])
+      .where('position_id', '=', positionId)
+      .orderBy('effective_at', 'desc')
+      .orderBy('creation_sequence', 'desc')
+      .execute();
   }
 
   async upsertPosition(portfolioId: string, listingId: string): Promise<{ id: string; created: boolean }> {

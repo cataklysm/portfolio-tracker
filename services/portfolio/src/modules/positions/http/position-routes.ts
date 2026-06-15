@@ -30,6 +30,11 @@ const ListPositionsQuery = Type.Object({
   portfolio_id: Type.Optional(Type.String({ format: 'uuid' })),
 });
 
+const TransferBody = Type.Object({
+  destination_portfolio_id: Type.String({ format: 'uuid' }),
+  effective_at: Type.Optional(Type.String({ format: 'date-time' })),
+});
+
 const InternalPositionsQuery = Type.Object({ user_id: Type.String({ format: 'uuid' }) });
 
 type TransactionBodyType = Static<typeof TransactionBody>;
@@ -81,6 +86,22 @@ export function registerPositionRoutes(app: FastifyInstance, deps: PositionRoute
   r.get('/positions/:id/allocations', { preHandler: read }, async (request) => {
     const { id } = request.params as { id: string };
     return deps.service.getRealizationAllocations(userId(request.user?.sub), id);
+  });
+
+  // Recorded moves of this position between portfolios.
+  r.get('/positions/:id/transfers', { preHandler: read }, async (request) => {
+    const { id } = request.params as { id: string };
+    return deps.service.listTransfers(userId(request.user?.sub), id);
+  });
+
+  // Move a position (with its full ledger) to another portfolio the user owns,
+  // merging into an existing position for the same listing when one exists.
+  r.post('/positions/:id/transfer', { preHandler: write, schema: { body: TransferBody } }, async (request) => {
+    const { id } = request.params as { id: string };
+    return deps.service.transferPosition(userId(request.user?.sub), bearer(request.headers.authorization), id, {
+      destinationPortfolioId: request.body.destination_portfolio_id,
+      effectiveAt: request.body.effective_at ? new Date(request.body.effective_at) : undefined,
+    });
   });
 
   r.post('/positions', { preHandler: write, schema: { body: CreatePositionBody } }, async (request, reply) => {

@@ -50,6 +50,16 @@ export interface PerformanceReport {
   returns: ReturnsResult;
 }
 
+/** Summary, holdings, allocation, and tax under a single consistent snapshot. */
+export interface ReportingSnapshot {
+  snapshot_at: string;
+  reporting_currency: string;
+  summary: PortfolioSummary;
+  holdings: HoldingGroup[];
+  allocation: AllocationReport;
+  tax: TaxReport;
+}
+
 // "Dividend income" for the summary/holdings = received dividends and cash-in-lieu.
 const INCOME_TYPES = new Set<CashFlowRecord['type']>(['dividend', 'cash_in_lieu']);
 
@@ -111,16 +121,60 @@ export class ReportingService {
       this.getSummary(userId, bearerToken, portfolioId),
       this.deps.taxEvents.listForUser(userId, { portfolioId }),
     ]);
+    return this.buildTaxReport(events, new Decimal(summary.realized_pnl), summary.reporting_currency, bearerToken);
+  }
 
-    const convert = await this.taxConverter(events, summary.reporting_currency, bearerToken);
+  /**
+   * One internally consistent reporting snapshot: summary, holdings, allocation,
+   * and tax computed from a single fetch of positions/flows/quotes/FX/tax events,
+   * stamped with one `snapshot_at`. Reading the four reports separately can drift
+   * if a quote refresh lands between requests; this derives them all from the
+   * same in-memory data so they always reconcile.
+   */
+  async getSnapshot(userId: string, bearerToken: string, portfolioId?: string): Promise<ReportingSnapshot> {
+    const [views, flows, settings, portfolios, events] = await Promise.all([
+      this.deps.positions.listPositions(userId, bearerToken, portfolioId),
+      this.deps.cashFlows.listForUser(userId, portfolioId),
+      this.deps.settings.getUserSettings(bearerToken),
+      this.deps.portfolios.list(userId, true),
+      this.deps.taxEvents.listForUser(userId, { portfolioId }),
+    ]);
+
+    const reportingCurrency = settings.reportingCurrency;
+    const snapshotAt = new Date().toISOString();
+    const portfolioNames = new Map(portfolios.map((p) => [p.id, p.name]));
+    const headlineMetric = portfolioId
+      ? (portfolios.find((p) => p.id === portfolioId)?.preferred_headline_metric ?? null)
+      : null;
+
+    const [dividends, dividendsByInstrument] = await Promise.all([
+      this.sumDividends(flows, reportingCurrency, bearerToken),
+      this.dividendsByInstrument(flows, views, reportingCurrency, bearerToken),
+    ]);
+
+    const summary = computeSummary(views, dividends, reportingCurrency, snapshotAt, headlineMetric);
+    const holdings = computeHoldings(views, portfolioNames, dividendsByInstrument);
+    const allocation = computeAllocation(views, portfolioNames);
+    const tax = await this.buildTaxReport(events, new Decimal(summary.realized_pnl), reportingCurrency, bearerToken);
+
+    return { snapshot_at: snapshotAt, reporting_currency: reportingCurrency, summary, holdings, allocation, tax };
+  }
+
+  /** Converts recorded tax events at booking-date FX and reconciles into a tax report. */
+  private async buildTaxReport(
+    events: TaxEventRecord[],
+    realizedPnl: Decimal,
+    reportingCurrency: string,
+    bearerToken: string,
+  ): Promise<TaxReport> {
+    const convert = await this.taxConverter(events, reportingCurrency, bearerToken);
     const converted: ConvertedTaxEvent[] = events.map((event) => ({
       component: event.component,
       direction: event.direction,
       amount: convert(new Decimal(event.amount), event.currency, event.booking_date),
       linked: event.transaction_id !== null || event.cash_flow_id !== null || event.position_id !== null,
     }));
-
-    return computeTaxReport(new Decimal(summary.realized_pnl), converted, summary.reporting_currency);
+    return computeTaxReport(realizedPnl, converted, reportingCurrency);
   }
 
   /**

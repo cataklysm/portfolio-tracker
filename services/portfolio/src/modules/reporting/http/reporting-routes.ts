@@ -48,6 +48,10 @@ export function registerReportingRoutes(app: FastifyInstance, deps: ReportingRou
     deps.service.getTaxReport(uid(request.user?.sub), bearer(request.headers.authorization), request.query.portfolio_id),
   );
 
+  r.get('/reporting/snapshot', { preHandler: read, schema: { querystring: ScopeQuery } }, async (request) =>
+    deps.service.getSnapshot(uid(request.user?.sub), bearer(request.headers.authorization), request.query.portfolio_id),
+  );
+
   r.get('/reporting/performance', { preHandler: read, schema: { querystring: PerformanceQuery } }, async (request) =>
     deps.service.getPerformance(
       uid(request.user?.sub),

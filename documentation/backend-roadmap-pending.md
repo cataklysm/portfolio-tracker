@@ -31,7 +31,11 @@ Each phase lists the **goal**, **owning service(s)**, **tables** (existing vs ne
 
 ## Recommended order
 
-**~~B-1~~ → ~~B-2~~ → ~~B-3~~ → ~~C-1~~ → ~~D~~ → E.** (Phase B, C, D done 2026-06-15; **E is the last phase left**.)
+**~~B-1~~ → ~~B-2~~ → ~~B-3~~ → ~~C-1~~ → ~~D~~ → ~~E~~.** ✅ **All phased work (B–E) done 2026-06-15.**
+The only remaining roadmap track is the separate **Universal-Tracker P0s** below
+(broker accounts, statement imports, reconciliation) plus the per-phase follow-ups
+noted inline (e.g. benchmark catalog/UI, spin-off/return-of-capital corporate
+actions, same-transaction change-history durability).
 
 B is the biggest unlock and gates C's richness and all of E. D (operations) can
 proceed in parallel with B. The "Universal Tracker" track (below) is separate and
@@ -141,25 +145,24 @@ tab.
    skips non-trading days via data gaps; this exposes the authoritative session
    state + `previous_trading_date` for consumers to adopt.
 
-   *Remaining D item:* **D-2 corporate-action apply/reverse** (signed workflow over
-   `position_corporate_action_applications`).
-
 ---
 
-## Phase E — Benchmarks & Risk *(depends on B)*
+## Phase E — Benchmarks & Risk *(depends on B)* ✅ **Done 2026-06-15**
 
 **Goal:** comparison and risk analytics, which need the historical series first.
 
-1. **Benchmark catalog + series + comparison.** Public read/write for portfolio &
-   combined benchmark preferences (`preferred_benchmark` / `combined_benchmark`
-   columns exist), a benchmark instrument catalog, historical series, and
-   period-relative portfolio-vs-benchmark calculations.
-   - *Owners:* portfolio (preferences/comparison), market (benchmark series),
-     authentication (combined benchmark preference). *Dep:* Phase B-1.
-2. **Risk analytics.** Volatility, max drawdown, Sharpe/Sortino, best/worst
-   periods, closed-position win rate, benchmark-relative risk.
-   - *Owner:* portfolio. *Dep:* Phase B-1 (+ E-1 for relative measures).
-   - *Size:* M (pure domain over the series).
+1. **Benchmark comparison.** ✅ `GET /reporting/benchmark?portfolio_id=&period=&benchmark_listing_id=`
+   compares a portfolio vs a benchmark listing — both rebased to 100 (portfolio
+   from its TWR returns, benchmark from daily closes), with period/excess return,
+   beta, correlation, and annualized tracking error (`benchmark.ts`, 4 tests).
+   `PUT /portfolios/:id/benchmark` sets/clears `preferred_benchmark`; the
+   comparison defaults to it. *Follow-ups:* a curated benchmark **catalog** (vs
+   selecting by listing id), a benchmark web UI (picker + chart), and the
+   auth-owned `combined_benchmark` for the combined view.
+2. **Risk analytics.** ✅ `GET /reporting/risk?portfolio_id=&period=` — annualized
+   volatility, max drawdown, Sharpe, Sortino, best/worst period, and closed-position
+   win rate, over the TWR per-period return series (`risk.ts`, 6 tests). Web: a risk
+   panel on the reports page. *Follow-up:* benchmark-relative risk (beta is in E-1).
 
 ---
 

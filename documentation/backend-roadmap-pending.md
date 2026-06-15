@@ -99,9 +99,17 @@ tab.
    unsigned with meaning carried by `subtype`/`direction`. The web `/activity` page
    gained a real "Feed" tab (default) with filters and cursor "Load more",
    alongside the existing cash-flow management and change-history tabs.
-   - *Still pending:* folding in Phase D's applied corporate actions / transfers
-     once those write paths exist. The `portfolio.booking_changes` log (Phase A-2)
-     is an adjacent *audit* trail, not part of this feed.
+   - ~~*Still pending:* folding in Phase D's applied corporate actions / transfers
+     once those write paths exist.~~ ✅ **Done 2026-06-15** — the union now also
+     covers `portfolio.position_corporate_action_applications` (kind
+     `corporate_action`, subtype `split`/`reverse_split`, ratio in quantity/price,
+     `direction='reversed'` when undone) and `portfolio.position_transfers` (kind
+     `transfer`). Corporate actions are owned via positions→portfolios; transfers
+     via their source portfolio (and match either side under a portfolio filter).
+     `amount`/`currency` are nullable (non-monetary events). Web rendering is a
+     frontend-todo item. SQL verified by typecheck + unit tests, not yet run live.
+     The `portfolio.booking_changes` log (Phase A-2) is an adjacent *audit* trail,
+     not part of this feed.
 
 ---
 
@@ -213,5 +221,5 @@ after).~~ ✅ **Done 2026-06-15** — see the hardening section below.
   individual linked events**, each **editable** (TaxEventModal, prop narrowed to an
   `EditableTaxEvent` Pick) and **deletable** inline (`deleteTaxEventAction` +
   router.refresh), so a correction/reversal can be made from the ledger without
-  going to the tax centre. Web typecheck clean. *(Committed together with the
-  pre-existing in-flight tax UI.)*
+  going to the tax centre. Web typecheck clean. *(Web files are in the working
+  tree, pending commit alongside the rest of the in-flight tax UI.)*

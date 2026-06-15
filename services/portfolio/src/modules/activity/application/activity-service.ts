@@ -11,8 +11,8 @@ export interface ActivityItem {
   portfolio_id: string | null;
   position_id: string | null;
   subtype: string;
-  currency: string;
-  amount: string;
+  currency: string | null;
+  amount: string | null;
   quantity: string | null;
   price: string | null;
   fee: string | null;

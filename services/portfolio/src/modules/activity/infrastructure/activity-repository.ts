@@ -3,12 +3,14 @@ import type { PortfolioDatabase } from '../../../platform/database/schema.js';
 import type { ActivityKind, ActivityQuery, ActivityRepository, ActivityRow } from '../application/ports.js';
 
 /**
- * Union read model over the three financial-booking tables. Trades, cash flows,
- * and tax events are projected to one shape and ordered by `(occurred_at, id)`
- * descending, with keyset pagination on that pair. Trades are scoped through
- * positions → portfolios for ownership; cash flows and tax events carry
- * `user_id` directly. Amounts are unsigned; the sign/meaning comes from
- * `subtype` (trade side / cash-flow type / tax component) and `direction`.
+ * Union read model over the financial-booking tables plus the two ledger-altering
+ * operations (applied corporate actions, position transfers). Every source is
+ * projected to one shape and ordered by `(occurred_at, id)` descending, with
+ * keyset pagination on that pair. Trades and corporate actions are scoped through
+ * positions → portfolios for ownership; cash flows and tax events carry `user_id`
+ * directly; transfers are scoped through their source portfolio. Monetary amounts
+ * are unsigned (sign/meaning comes from `subtype` and `direction`); corporate
+ * actions and transfers carry no amount/currency.
  */
 export class KyselyActivityRepository implements ActivityRepository {
   constructor(private readonly db: Kysely<PortfolioDatabase>) {}
@@ -19,6 +21,11 @@ export class KyselyActivityRepository implements ActivityRepository {
     const tradePortfolio = portfolioId ? sql`AND p.portfolio_id = ${portfolioId}` : sql``;
     const cashPortfolio = portfolioId ? sql`AND cf.portfolio_id = ${portfolioId}` : sql``;
     const taxPortfolio = portfolioId ? sql`AND te.portfolio_id = ${portfolioId}` : sql``;
+    const caPortfolio = portfolioId ? sql`AND cap.portfolio_id = ${portfolioId}` : sql``;
+    // A transfer touches two portfolios; it is relevant to either side.
+    const transferPortfolio = portfolioId
+      ? sql`AND (tr.source_portfolio_id = ${portfolioId} OR tr.destination_portfolio_id = ${portfolioId})`
+      : sql``;
     const kindFilter = kind ? sql`AND feed.kind = ${kind}` : sql``;
     const keyset = before
       ? sql`AND (feed.occurred_at < ${before.occurredAt}::timestamptz
@@ -55,6 +62,34 @@ export class KyselyActivityRepository implements ActivityRepository {
                te.direction, te.note
         FROM portfolio.tax_events te
         WHERE te.user_id = ${userId} ${taxPortfolio}
+
+        UNION ALL
+
+        SELECT ca.id::text, 'corporate_action', ca.effective_at,
+               cap.portfolio_id, ca.position_id,
+               CASE
+                 WHEN ca.ratio_numerator IS NULL OR ca.ratio_denominator IS NULL THEN 'corporate_action'
+                 WHEN ca.ratio_numerator::numeric >= ca.ratio_denominator::numeric THEN 'split'
+                 ELSE 'reverse_split'
+               END,
+               NULL::text, NULL::text,
+               ca.ratio_numerator::text, ca.ratio_denominator::text, NULL::text,
+               CASE WHEN ca.reversed_at IS NULL THEN NULL ELSE 'reversed' END, NULL::text
+        FROM portfolio.position_corporate_action_applications ca
+        JOIN portfolio.positions cap ON cap.id = ca.position_id
+        JOIN portfolio.portfolios capf ON capf.id = cap.portfolio_id
+        WHERE capf.user_id = ${userId} ${caPortfolio}
+
+        UNION ALL
+
+        SELECT tr.id::text, 'transfer', tr.effective_at,
+               tr.destination_portfolio_id, tr.position_id,
+               'transfer', NULL::text,
+               NULL::text, NULL::text, NULL::text, NULL::text,
+               NULL::text, NULL::text
+        FROM portfolio.position_transfers tr
+        JOIN portfolio.portfolios trpf ON trpf.id = tr.source_portfolio_id
+        WHERE trpf.user_id = ${userId} ${transferPortfolio}
       )
       SELECT id, kind, occurred_at, portfolio_id, position_id, subtype, currency,
              amount, quantity, price, fee, direction, note

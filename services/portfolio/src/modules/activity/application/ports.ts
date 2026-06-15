@@ -1,4 +1,4 @@
-export type ActivityKind = 'trade' | 'cash_flow' | 'tax_event';
+export type ActivityKind = 'trade' | 'cash_flow' | 'tax_event' | 'corporate_action' | 'transfer';
 
 /** A raw unified activity row as projected by the union read model. */
 export interface ActivityRow {
@@ -7,15 +7,24 @@ export interface ActivityRow {
   occurred_at: Date;
   portfolio_id: string | null;
   position_id: string | null;
-  /** Kind-specific subtype: trade side, cash-flow type, or tax component. */
+  /**
+   * Kind-specific subtype: trade side, cash-flow type, tax component,
+   * 'split'/'reverse_split' (corporate action), or 'transfer'.
+   */
   subtype: string;
-  currency: string;
-  /** Trade consideration (qty × price), cash-flow net amount, or tax amount. */
-  amount: string;
+  /** Settlement currency; null for non-monetary events (corporate action, transfer). */
+  currency: string | null;
+  /**
+   * Trade consideration (qty × price), cash-flow net amount, or tax amount;
+   * null for non-monetary events (corporate action, transfer).
+   */
+  amount: string | null;
+  /** Trade quantity, or a corporate action's ratio numerator. */
   quantity: string | null;
+  /** Trade price, or a corporate action's ratio denominator. */
   price: string | null;
   fee: string | null;
-  /** Tax-event direction (withheld/refunded); null otherwise. */
+  /** Tax direction (withheld/refunded), or 'reversed' for an undone corporate action; null otherwise. */
   direction: string | null;
   note: string | null;
 }

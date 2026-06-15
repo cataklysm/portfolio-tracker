@@ -92,6 +92,41 @@ describe('ActivityService.list', () => {
     assert.deepEqual(repo.lastQuery?.before, { occurredAt: '2026-06-12T00:00:00.000Z', id: 'c' });
   });
 
+  test('passes through non-monetary kinds (corporate action / transfer) with null amount + currency', async () => {
+    const ca: ActivityRow = {
+      id: 'ca-1',
+      kind: 'corporate_action',
+      occurred_at: new Date('2026-06-09T00:00:00.000Z'),
+      portfolio_id: 'pf',
+      position_id: 'pos-1',
+      subtype: 'split',
+      currency: null,
+      amount: null,
+      quantity: '2', // ratio numerator
+      price: '1', // ratio denominator
+      fee: null,
+      direction: null,
+      note: null,
+    };
+    const transfer: ActivityRow = {
+      ...ca,
+      id: 'tr-1',
+      kind: 'transfer',
+      subtype: 'transfer',
+      quantity: null,
+      price: null,
+    };
+    const page = await new ActivityService(new FakeRepo([ca, transfer])).list('u1', { limit: 50 });
+    assert.deepEqual(
+      page.items.map((i) => [i.kind, i.subtype, i.amount, i.currency]),
+      [
+        ['corporate_action', 'split', null, null],
+        ['transfer', 'transfer', null, null],
+      ],
+    );
+    assert.equal(page.items[0]?.quantity, '2'); // ratio preserved
+  });
+
   test('clamps the limit to the allowed range', async () => {
     const repo = new FakeRepo([]);
     const service = new ActivityService(repo);

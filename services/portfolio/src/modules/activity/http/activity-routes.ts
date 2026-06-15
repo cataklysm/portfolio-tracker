@@ -8,7 +8,13 @@ import type { ActivityKind } from '../application/ports.js';
 const ListQuery = Type.Object({
   portfolio_id: Type.Optional(Type.String({ format: 'uuid' })),
   type: Type.Optional(
-    Type.Union([Type.Literal('trade'), Type.Literal('cash_flow'), Type.Literal('tax_event')]),
+    Type.Union([
+      Type.Literal('trade'),
+      Type.Literal('cash_flow'),
+      Type.Literal('tax_event'),
+      Type.Literal('corporate_action'),
+      Type.Literal('transfer'),
+    ]),
   ),
   cursor: Type.Optional(Type.String({ minLength: 1 })),
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })),
@@ -22,7 +28,8 @@ export interface ActivityRouteDeps {
 
 /**
  * The cross-portfolio activity feed: one chronological, keyset-paginated stream
- * of trades, cash flows, and tax events. Read needs `portfolio:read`.
+ * of trades, cash flows, tax events, applied corporate actions, and position
+ * transfers. Read needs `portfolio:read`.
  */
 export function registerActivityRoutes(app: FastifyInstance, deps: ActivityRouteDeps): void {
   const r = app.withTypeProvider<TypeBoxTypeProvider>();

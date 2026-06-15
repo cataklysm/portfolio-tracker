@@ -31,7 +31,7 @@ Each phase lists the **goal**, **owning service(s)**, **tables** (existing vs ne
 
 ## Recommended order
 
-**B-1 → B-2 → B-3 → C-1 → D → E.**
+**~~B-1~~ → B-2 → B-3 → C-1 → D → E.** (B-1 done 2026-06-15.)
 
 B is the biggest unlock and gates C's richness and all of E. D (operations) can
 proceed in parallel with B. The "Universal Tracker" track (below) is separate and
@@ -45,14 +45,19 @@ it needs.
 **Goal:** turn the dashboard chart from a single-asset price into real portfolio
 performance, and make report reads internally consistent.
 
-1. **Historical portfolio performance series.** A new module reconstructing
-   portfolio value, contributed capital, and cumulative P&L per point over
-   `1W/1M/YTD/1Y/ALL` from: trades, cash flows, historical prices, historical FX.
-   - *Owner:* portfolio (consumes market history + FX). *Tables:* none required if
-     computed on read; consider a cached daily-value table if latency demands.
-   - *Contract:* `GET /reporting/performance?portfolio_id=&period=`.
-   - *Dep:* market daily-close history + historical FX (both exist).
-   - *Size:* L. Core new calculation engine; the largest item here.
+1. **Historical portfolio performance series.** ✅ **Done 2026-06-15.**
+   `reporting/domain/performance-series.ts` replays every position's ledger as of
+   each sample date and marks holdings to that day's close, reconstructing value,
+   contributed capital, and cumulative P&L over `1W/1M/YTD/1Y/ALL` (computed on
+   read — no cache table yet). Conversions mirror the live snapshot (day-FX for
+   value/cost, value-date FX for realized/dividends) so the last point reconciles
+   with `/reporting/summary`; each point carries a `complete` flag. Served at
+   `GET /reporting/performance?portfolio_id=&period=`. Market gained batched
+   date-range history to avoid per-day N+1 reads (`GET /fx/series`,
+   `GET /quotes/:id/history`, both anchor-prefixed for forward-fill). Dashboard
+   shows a value-vs-cost-basis chart with a period selector.
+   - *Follow-up:* a cached daily-value table if read latency demands (the replay
+     is O(positions × sample-dates)).
 
 2. **XIRR + time-weighted return.** Money-weighted (XIRR) over external cash flows
    and TWR over sub-period returns, layered on B-1's series.

@@ -72,6 +72,7 @@ export function registerCatalogRoutes(app: FastifyInstance, deps: CatalogRouteDe
   const r = app.withTypeProvider<TypeBoxTypeProvider>();
   const read = [deps.authenticate, deps.requireScope('instruments:read')];
   const write = [deps.authenticate, deps.requireScope('instruments:write')];
+  const admin = [deps.authenticate, deps.requireScope('system:admin')];
 
   r.get('/exchanges', { preHandler: read }, async () => deps.service.listExchanges());
 
@@ -104,6 +105,13 @@ export function registerCatalogRoutes(app: FastifyInstance, deps: CatalogRouteDe
     const result = await deps.service.createInstrument(request.body);
     reply.code(201);
     return result;
+  });
+
+  r.get('/instruments/admin/symbols', { preHandler: admin }, async () => deps.service.listAdminSymbols());
+
+  r.delete('/instruments/admin/symbols/:id', { preHandler: admin }, async (request, reply) => {
+    await deps.service.deactivateListing((request.params as { id: string }).id);
+    reply.code(204);
   });
 
   r.get('/listings', { preHandler: read, schema: { querystring: BatchListingsQuery } }, async (request) => {

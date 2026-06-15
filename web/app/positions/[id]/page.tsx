@@ -4,7 +4,7 @@ import type { AlertRule, CorporateAction, EarningsRow, FairValueEstimate, Fundam
 import { apiFetch } from "@/lib/api"
 import { getLocale } from "@/lib/locale"
 import { getTranslations } from "@/lib/i18n"
-import { fmtCurrency, fmtPct, fmtQty, num } from "@/lib/format"
+import { fmtCurrency, fmtPct, fmtPrice, fmtQty, num } from "@/lib/format"
 import { PositionPriceChart } from "@/components/PositionPriceChart"
 import { TransactionsTable } from "@/components/TransactionsTable"
 import { AddTransactionModal } from "@/components/AddTransactionModal"
@@ -15,6 +15,8 @@ import { EventsSection, NewsSection } from "@/components/EventsSection"
 import { PriceTargetsSection } from "@/components/PriceTargetsSection"
 import { DeletePositionButton } from "@/components/DeletePositionButton"
 import { TransferPositionControl } from "@/components/TransferPositionControl"
+import { CorporateActionsManager } from "@/components/CorporateActionsManager"
+import type { AppliedCorporateAction } from "@/app/positions/[id]/corporate-action-actions"
 import { AssetAlerts } from "@/components/AssetAlerts"
 
 async function fetchInsights<T>(instrumentId: string | null, path: string): Promise<T[]> {
@@ -187,12 +189,13 @@ export default async function PositionDetailPage({ params }: Props) {
 
   const pos = (await resp.json()) as PositionDetail
   const instrumentId = pos.listing?.instrument_id ?? null
-  const [listingResp, seriesResp, allocationResp, portfoliosResp, sessionsResp, fairValues, priceTargets, fundamentals, events, notificationData] = await Promise.all([
+  const [listingResp, seriesResp, allocationResp, portfoliosResp, sessionsResp, appliedCaResp, fairValues, priceTargets, fundamentals, events, notificationData] = await Promise.all([
     apiFetch(`/listings/${pos.listing_id}`, { cache: "no-store" }),
     apiFetch(`/quotes/${pos.listing_id}/series?limit=365`, { cache: "no-store" }),
     apiFetch(`/positions/${pos.id}/allocations`, { cache: "no-store" }),
     apiFetch("/portfolios", { cache: "no-store" }),
     apiFetch(`/listings/sessions?ids=${pos.listing_id}`, { cache: "no-store" }),
+    apiFetch(`/positions/${pos.id}/corporate-actions`, { cache: "no-store" }),
     fetchInsights<FairValueEstimate>(instrumentId, "fair-values"),
     fetchInsights<PriceTarget>(instrumentId, "price-targets"),
     fetchFundamentals(instrumentId),
@@ -203,11 +206,13 @@ export default async function PositionDetailPage({ params }: Props) {
   const portfolios = portfoliosResp.ok ? ((await portfoliosResp.json()) as Portfolio[]) : []
   const otherPortfolios = portfolios.filter((p) => p.id !== pos.portfolio_id).map((p) => ({ id: p.id, name: p.name }))
   const session = sessionsResp.ok ? ((await sessionsResp.json()) as ListingSession[])[0] ?? null : null
+  const appliedCorporateActions = appliedCaResp.ok ? ((await appliedCaResp.json()) as AppliedCorporateAction[]) : []
   const chartSeries = seriesResp.ok ? ((await seriesResp.json()) as SparklinePoint[]) : pos.sparkline
   const allocations = allocationResp.ok ? ((await allocationResp.json()) as RealizationAllocationView) : null
   const p = pos.performance
   const reporting = p.reporting_currency
   const listingCurrency = pos.listing?.currency ?? reporting
+  const assetType = pos.listing?.asset_type ?? "equity"
   const firstTransactionDate = pos.transactions.map((transaction) => transaction.effective_at).sort()[0]?.slice(0, 10) ?? null
 
   const price = num(p.current_price)
@@ -244,7 +249,7 @@ export default async function PositionDetailPage({ params }: Props) {
           </div>
         </div>
         <div className="text-right">
-          <p className="text-2xl font-semibold tabular-nums tracking-tight text-[var(--app-text)]">{price !== null ? fmtCurrency(locale, price, listingCurrency) : "—"}</p>
+          <p className="text-2xl font-semibold tabular-nums tracking-tight text-[var(--app-text)]">{price !== null ? fmtPrice(locale, price, listingCurrency, assetType) : "—"}</p>
           <p className={`mt-1 text-xs font-semibold tabular-nums ${daily === null ? "text-[var(--app-text-faint)]" : isDailyUp ? "text-[var(--app-positive)]" : "text-[var(--app-negative)]"}`}>{daily === null ? "Daily movement unavailable" : `${fmtPct(daily)} ${t("position.todaySuffix")}`}</p>
         </div>
       </header>
@@ -272,7 +277,7 @@ export default async function PositionDetailPage({ params }: Props) {
       <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="min-w-0 space-y-3">
           <Section title={t("positionDetail.transactions")} action={<AddTransactionModal positionId={pos.id} currency={listingCurrency} />}>
-            <TransactionsTable transactions={pos.transactions} locale={locale} positionId={pos.id} portfolioId={pos.portfolio_id} currency={listingCurrency} reportingCurrency={reporting} allocations={allocations} />
+            <TransactionsTable transactions={pos.transactions} locale={locale} positionId={pos.id} portfolioId={pos.portfolio_id} currency={listingCurrency} reportingCurrency={reporting} assetType={assetType} allocations={allocations} />
           </Section>
 
           {instrumentId ? (
@@ -290,9 +295,9 @@ export default async function PositionDetailPage({ params }: Props) {
 
         <aside className="space-y-3">
           <Section title="Position facts">
-            <FactRow label={t("position.quantity")} value={fmtQty(locale, qty, pos.listing?.asset_type ?? "equity")} />
+            <FactRow label={t("position.quantity")} value={fmtQty(locale, qty, assetType)} />
             <FactRow label={t("position.costBasis")} value={cost !== null ? fmtCurrency(locale, cost, reporting) : "—"} />
-            <FactRow label="Average cost" value={averageCost !== null ? fmtCurrency(locale, averageCost, reporting) : "—"} />
+            <FactRow label="Average cost" value={averageCost !== null ? fmtPrice(locale, averageCost, reporting, assetType) : "—"} />
             <FactRow label="Total fees" value={fees !== null ? fmtCurrency(locale, fees, reporting) : "—"} />
             <FactRow
               label="After-tax realized P&L"
@@ -321,6 +326,11 @@ export default async function PositionDetailPage({ params }: Props) {
           ) : null}
 
           {listing ? <Section title={t("positionDetail.instrumentAndData")}><ListingSettings positionId={pos.id} listing={listing} instrumentName={pos.listing?.name ?? ""} firstTransactionDate={firstTransactionDate} /></Section> : null}
+
+          <Section title="Corporate actions">
+            <p className="mb-3 text-[10px] leading-4 text-[var(--app-text-muted)]">Apply splits / reverse splits to restate this holding&apos;s share count (cost basis preserved), or reverse an applied one.</p>
+            <CorporateActionsManager positionId={pos.id} applied={appliedCorporateActions} available={events.corporateActions} locale={locale} />
+          </Section>
 
           <Section title={t("positionDetail.moveTitle")}>
             <p className="mb-3 text-[10px] leading-4 text-[var(--app-text-muted)]">{t("positionDetail.moveDesc")}</p>

@@ -30,6 +30,8 @@ export const en = {
     notifications: "Notifications",
     news: "News",
     events: "Events",
+    administration: "Administration",
+    symbols: "Symbols",
     addPosition: "Add position",
     soon: "soon",
     profileAndSettings: "Profile & settings",

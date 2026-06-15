@@ -1,8 +1,8 @@
 "use client"
 import Link from "next/link"
 import { useMemo, useState } from "react"
-import { fmtCurrency, fmtPct, num } from "@/lib/format"
-import type { PositionView, TaxReport } from "@/lib/types"
+import { fmtCurrency, fmtPct, fmtPrice, fmtQty, num } from "@/lib/format"
+import type { ActivityItem, ActivityPage, Portfolio, PositionView, TaxReport } from "@/lib/types"
 
 type View = "holdings" | "allocation" | "activity"
 type HoldingSortKey = "name" | "price" | "dailyPct" | "value" | "allocation" | "returnPct"
@@ -22,6 +22,9 @@ const ASSET_LABELS: Record<string, string> = {
 
 interface Props {
   positions: PositionView[]
+  portfolios: Portfolio[]
+  selectedPortfolioId?: string
+  activity: ActivityPage
   reportingCurrency: string
   locale: string
   taxReport: TaxReport | null
@@ -39,7 +42,7 @@ interface HoldingRow {
   allocation: number
 }
 
-export function DashboardOverview({ positions, reportingCurrency, locale, taxReport }: Props) {
+export function DashboardOverview({ positions, portfolios, selectedPortfolioId, activity, reportingCurrency, locale, taxReport }: Props) {
   const [view, setView] = useState<View>("holdings")
   const [showClosed, setShowClosed] = useState(false)
 
@@ -70,11 +73,16 @@ export function DashboardOverview({ positions, reportingCurrency, locale, taxRep
               <input type="checkbox" checked={showClosed} onChange={(event) => setShowClosed(event.target.checked)} className="accent-[var(--app-accent)]" />
               Include closed
             </label>
+            {view === "holdings" ? (
+              <Link href="/positions/add" className="rounded-lg bg-[var(--app-accent)] px-3 py-1.5 text-[10px] font-semibold text-white transition hover:brightness-110">
+                Add position
+              </Link>
+            ) : null}
           </div>
 
           {view === "holdings" && <HoldingsTable rows={visibleRows} locale={locale} currency={reportingCurrency} />}
           {view === "allocation" && <AllocationView rows={model.openRows} locale={locale} currency={reportingCurrency} />}
-          {view === "activity" && <ActivityPlaceholder />}
+          {view === "activity" && <ActivityOverview activity={activity} positions={positions} portfolios={portfolios} selectedPortfolioId={selectedPortfolioId} locale={locale} />}
         </section>
       </div>
 
@@ -272,7 +280,7 @@ function Holding({ row, locale, currency }: { row: HoldingRow; locale: string; c
         <span className="min-w-0"><span className="block truncate font-semibold text-[var(--app-text)]">{listing?.name ?? "Unknown asset"}</span><span className="block truncate text-[10px] font-medium text-[var(--app-text-faint)]">{listing?.symbol ?? row.position.listing_id}</span></span>
         {row.position.state !== "open" && <span className="ml-auto rounded border border-[var(--app-border)] px-1.5 py-0.5 text-[8px] uppercase text-[var(--app-text-faint)]">{row.position.state}</span>}
       </span>
-      <span className="text-right tabular-nums text-[var(--app-text-muted)]">{row.price === null ? "—" : fmtCurrency(locale, row.price, listing?.currency ?? currency)}</span>
+      <span className="text-right tabular-nums text-[var(--app-text-muted)]">{row.price === null ? "—" : fmtPrice(locale, row.price, listing?.currency ?? currency, row.type)}</span>
       <span className={`text-right font-medium tabular-nums ${row.dailyPct === null ? "text-[var(--app-text-faint)]" : dailyPositive ? "text-[var(--app-positive)]" : "text-[var(--app-negative)]"}`}>{row.dailyPct === null ? "—" : fmtPct(row.dailyPct)}</span>
       <span className="text-right font-medium tabular-nums text-[var(--app-text)]">{fmtCurrency(locale, row.value, currency)}</span>
       <span className="text-right tabular-nums text-[var(--app-text-muted)]">{row.allocation.toFixed(1)}%</span>
@@ -328,12 +336,79 @@ function compareHoldingRows(a: HoldingRow, b: HoldingRow, key: HoldingSortKey, d
   return (aValue - bValue) * multiplier
 }
 
-function ActivityPlaceholder() {
+const ACTIVITY_STYLE: Record<string, { label: string; className: string }> = {
+  trade: { label: "Trade", className: "bg-[var(--app-accent-soft)] text-[var(--app-accent)]" },
+  cash_flow: { label: "Cash", className: "bg-[color-mix(in_srgb,var(--app-positive)_18%,transparent)] text-[var(--app-positive)]" },
+  tax_event: { label: "Tax", className: "bg-[color-mix(in_srgb,var(--app-warning)_18%,transparent)] text-[var(--app-warning)]" },
+}
+
+function ActivityOverview({ activity, positions, portfolios, selectedPortfolioId, locale }: { activity: ActivityPage; positions: PositionView[]; portfolios: Portfolio[]; selectedPortfolioId?: string; locale: string }) {
+  const portfolioNames = new Map(portfolios.map((portfolio) => [portfolio.id, portfolio.name]))
+  const positionNames = new Map(positions.map((position) => [position.id, position.listing?.name ?? position.listing?.symbol ?? position.id]))
+  const positionAssetTypes = new Map(positions.map((position) => [position.id, position.listing?.asset_type ?? "equity"]))
+  const counts = activity.items.reduce<Record<string, number>>((acc, item) => {
+    acc[item.kind] = (acc[item.kind] ?? 0) + 1
+    return acc
+  }, {})
+  const fullHref = selectedPortfolioId ? `/activity?portfolio=${selectedPortfolioId}` : "/activity"
+
+  if (activity.items.length === 0) {
+    return (
+      <div className="flex min-h-52 flex-col items-center justify-center px-6 text-center">
+        <p className="text-sm font-medium text-[var(--app-text)]">No portfolio activity yet</p>
+        <p className="mt-1 text-xs text-[var(--app-text-muted)]">Trades, cash flows, and tax events will appear here.</p>
+      </div>
+    )
+  }
+
   return (
-    <div className="flex min-h-52 items-center justify-center px-6 text-center">
-      <div><p className="text-sm font-medium text-[var(--app-text)]">Portfolio activity is coming next</p><p className="mt-1 max-w-sm text-xs leading-5 text-[var(--app-text-muted)]">Transactions are currently available inside each position. A cross-portfolio activity API is required for this view.</p></div>
+    <div>
+      <div className="grid border-b border-[var(--app-border)] sm:grid-cols-3">
+        <ActivityMetric label="Trades" value={counts.trade ?? 0} tone="accent" />
+        <ActivityMetric label="Cash flows" value={counts.cash_flow ?? 0} tone="positive" />
+        <ActivityMetric label="Tax events" value={counts.tax_event ?? 0} tone="warning" />
+      </div>
+      <ul className="divide-y divide-[var(--app-border)]">
+        {activity.items.map((item) => (
+          <ActivityRow key={`${item.kind}:${item.id}`} item={item} portfolioNames={portfolioNames} positionNames={positionNames} positionAssetTypes={positionAssetTypes} locale={locale} />
+        ))}
+      </ul>
+      <div className="border-t border-[var(--app-border)] p-3 text-center">
+        <Link href={fullHref} className="inline-flex rounded-md border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-1.5 text-xs font-medium text-[var(--app-text-muted)] transition hover:text-[var(--app-text)]">
+          Open full activity workspace
+        </Link>
+      </div>
     </div>
   )
+}
+
+function ActivityMetric({ label, value, tone }: { label: string; value: number; tone: "accent" | "positive" | "warning" }) {
+  const color = tone === "positive" ? "text-[var(--app-positive)]" : tone === "warning" ? "text-[var(--app-warning)]" : "text-[var(--app-accent)]"
+  return <div className="border-b border-[var(--app-border)] px-4 py-3 last:border-b-0 sm:border-b-0 sm:border-l sm:first:border-l-0"><p className="text-[9px] uppercase tracking-wider text-[var(--app-text-faint)]">{label}</p><p className={`mt-1 text-lg font-semibold tabular-nums ${color}`}>{value}</p><p className="text-[9px] text-[var(--app-text-faint)]">in recent activity</p></div>
+}
+
+function ActivityRow({ item, portfolioNames, positionNames, positionAssetTypes, locale }: { item: ActivityItem; portfolioNames: Map<string, string>; positionNames: Map<string, string>; positionAssetTypes: Map<string, string>; locale: string }) {
+  const style = ACTIVITY_STYLE[item.kind] ?? { label: item.kind, className: "text-[var(--app-text-muted)]" }
+  const scope = item.position_id ? positionNames.get(item.position_id) : item.portfolio_id ? portfolioNames.get(item.portfolio_id) : "Unscoped"
+  const amount = num(item.amount) ?? 0
+  return (
+    <li className="grid grid-cols-[72px_52px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 text-[10px] transition hover:bg-[var(--app-surface-hover)]">
+      <span className="tabular-nums text-[var(--app-text-faint)]">{new Date(item.occurred_at).toLocaleDateString(locale, { day: "2-digit", month: "short" })}</span>
+      <span className={`inline-flex justify-center rounded px-1.5 py-0.5 text-[8px] font-semibold uppercase ${style.className}`}>{style.label}</span>
+      <span className="min-w-0 truncate text-[var(--app-text)]">{activityDescription(item, locale, item.position_id ? positionAssetTypes.get(item.position_id) ?? "equity" : "equity")}<span className="ml-2 text-[var(--app-text-faint)]">· {scope}</span></span>
+      <span className="tabular-nums text-[var(--app-text-muted)]">{fmtCurrency(locale, amount, item.currency)}</span>
+    </li>
+  )
+}
+
+function activityDescription(item: ActivityItem, locale: string, assetType: string): string {
+  if (item.kind === "trade") {
+    const quantity = num(item.quantity)
+    const price = num(item.price)
+    return `${item.subtype === "sell" ? "Sell" : "Buy"} ${quantity === null ? "" : fmtQty(locale, quantity, assetType)} @ ${price === null ? "" : fmtPrice(locale, price, item.currency, assetType)}`.trim()
+  }
+  if (item.kind === "tax_event") return `${item.subtype.replaceAll("_", " ")} ${item.direction ?? ""}`.trim()
+  return item.subtype.replaceAll("_", " ")
 }
 
 function IntelligenceRail({ model, locale, currency, taxReport }: { model: Model; locale: string; currency: string; taxReport: TaxReport | null }) {

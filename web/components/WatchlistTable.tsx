@@ -3,7 +3,7 @@ import { useTransition } from "react"
 import { removeFromWatchlistAction } from "@/app/watchlist/actions"
 import { useLocale } from "@/lib/locale-context"
 import { useTranslations } from "@/lib/i18n"
-import { fmtCurrency, num } from "@/lib/format"
+import { fmtPrice, num } from "@/lib/format"
 import type { WatchlistItemView } from "@/lib/types"
 
 export function WatchlistTable({ items }: { items: WatchlistItemView[] }) {
@@ -50,7 +50,7 @@ function Row({ item }: { item: WatchlistItemView }) {
           </div>
         </div>
       </div>
-      <span className="text-right text-sm tabular-nums text-[var(--app-text)]">{price !== null ? fmtCurrency(locale, price, currency) : "—"}</span>
+      <span className="text-right text-sm tabular-nums text-[var(--app-text)]">{price !== null ? fmtPrice(locale, price, currency, item.listing?.asset_type ?? "equity") : "—"}</span>
       <span className={`text-right text-sm font-medium tabular-nums ${daily === null ? "text-[var(--app-text-faint)]" : isUp ? "text-[var(--app-positive)]" : "text-[var(--app-negative)]"}`}>{daily !== null ? `${isUp ? "+" : ""}${daily.toFixed(2)}%` : "—"}</span>
       <div className="text-right">
         <button onClick={() => startRemove(async () => void (await removeFromWatchlistAction(item.listing_id)))} disabled={isRemoving} title={t("watchlist.removeTitle")} className="rounded-md border border-[var(--app-border)] px-2 py-1 text-xs text-[var(--app-text-faint)] hover:border-rose-500/40 hover:text-rose-300 disabled:opacity-50">{isRemoving ? "..." : "×"}</button>

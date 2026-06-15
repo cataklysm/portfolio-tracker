@@ -204,6 +204,14 @@ after).~~ ✅ **Done 2026-06-15** — see the hardening section below.
   projection after the commit (it makes external calls and must not hold a txn
   open). *Verified by typecheck + the full suite (168 pass); the DB-transaction
   path itself is not unit-tested (needs a live DB).*
-- **Transaction-level tax UI completeness:** position-detail already returns linked
-  tax events per transaction; richer correction/reversal UX is part of the
-  provenance follow-up.
+- ~~**Transaction-level tax UI completeness:** position-detail already returns
+  linked tax events per transaction; richer correction/reversal UX is part of the
+  provenance follow-up.~~ ✅ **Done 2026-06-15** (web). The recorded-broker-tax UI
+  was already substantial (TaxCenter list with edit/delete/add; per-transaction
+  "Record tax" + net-tax summary; position-level net-tax + after-tax realized).
+  Closed the last gap: each transaction row's tax summary now **expands to the
+  individual linked events**, each **editable** (TaxEventModal, prop narrowed to an
+  `EditableTaxEvent` Pick) and **deletable** inline (`deleteTaxEventAction` +
+  router.refresh), so a correction/reversal can be made from the ledger without
+  going to the tax centre. Web typecheck clean. *(Committed together with the
+  pre-existing in-flight tax UI.)*

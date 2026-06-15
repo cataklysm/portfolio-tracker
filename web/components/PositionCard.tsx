@@ -3,7 +3,7 @@ import Link from "next/link"
 import type { PositionView } from "@/lib/types"
 import { useLocale } from "@/lib/locale-context"
 import { useTranslations } from "@/lib/i18n"
-import { fmtCurrency, fmtQty, num } from "@/lib/format"
+import { fmtCurrency, fmtPrice, fmtQty, num } from "@/lib/format"
 
 interface TypeTheme {
   pill: string
@@ -143,7 +143,7 @@ export function PositionCard({ position, activeFilter, onTypeClick }: Props) {
         <div className="relative mb-4 flex items-end justify-between gap-4">
           <div>
             <span className="text-[26px] font-bold leading-none tabular-nums text-white">
-              {price !== null ? fmtCurrency(locale, price, listing?.currency ?? reporting) : "—"}
+              {price !== null ? fmtPrice(locale, price, listing?.currency ?? reporting, assetType) : "—"}
             </span>
             {daily !== null && (
               <span className={`ml-3 text-sm font-semibold ${isDailyUp ? "text-emerald-400" : "text-rose-400"}`}>

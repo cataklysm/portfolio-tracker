@@ -525,6 +525,14 @@ export interface ListingDetail {
   provider_identifiers: { provider: string; provider_identifier: string }[]
 }
 
+export interface AdminSymbolView extends ListingDetail {
+  instrument_name: string
+  asset_type: "equity" | "crypto" | "fund"
+  isin: string | null
+  underlying_identifier: string | null
+  in_use: boolean
+}
+
 // ---- Watchlist --------------------------------------------------------------
 
 export interface WatchlistItem {

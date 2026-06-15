@@ -10,11 +10,29 @@ export function fmtCurrency(locale: string, value: number, currency: string): st
   }
 }
 
+export function fmtPrice(locale: string, value: number, currency: string, assetType: string): string {
+  const maximumFractionDigits = assetType === "crypto" ? 8 : 3
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits,
+    }).format(value)
+  } catch {
+    return `${trimFixed(value, maximumFractionDigits)} ${currency}`
+  }
+}
+
 export function fmtQty(locale: string, value: number, assetType: string): string {
   return new Intl.NumberFormat(locale, {
     minimumFractionDigits: 0,
     maximumFractionDigits: assetType === "crypto" ? 8 : 4,
   }).format(value)
+}
+
+function trimFixed(value: number, digits: number): string {
+  return value.toFixed(digits).replace(/\.?0+$/, "")
 }
 
 export function fmtPct(value: number): string {

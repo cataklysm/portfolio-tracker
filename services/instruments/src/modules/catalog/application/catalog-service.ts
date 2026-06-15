@@ -8,6 +8,7 @@ import {
 } from '../domain/identifiers.js';
 import { computeMarketSession, type MarketStatus } from '../domain/session.js';
 import type {
+  AdminSymbolView,
   CatalogRepository,
   CreateExchangeInput,
   ExchangeView,
@@ -139,6 +140,18 @@ export class CatalogService {
     const listing = await this.repo.getListing(id);
     if (!listing) throw AppError.notFound('listing_not_found', 'Listing not found');
     return listing;
+  }
+
+  listAdminSymbols(): Promise<AdminSymbolView[]> {
+    return this.repo.listAdminSymbols();
+  }
+
+  async deactivateListing(id: string): Promise<void> {
+    await this.getListing(id);
+    if (await this.repo.listingInUse(id)) {
+      throw AppError.conflict('listing_in_use', 'This symbol is still used by a position or watchlist');
+    }
+    await this.repo.deactivateListing(id);
   }
 
   /**

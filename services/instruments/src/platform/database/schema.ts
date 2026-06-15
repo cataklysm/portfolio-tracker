@@ -70,6 +70,17 @@ export interface WatchInterestsTable {
   updated_at: Timestamp;
 }
 
+/** Read-only references owned by the portfolio service, used for safe catalog administration. */
+export interface PortfolioPositionsReferencesTable {
+  id: string;
+  listing_id: string;
+}
+
+export interface PortfolioWatchlistReferencesTable {
+  id: string;
+  listing_id: string;
+}
+
 export interface OutboxEventsTable {
   id: Generated<string>;
   event_type: string;
@@ -94,4 +105,6 @@ export interface InstrumentsDatabase {
   'instruments.listing_provider_identifiers': ListingProviderIdentifiersTable;
   'instruments.watch_interests': WatchInterestsTable;
   'instruments.outbox_events': OutboxEventsTable;
+  'portfolio.positions': PortfolioPositionsReferencesTable;
+  'portfolio.watchlist_items': PortfolioWatchlistReferencesTable;
 }

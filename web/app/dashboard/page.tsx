@@ -5,7 +5,7 @@ import { DashboardOverview } from "@/components/DashboardOverview"
 import { PerformanceChart } from "@/components/PerformanceChart"
 import { CreatePortfolioForm } from "@/components/CreatePortfolioForm"
 import { getTranslations } from "@/lib/i18n"
-import type { PositionView, Portfolio, MeData, TaxReport, PerformancePeriod, PerformanceReport } from "@/lib/types"
+import type { ActivityPage, PositionView, Portfolio, MeData, TaxReport, PerformancePeriod, PerformanceReport } from "@/lib/types"
 
 interface Props {
   searchParams: Promise<{ portfolio?: string; period?: string }>
@@ -32,6 +32,16 @@ async function fetchPerformance(query: string): Promise<PerformanceReport | null
     return response.ok ? ((await response.json()) as PerformanceReport) : null
   } catch {
     return null
+  }
+}
+
+async function fetchActivity(query: string): Promise<ActivityPage> {
+  try {
+    const separator = query ? "&" : "?"
+    const response = await apiFetch(`/activity${query}${separator}limit=12`, { cache: "no-store" })
+    return response.ok ? ((await response.json()) as ActivityPage) : { items: [], next_cursor: null }
+  } catch {
+    return { items: [], next_cursor: null }
   }
 }
 
@@ -62,10 +72,11 @@ export default async function DashboardPage({ searchParams }: Props) {
   const selected = portfolios.find((p) => p.id === selectedRaw)?.id
   const query = selected ? `?portfolio_id=${selected}` : ""
   const perfQuery = `?period=${period}${selected ? `&portfolio_id=${selected}` : ""}`
-  const [positionsResp, taxReport, performance] = await Promise.all([
+  const [positionsResp, taxReport, performance, activity] = await Promise.all([
     apiFetch(selected ? `/positions${query}` : "/positions", { cache: "no-store" }),
     fetchTaxReport(query),
     fetchPerformance(perfQuery),
+    fetchActivity(query),
   ])
   const positions = (await positionsResp.json()) as PositionView[]
 
@@ -77,27 +88,6 @@ export default async function DashboardPage({ searchParams }: Props) {
 
   return (
     <div className="mx-auto max-w-[1500px] px-3 py-3 sm:px-4 lg:px-5">
-      <header className="mb-3 hidden items-center justify-between gap-4 lg:flex">
-        <div className="flex items-center gap-3">
-          <h1 className="text-sm font-semibold tracking-tight text-[var(--app-text)]">{t("dashboard.title")}</h1>
-          <span className="h-4 w-px bg-[var(--app-border)]" />
-          <div className="flex flex-wrap gap-1">
-            <FilterPill href="/dashboard" label={t("dashboard.allPortfolios")} active={!selected} />
-            {portfolios.map((p) => <FilterPill key={p.id} href={`/dashboard?portfolio=${p.id}`} label={p.name} active={selected === p.id} />)}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {latestQuote && <span className="text-[9px] text-[var(--app-text-faint)]">{t("dashboard.quotesAsOf", { time: new Date(latestQuote).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" }) })}</span>}
-          <Link href="/positions/add" className="rounded-lg bg-[var(--app-accent)] px-3 py-2 text-xs font-semibold text-white transition hover:brightness-110">{t("dashboard.addPosition")}</Link>
-        </div>
-      </header>
-
-      <div className="mb-3 flex flex-wrap gap-1 lg:hidden">
-        <FilterPill href="/dashboard" label={t("dashboard.allPortfolios")} active={!selected} />
-        {portfolios.map((p) => <FilterPill key={p.id} href={`/dashboard?portfolio=${p.id}`} label={p.name} active={selected === p.id} />)}
-        <Link href="/positions/add" className="ml-auto rounded-lg bg-[var(--app-accent)] px-3 py-1.5 text-[10px] font-semibold text-white">{t("dashboard.addPosition")}</Link>
-      </div>
-
       {positions.length === 0 ? (
         <div className="app-panel flex flex-col items-center justify-center rounded-xl py-24 text-center">
           <p className="mb-2 text-lg font-medium text-[var(--app-text)]">{t("dashboard.emptyTitle")}</p>
@@ -112,27 +102,22 @@ export default async function DashboardPage({ searchParams }: Props) {
             report={performance}
             period={period}
             portfolioId={selected}
+            portfolioName={selected ? portfolios.find((portfolio) => portfolio.id === selected)?.name ?? t("dashboard.title") : t("dashboard.allPortfolios")}
+            latestQuote={latestQuote}
             currency={reporting}
             locale={locale}
           />
-          <DashboardOverview positions={positions} reportingCurrency={reporting} locale={locale} taxReport={taxReport} />
+          <DashboardOverview
+            positions={positions}
+            portfolios={portfolios}
+            selectedPortfolioId={selected}
+            activity={activity}
+            reportingCurrency={reporting}
+            locale={locale}
+            taxReport={taxReport}
+          />
         </div>
       )}
     </div>
-  )
-}
-
-function FilterPill({ href, label, active }: { href: string; label: string; active: boolean }) {
-  return (
-    <Link
-      href={href}
-      className={`rounded-md border px-2.5 py-1 text-[10px] font-medium transition-all ${
-        active
-          ? "border-[color-mix(in_srgb,var(--app-accent)_48%,var(--app-border))] bg-[var(--app-accent-soft)] text-[var(--app-accent)]"
-          : "border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-muted)] hover:border-[var(--app-border-strong)] hover:text-[var(--app-text)]"
-      }`}
-    >
-      {label}
-    </Link>
   )
 }

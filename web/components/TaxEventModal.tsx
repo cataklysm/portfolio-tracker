@@ -7,8 +7,18 @@ import type { TaxEvent } from "@/lib/types"
 const field = "w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-raised)] px-2.5 py-2 text-xs text-[var(--app-text)] outline-none focus:ring-1 focus:ring-[var(--app-accent)]"
 const label = "mb-1 block text-[9px] uppercase tracking-[0.08em] text-[var(--app-text-faint)]"
 
+/**
+ * The fields the edit form actually reads — narrower than the full TaxEvent so a
+ * transaction's embedded tax event (which omits the link/audit columns) can be
+ * edited inline. `position_id` is only used to revalidate the position page.
+ */
+export type EditableTaxEvent = Pick<
+  TaxEvent,
+  "id" | "position_id" | "component" | "direction" | "amount" | "currency" | "booking_date" | "note"
+>
+
 interface Props {
-  event?: TaxEvent
+  event?: EditableTaxEvent
   triggerLabel?: string
   currency: string
   portfolioId?: string | null

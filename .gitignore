@@ -5,6 +5,9 @@
 *.local
 secrets/
 
+# Local API captures/analysis (may describe sensitive session behavior)
+documentation/stock3-api-har-analysis.md
+
 # Claude Code config (machine-specific; settings.local.json contains secrets)
 .claude/
 

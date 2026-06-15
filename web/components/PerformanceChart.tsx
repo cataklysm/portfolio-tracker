@@ -7,6 +7,8 @@ interface Props {
   report: PerformanceReport | null
   period: PerformancePeriod
   portfolioId?: string
+  portfolioName: string
+  latestQuote?: string
   currency: string
   locale: string
 }
@@ -15,7 +17,7 @@ const PERIODS: PerformancePeriod[] = ["1W", "1M", "YTD", "1Y", "ALL"]
 const W = 760
 const H = 200
 
-export function PerformanceChart({ report, period, portfolioId, currency, locale }: Props) {
+export function PerformanceChart({ report, period, portfolioId, portfolioName, latestQuote, currency, locale }: Props) {
   const t = getTranslations()
   const points = report?.points ?? []
 
@@ -34,6 +36,7 @@ export function PerformanceChart({ report, period, portfolioId, currency, locale
     <section className="app-panel overflow-hidden rounded-xl">
       <div className="flex flex-wrap items-start justify-between gap-3 px-4 pt-3">
         <div>
+          <p className="mb-1 text-xs font-semibold text-[var(--app-text)]">{portfolioName}</p>
           <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--app-text-faint)]">
             {t("dashboard.performance")}
           </p>
@@ -70,6 +73,7 @@ export function PerformanceChart({ report, period, portfolioId, currency, locale
               </Link>
             ))}
           </div>
+          {latestQuote ? <span className="text-[9px] text-[var(--app-text-faint)]">{t("dashboard.quotesAsOf", { time: new Date(latestQuote).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" }) })}</span> : null}
         </div>
       </div>
 

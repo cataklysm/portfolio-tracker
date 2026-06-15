@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { loadActivityAction } from "@/app/activity/feed-actions"
-import { fmtCurrency, num } from "@/lib/format"
+import { fmtCurrency, fmtPrice, fmtQty, num } from "@/lib/format"
 import type { ActivityItem, ActivityPage } from "@/lib/types"
 
 interface Props {
@@ -11,7 +11,9 @@ interface Props {
   portfolioId?: string
   portfolioNames: Map<string, string>
   positionNames: Map<string, string>
+  positionAssetTypes: Map<string, string>
   locale: string
+  embedded?: boolean
 }
 
 const KIND_STYLE: Record<string, { label: string; className: string }> = {
@@ -20,7 +22,7 @@ const KIND_STYLE: Record<string, { label: string; className: string }> = {
   tax_event: { label: "Tax", className: "bg-[color-mix(in_srgb,var(--app-warning)_18%,transparent)] text-[var(--app-warning)]" },
 }
 
-export function ActivityFeed({ initial, type, portfolioId, portfolioNames, positionNames, locale }: Props) {
+export function ActivityFeed({ initial, type, portfolioId, portfolioNames, positionNames, positionAssetTypes, locale, embedded = false }: Props) {
   const [items, setItems] = useState<ActivityItem[]>(initial.items)
   const [cursor, setCursor] = useState<string | null>(initial.next_cursor)
   const [loading, setLoading] = useState(false)
@@ -36,17 +38,17 @@ export function ActivityFeed({ initial, type, portfolioId, portfolioNames, posit
 
   if (items.length === 0) {
     return (
-      <section className="app-panel rounded-xl px-5 py-16 text-center text-sm text-[var(--app-text-muted)]">
+      <div className={`${embedded ? "" : "app-panel rounded-xl"} px-5 py-16 text-center text-sm text-[var(--app-text-muted)]`}>
         No activity matches the selected filters.
-      </section>
+      </div>
     )
   }
 
   return (
-    <section className="app-panel overflow-hidden rounded-xl">
+    <section className={embedded ? "" : "app-panel overflow-hidden rounded-xl"}>
       <ul className="divide-y divide-[var(--app-border)]">
         {items.map((item) => (
-          <Row key={`${item.kind}:${item.id}`} item={item} portfolioNames={portfolioNames} positionNames={positionNames} locale={locale} />
+          <Row key={`${item.kind}:${item.id}`} item={item} portfolioNames={portfolioNames} positionNames={positionNames} positionAssetTypes={positionAssetTypes} locale={locale} />
         ))}
       </ul>
       {cursor && (
@@ -69,11 +71,13 @@ function Row({
   item,
   portfolioNames,
   positionNames,
+  positionAssetTypes,
   locale,
 }: {
   item: ActivityItem
   portfolioNames: Map<string, string>
   positionNames: Map<string, string>
+  positionAssetTypes: Map<string, string>
   locale: string
 }) {
   const kind = KIND_STYLE[item.kind] ?? { label: item.kind, className: "text-[var(--app-text-muted)]" }
@@ -93,7 +97,7 @@ function Row({
         {kind.label}
       </span>
       <span className="min-w-0 truncate text-[var(--app-text)]">
-        {describe(item)}
+        {describe(item, locale, item.position_id ? positionAssetTypes.get(item.position_id) ?? "equity" : "equity")}
         <span className="ml-2 text-[var(--app-text-faint)]">· {scope}</span>
         {item.note ? <span className="ml-2 text-[var(--app-text-faint)]">· {item.note}</span> : null}
       </span>
@@ -102,10 +106,12 @@ function Row({
   )
 }
 
-function describe(item: ActivityItem): string {
+function describe(item: ActivityItem, locale: string, assetType: string): string {
   if (item.kind === "trade") {
     const side = item.subtype === "sell" ? "Sell" : "Buy"
-    return `${side} ${item.quantity ?? ""} @ ${item.price ?? ""}`.trim()
+    const quantity = num(item.quantity)
+    const price = num(item.price)
+    return `${side} ${quantity === null ? "" : fmtQty(locale, quantity, assetType)} @ ${price === null ? "" : fmtPrice(locale, price, item.currency, assetType)}`.trim()
   }
   if (item.kind === "tax_event") {
     return `${item.subtype.replaceAll("_", " ")} ${item.direction ?? ""}`.trim()

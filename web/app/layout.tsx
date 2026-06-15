@@ -5,7 +5,7 @@ import { AppShell } from "@/components/AppShell"
 import { apiFetch, fetchMe } from "@/lib/api"
 import { getLocale } from "@/lib/locale"
 import { LocaleProvider } from "@/lib/locale-context"
-import type { PositionView } from "@/lib/types"
+import type { Portfolio, PositionView } from "@/lib/types"
 
 /** Unread notification count for the sidebar badge; 0 when signed out/unavailable. */
 async function fetchUnreadCount(): Promise<number> {
@@ -27,6 +27,15 @@ async function fetchHeaderPositions(): Promise<PositionView[]> {
   }
 }
 
+async function fetchSidebarPortfolios(): Promise<Portfolio[]> {
+  try {
+    const resp = await apiFetch("/portfolios", { cache: "no-store" })
+    return resp.ok ? ((await resp.json()) as Portfolio[]) : []
+  } catch {
+    return []
+  }
+}
+
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" })
 
 export const metadata: Metadata = {
@@ -40,7 +49,9 @@ export default async function RootLayout({
   children: React.ReactNode
 }) {
   const [me, locale] = await Promise.all([fetchMe(), getLocale()])
-  const [unreadCount, positions] = me ? await Promise.all([fetchUnreadCount(), fetchHeaderPositions()]) : [0, []]
+  const [unreadCount, positions, portfolios] = me
+    ? await Promise.all([fetchUnreadCount(), fetchHeaderPositions(), fetchSidebarPortfolios()])
+    : [0, [], []]
 
   return (
     <html lang={locale} suppressHydrationWarning>
@@ -56,7 +67,7 @@ export default async function RootLayout({
         className={`${inter.variable} h-screen font-sans antialiased`}
       >
         <LocaleProvider locale={locale}>
-          <AppShell me={me} unreadCount={unreadCount} positions={positions}>{children}</AppShell>
+          <AppShell me={me} unreadCount={unreadCount} positions={positions} portfolios={portfolios}>{children}</AppShell>
         </LocaleProvider>
       </body>
     </html>

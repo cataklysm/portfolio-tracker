@@ -29,6 +29,14 @@ export interface ListingDetail extends ListingView {
   provider_identifiers: ProviderIdentifierView[];
 }
 
+export interface AdminSymbolView extends ListingDetail {
+  instrument_name: string;
+  asset_type: AssetType;
+  isin: string | null;
+  underlying_identifier: string | null;
+  in_use: boolean;
+}
+
 export interface UpdateListingInput {
   symbol?: string;
   currency?: string;
@@ -118,6 +126,9 @@ export interface CatalogRepository {
   getListingSessionCalendars(ids: string[]): Promise<ListingSessionCalendar[]>;
   getProviderListings(ids: string[], provider: string): Promise<ProviderListing[]>;
   getListing(id: string): Promise<ListingDetail | null>;
+  listAdminSymbols(): Promise<AdminSymbolView[]>;
+  listingInUse(id: string): Promise<boolean>;
+  deactivateListing(id: string): Promise<void>;
   /** True if another listing already uses (symbol, exchange) — for edit conflicts. */
   symbolTaken(exchangeId: string | null, symbol: string, excludeListingId: string): Promise<boolean>;
   updateListing(id: string, patch: { symbol?: string; currency?: string }): Promise<void>;

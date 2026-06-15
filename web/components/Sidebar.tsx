@@ -1,8 +1,8 @@
 "use client"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
 import { useTranslations, type MessageKey } from "@/lib/i18n"
-import type { MeData } from "@/lib/types"
+import type { MeData, Portfolio } from "@/lib/types"
 
 const ICONS = {
   portfolio: "M4 19V9m5 10V5m5 14v-7m5 7V3",
@@ -13,6 +13,7 @@ const ICONS = {
   news: "M5 4h14v16H5zM8 8h8M8 12h8M8 16h5",
   events: "M6 3v3m12-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z",
   addPosition: "M12 5v14M5 12h14",
+  administration: "M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM19 12l2-1-2-3-2 .2-1.5-1L15 5H9l-.5 2.2-1.5 1L5 8l-2 3 2 1v2l-2 1 2 3 2-.2 1.5 1L9 21h6l.5-2.2 1.5-1 2 .2 2-3-2-1v-2Z",
   collapse: "m15 18-6-6 6-6",
   expand: "m9 18 6-6-6-6",
 } as const
@@ -21,7 +22,6 @@ type IconKey = keyof typeof ICONS
 interface NavItem { labelKey: MessageKey; icon: IconKey; href: string | null }
 
 const NAV_ITEMS: NavItem[] = [
-  { labelKey: "nav.portfolio", icon: "portfolio", href: "/dashboard" },
   { labelKey: "nav.reports", icon: "reports", href: "/reports" },
   { labelKey: "nav.activity", icon: "activity", href: "/activity" },
   { labelKey: "nav.watchlist", icon: "watchlist", href: "/watchlist" },
@@ -38,9 +38,11 @@ function Icon({ icon }: { icon: IconKey }) {
   )
 }
 
-export function Sidebar({ collapsed, onToggle, animate, me: _me, unreadCount = 0 }: { collapsed: boolean; onToggle: () => void; animate: boolean; me: MeData | null; unreadCount?: number }) {
+export function Sidebar({ collapsed, onToggle, animate, me, unreadCount = 0, portfolios = [] }: { collapsed: boolean; onToggle: () => void; animate: boolean; me: MeData | null; unreadCount?: number; portfolios?: Portfolio[] }) {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const t = useTranslations()
+  const selectedPortfolio = pathname === "/dashboard" ? searchParams.get("portfolio") : null
 
   return (
     <aside className={`hidden shrink-0 flex-col border-r border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-sidebar)_96%,transparent)] backdrop-blur-xl lg:flex ${animate ? "transition-[width] duration-200" : ""} ${collapsed ? "w-16" : "w-48"}`}>
@@ -50,9 +52,28 @@ export function Sidebar({ collapsed, onToggle, animate, me: _me, unreadCount = 0
       </Link>
 
       <nav className="flex flex-1 flex-col gap-1 p-2">
+        <NavRow item={{ labelKey: "nav.portfolio", icon: "portfolio", href: "/dashboard" }} active={pathname === "/dashboard" && !selectedPortfolio} collapsed={collapsed} />
+        {!collapsed && portfolios.length > 0 ? (
+          <div className="mb-1 ml-4 border-l border-[var(--app-border)] pl-2">
+            {portfolios.map((portfolio) => (
+              <SubNavRow key={portfolio.id} href={`/dashboard?portfolio=${portfolio.id}`} label={portfolio.name} active={selectedPortfolio === portfolio.id} />
+            ))}
+          </div>
+        ) : null}
         {NAV_ITEMS.map((item) => <NavRow key={item.labelKey} item={item} active={!!item.href && pathname.startsWith(item.href)} collapsed={collapsed} badge={item.href === "/notifications" ? unreadCount : undefined} />)}
         <div className="my-2 h-px bg-[var(--app-border)]" />
         <NavRow item={{ labelKey: "nav.addPosition", icon: "addPosition", href: "/positions/add" }} active={pathname === "/positions/add"} collapsed={collapsed} />
+        {me?.role === "admin" ? (
+          <>
+            <div className="my-2 h-px bg-[var(--app-border)]" />
+            <NavRow item={{ labelKey: "nav.administration", icon: "administration", href: "/administration/symbols" }} active={pathname.startsWith("/administration")} collapsed={collapsed} />
+            {!collapsed ? (
+              <div className="ml-4 border-l border-[var(--app-border)] pl-2">
+                <SubNavRow href="/administration/symbols" label={t("nav.symbols")} active={pathname === "/administration/symbols"} />
+              </div>
+            ) : null}
+          </>
+        ) : null}
       </nav>
 
       <div className="space-y-1 border-t border-[var(--app-border)] p-2">
@@ -61,6 +82,14 @@ export function Sidebar({ collapsed, onToggle, animate, me: _me, unreadCount = 0
         </button>
       </div>
     </aside>
+  )
+}
+
+function SubNavRow({ href, label, active }: { href: string; label: string; active: boolean }) {
+  return (
+    <Link href={href} className={`relative block truncate rounded-md px-2.5 py-1.5 text-[11px] transition ${active ? "bg-[var(--app-accent-soft)] font-medium text-[var(--app-accent)]" : "text-[var(--app-text-faint)] hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text)]"}`}>
+      {label}
+    </Link>
   )
 }
 

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Kysely, Transaction } from 'kysely';
 import type { InstrumentsDatabase } from '../../../platform/database/schema.js';
 import type {
+  AdminSymbolView,
   CatalogRepository,
   CreateExchangeInput,
   ExchangeView,
@@ -201,6 +202,99 @@ export class KyselyCatalogRepository implements CatalogRepository {
       .orderBy('provider')
       .execute();
     return { ...row, provider_identifiers: identifiers };
+  }
+
+  async listAdminSymbols(): Promise<AdminSymbolView[]> {
+    const [rows, identifiers, positions, watchlistItems] = await Promise.all([
+      this.db
+        .selectFrom('instruments.listings as l')
+        .innerJoin('instruments.instruments as i', 'i.id', 'l.instrument_id')
+        .leftJoin('instruments.exchanges as e', 'e.id', 'l.exchange_id')
+        .select([
+          'l.id as id',
+          'l.instrument_id as instrument_id',
+          'l.symbol as symbol',
+          'l.currency as currency',
+          'l.exchange_id as exchange_id',
+          'l.active as active',
+          'e.mic as exchange_mic',
+          'i.name as instrument_name',
+          'i.asset_type as asset_type',
+          'i.isin as isin',
+          'i.underlying_identifier as underlying_identifier',
+        ])
+        .where('l.active', '=', true)
+        .orderBy('i.name')
+        .orderBy('l.symbol')
+        .execute(),
+      this.db
+        .selectFrom('instruments.listing_provider_identifiers')
+        .select(['listing_id', 'provider', 'provider_identifier'])
+        .orderBy('provider')
+        .execute(),
+      this.db
+        .selectFrom('portfolio.positions')
+        .select('listing_id')
+        .distinct()
+        .execute(),
+      this.db
+        .selectFrom('portfolio.watchlist_items')
+        .select('listing_id')
+        .distinct()
+        .execute(),
+    ]);
+    const identifiersByListing = new Map<string, { provider: string; provider_identifier: string }[]>();
+    for (const identifier of identifiers) {
+      const list = identifiersByListing.get(identifier.listing_id) ?? [];
+      list.push({ provider: identifier.provider, provider_identifier: identifier.provider_identifier });
+      identifiersByListing.set(identifier.listing_id, list);
+    }
+    const used = new Set([...positions, ...watchlistItems].map((reference) => reference.listing_id));
+    return rows.map((row) => ({
+      ...row,
+      provider_identifiers: identifiersByListing.get(row.id) ?? [],
+      in_use: used.has(row.id),
+    }));
+  }
+
+  async listingInUse(id: string): Promise<boolean> {
+    const [position, watchlistItem] = await Promise.all([
+      this.db
+        .selectFrom('portfolio.positions')
+        .select('listing_id')
+        .where('listing_id', '=', id)
+        .executeTakeFirst(),
+      this.db
+        .selectFrom('portfolio.watchlist_items')
+        .select('listing_id')
+        .where('listing_id', '=', id)
+        .executeTakeFirst(),
+    ]);
+    return position !== undefined || watchlistItem !== undefined;
+  }
+
+  async deactivateListing(id: string): Promise<void> {
+    await this.db.transaction().execute(async (trx) => {
+      const listing = await trx
+        .updateTable('instruments.listings')
+        .set({ active: false, updated_at: new Date() })
+        .where('id', '=', id)
+        .returning('instrument_id')
+        .executeTakeFirstOrThrow();
+      const remaining = await trx
+        .selectFrom('instruments.listings')
+        .select('id')
+        .where('instrument_id', '=', listing.instrument_id)
+        .where('active', '=', true)
+        .executeTakeFirst();
+      if (!remaining) {
+        await trx
+          .updateTable('instruments.instruments')
+          .set({ active: false, updated_at: new Date() })
+          .where('id', '=', listing.instrument_id)
+          .execute();
+      }
+    });
   }
 
   async symbolTaken(exchangeId: string | null, symbol: string, excludeListingId: string): Promise<boolean> {

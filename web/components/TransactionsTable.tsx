@@ -1,9 +1,20 @@
 "use client"
 import { Fragment, useEffect, useState } from "react"
-import type { RealizationAllocationView, TransactionTaxEvent, TransactionView } from "@/lib/types"
+import { useRouter } from "next/navigation"
+import type { RealizationAllocationView, TaxComponent, TransactionTaxEvent, TransactionView } from "@/lib/types"
 import { EditTransactionModal } from "./EditTransactionModal"
 import { TaxEventModal } from "./TaxEventModal"
+import { deleteTaxEventAction } from "@/app/reports/tax-actions"
 import { useTranslations } from "@/lib/i18n"
+import { fmtPrice, fmtQty } from "@/lib/format"
+
+const TAX_COMPONENT_LABEL: Record<TaxComponent, string> = {
+  capital_income: "Capital income tax",
+  solidarity: "Solidarity surcharge",
+  church: "Church tax",
+  foreign_withholding: "Foreign withholding",
+  generic: "Broker tax / correction",
+}
 
 function formatDate(locale: string, value: string): string {
   return new Date(value).toLocaleDateString(locale, { day: "2-digit", month: "2-digit", year: "numeric" })
@@ -38,15 +49,26 @@ interface Props {
   positionId: string
   currency: string
   reportingCurrency: string
+  assetType: string
   portfolioId: string
   allocations: RealizationAllocationView | null
 }
 
-export function TransactionsTable({ transactions, locale, positionId, portfolioId, currency, reportingCurrency, allocations }: Props) {
+export function TransactionsTable({ transactions, locale, positionId, portfolioId, currency, reportingCurrency, assetType, allocations }: Props) {
   const t = useTranslations()
   const storageKey = `portfolio-transaction-sells:${positionId}`
   const [collapsedSells, setCollapsedSells] = useState<Set<string>>(new Set())
+  const [expandedTax, setExpandedTax] = useState<Set<string>>(new Set())
   const [storageReady, setStorageReady] = useState(false)
+
+  function toggleTax(id: string) {
+    setExpandedTax((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   useEffect(() => {
     try {
@@ -126,13 +148,12 @@ export function TransactionsTable({ transactions, locale, positionId, portfolioI
               </td>
               <td
                 className="w-24 min-w-24 whitespace-nowrap py-2 pr-4 text-right tabular-nums"
-                title={isOpenRemainder ? `Remaining from original buy quantity ${parseFloat(tx.quantity).toLocaleString(locale)}` : undefined}
+                title={isOpenRemainder ? `Remaining from original buy quantity ${fmtQty(locale, parseFloat(tx.quantity), assetType)}` : undefined}
               >
-                {(isOpenRemainder ? remainingQuantity : parseFloat(tx.quantity))?.toLocaleString(locale)}
+                {fmtQty(locale, (isOpenRemainder ? remainingQuantity : parseFloat(tx.quantity)) ?? 0, assetType)}
               </td>
               <td className="w-32 min-w-32 whitespace-nowrap py-2 pr-4 text-right tabular-nums">
-                {parseFloat(tx.price).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}{" "}
-                <span className="text-[var(--app-text-faint)]">{tx.currency}</span>
+                {fmtPrice(locale, parseFloat(tx.price), tx.currency, assetType)}
               </td>
               <td className="w-28 min-w-28 whitespace-nowrap py-2 pr-4 text-right tabular-nums text-[var(--app-text-faint)]">
                 {!isOpenRemainder && parseFloat(tx.fee) > 0 ? <>{parseFloat(tx.fee).toLocaleString(locale, { minimumFractionDigits: 2 })} <span>{tx.currency}</span></> : null}
@@ -144,19 +165,27 @@ export function TransactionsTable({ transactions, locale, positionId, portfolioI
                 currency={tx.currency}
                 displayCurrency={reportingCurrency}
                 locale={locale}
-                title={tx.performance.remaining_quantity !== null && parseFloat(tx.performance.remaining_quantity) > 0 ? `${parseFloat(tx.performance.remaining_quantity).toLocaleString(locale)} ${t("transactions.qty").toLowerCase()}` : undefined}
+                title={tx.performance.remaining_quantity !== null && parseFloat(tx.performance.remaining_quantity) > 0 ? `${fmtQty(locale, parseFloat(tx.performance.remaining_quantity), assetType)} ${t("transactions.qty").toLowerCase()}` : undefined}
               />
               <td className="min-w-48 py-2 pr-4 text-[var(--app-text-muted)]">
                 {tx.note}
                 {isOpenRemainder ? <span className="mt-0.5 block text-[10px] text-[var(--app-text-faint)]">Open remainder of the original buy transaction</span> : null}
                 {tx.tax_events.length > 0 ? (
-                  <span className="mt-0.5 block text-[10px] text-[var(--app-text-faint)]" title={t("transactions.linkedTax")}>
+                  <button
+                    type="button"
+                    onClick={() => toggleTax(tx.id)}
+                    aria-expanded={expandedTax.has(tx.id)}
+                    title={t("transactions.linkedTax")}
+                    className="mt-0.5 block text-left text-[10px] text-[var(--app-text-faint)] transition hover:text-[var(--app-text-muted)]"
+                  >
+                    <span className="mr-1 inline-block text-[8px]">{expandedTax.has(tx.id) ? "v" : ">"}</span>
                     {[...netTaxByCurrency(tx.tax_events)].map(([ccy, net], i) => (
                       <span key={ccy} className={i > 0 ? "ml-2" : ""}>
                         {t("transactions.tax")}: {net > 0 ? "−" : net < 0 ? "+" : ""}{Math.abs(net).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {ccy}
                       </span>
                     ))}
-                  </span>
+                    <span className="ml-1 text-[var(--app-border-strong)]">· {tx.tax_events.length}</span>
+                  </button>
                 ) : null}
               </td>
               <td className="w-px whitespace-nowrap py-2 text-right">
@@ -166,12 +195,84 @@ export function TransactionsTable({ transactions, locale, positionId, portfolioI
                 </div>
               </td>
             </tr>
-            {hasChildren && !collapsed ? <AllocationRows sell={tx} transactions={transactions} lots={lotRows} average={average} allocations={effectiveAllocations} locale={locale} reportingCurrency={reportingCurrency} /> : null}
+            {hasChildren && !collapsed ? <AllocationRows sell={tx} transactions={transactions} lots={lotRows} average={average} allocations={effectiveAllocations} locale={locale} reportingCurrency={reportingCurrency} assetType={assetType} /> : null}
+            {tx.tax_events.length > 0 && expandedTax.has(tx.id) ? <TaxEventRows events={tx.tax_events} positionId={positionId} locale={locale} /> : null}
             </Fragment>
           })}
         </tbody>
       </table>
     </div>
+  )
+}
+
+/**
+ * Expanded sub-row listing the individual broker-tax events linked to a
+ * transaction, each editable (reusing TaxEventModal) and deletable inline — so a
+ * correction or reversal can be made from the ledger without leaving for the tax
+ * centre. A withheld amount shows as a cost (−), a refund as a credit (+).
+ */
+function TaxEventRows({ events, positionId, locale }: { events: TransactionTaxEvent[]; positionId: string; locale: string }) {
+  const router = useRouter()
+  const [busy, setBusy] = useState<string | null>(null)
+
+  async function remove(id: string) {
+    setBusy(id)
+    try {
+      await deleteTaxEventAction(id, positionId, null)
+      router.refresh()
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <tr className="bg-[var(--app-surface-raised)]">
+      <td colSpan={9} className="px-5 py-2">
+        <ul className="space-y-1">
+          {events.map((event) => {
+            const amount = parseFloat(event.amount)
+            const signedTone = event.direction === "withheld" ? "text-[var(--app-negative)]" : "text-[var(--app-positive)]"
+            return (
+              <li key={event.id} className="flex items-center justify-between gap-3 rounded-md border border-[var(--app-border)] px-3 py-1.5 text-[10px]">
+                <div className="min-w-0">
+                  <span className="font-medium text-[var(--app-text)]">{TAX_COMPONENT_LABEL[event.component]}</span>
+                  <span className={`ml-2 rounded px-1.5 py-0.5 text-[8px] font-semibold uppercase ${event.direction === "withheld" ? "bg-[color-mix(in_srgb,var(--app-negative)_12%,transparent)] text-[var(--app-negative)]" : "bg-[color-mix(in_srgb,var(--app-positive)_12%,transparent)] text-[var(--app-positive)]"}`}>{event.direction}</span>
+                  <span className="ml-2 text-[var(--app-text-faint)]">{event.booking_date}</span>
+                  {event.note ? <span className="ml-2 text-[var(--app-text-faint)]">· {event.note}</span> : null}
+                </div>
+                <div className="flex items-center gap-3 whitespace-nowrap">
+                  <span className={`tabular-nums ${signedTone}`}>
+                    {event.direction === "withheld" ? "−" : "+"}{Math.abs(amount).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {event.currency}
+                  </span>
+                  <TaxEventModal
+                    currency={event.currency}
+                    event={{
+                      id: event.id,
+                      position_id: positionId,
+                      component: event.component,
+                      direction: event.direction,
+                      amount: event.amount,
+                      currency: event.currency,
+                      booking_date: event.booking_date,
+                      note: event.note,
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => remove(event.id)}
+                    disabled={busy === event.id}
+                    title="Delete tax event"
+                    className="text-[var(--app-text-faint)] transition hover:text-[var(--app-negative)] disabled:opacity-50"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      </td>
+    </tr>
   )
 }
 
@@ -234,7 +335,7 @@ function emptyAllocations(): RealizationAllocationView {
   return { position_id: "", accounting_method: null, calculation_version: null, lot_allocations: [], average_cost_realizations: [] }
 }
 
-function AllocationRows({ sell, transactions, lots, average, allocations, locale, reportingCurrency }: {
+function AllocationRows({ sell, transactions, lots, average, allocations, locale, reportingCurrency, assetType }: {
   sell: TransactionView
   transactions: TransactionView[]
   lots: RealizationAllocationView["lot_allocations"]
@@ -242,6 +343,7 @@ function AllocationRows({ sell, transactions, lots, average, allocations, locale
   allocations: RealizationAllocationView | null
   locale: string
   reportingCurrency: string
+  assetType: string
 }) {
   const byId = new Map(transactions.map((transaction) => [transaction.id, transaction]))
   const displayedTotal = numberOrNull(sell.performance.realized_pnl_reporting) ?? numberOrNull(sell.performance.realized_pnl)
@@ -249,8 +351,8 @@ function AllocationRows({ sell, transactions, lots, average, allocations, locale
   if (average) {
     return <tr className="bg-[var(--app-surface-raised)] text-[10px] text-[var(--app-text-muted)]">
       <td className="py-2 pl-8 pr-4" colSpan={2}><span className="mr-2 text-[var(--app-border-strong)]">↳</span>Average-cost pool</td>
-      <td className="py-2 pr-4 text-right tabular-nums">{parseFloat(average.quantity).toLocaleString(locale)}</td>
-      <td className="py-2 pr-4 text-right tabular-nums">{parseFloat(average.average_cost_basis).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</td>
+      <td className="py-2 pr-4 text-right tabular-nums">{fmtQty(locale, parseFloat(average.quantity), assetType)}</td>
+      <td className="py-2 pr-4 text-right tabular-nums">{fmtPrice(locale, parseFloat(average.average_cost_basis), sell.currency, assetType)}</td>
       <td />
       <AllocatedPnlCell value={displayedTotal} total={displayedTotal} currency={displayedCurrency} locale={locale} />
       <td />
@@ -266,8 +368,8 @@ function AllocationRows({ sell, transactions, lots, average, allocations, locale
     return <tr key={`${lot.sell_transaction_id}-${lot.buy_transaction_id}`} className="bg-[var(--app-surface-raised)] text-[10px] text-[var(--app-text-muted)]">
       <td className="py-2 pl-8 pr-4 tabular-nums"><span className="mr-2 text-[var(--app-border-strong)]">↳</span>{formatDate(locale, buy.effective_at)}</td>
       <td className="py-2 pr-4"><span className="rounded border border-[var(--app-border)] px-1.5 py-0.5 text-[8px] font-semibold uppercase text-[var(--app-text-faint)]">consumed buy</span></td>
-      <td className="py-2 pr-4 text-right tabular-nums">{parseFloat(lot.quantity).toLocaleString(locale)}</td>
-      <td className="py-2 pr-4 text-right tabular-nums">{parseFloat(buy.price).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} <span className="text-[var(--app-text-faint)]">{buy.currency}</span></td>
+      <td className="py-2 pr-4 text-right tabular-nums">{fmtQty(locale, parseFloat(lot.quantity), assetType)}</td>
+      <td className="py-2 pr-4 text-right tabular-nums">{fmtPrice(locale, parseFloat(buy.price), buy.currency, assetType)}</td>
       <td className="py-2 pr-4 text-right tabular-nums text-[var(--app-text-faint)]" title="The original buy fee is not allocated proportionally to consumed quantities." />
       <AllocatedPnlCell value={allocatedPnl?.value ?? null} total={allocatedPnl?.total ?? null} currency={allocatedPnl?.currency ?? displayedCurrency} locale={locale} />
       <td className="w-32 min-w-32 py-2 pr-4" />

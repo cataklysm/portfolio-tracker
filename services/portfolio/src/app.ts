@@ -42,6 +42,7 @@ import {
   registerTaxEventRoutes,
 } from './modules/tax-events/index.js';
 import { KyselyChangeLogRepository, registerChangeLogRoutes } from './modules/audit/index.js';
+import { ActivityService, KyselyActivityRepository, registerActivityRoutes } from './modules/activity/index.js';
 import { ReportingService, registerReportingRoutes } from './modules/reporting/index.js';
 import {
   TaxRuleService,
@@ -91,6 +92,7 @@ export async function buildApp(config: PortfolioConfig): Promise<BuiltService> {
   const userTaxRepo = new KyselyUserTaxSettingsRepository(db);
   const portfolioTaxRepo = new KyselyPortfolioTaxSettingsRepository(db);
   const changeLog = new KyselyChangeLogRepository(db);
+  const activityService = new ActivityService(new KyselyActivityRepository(db));
   const portfolioService = new PortfolioService(portfolioRepo);
   const watchlistService = new WatchlistService({
     repo: new KyselyWatchlistRepository(db),
@@ -154,6 +156,7 @@ export async function buildApp(config: PortfolioConfig): Promise<BuiltService> {
   registerTaxSettingsRoutes(app, { service: taxSettingsService, ...authDeps });
   registerTaxEstimateRoutes(app, { service: taxEstimateService, ...authDeps });
   registerChangeLogRoutes(app, { reader: changeLog, ...authDeps });
+  registerActivityRoutes(app, { service: activityService, ...authDeps });
   registerReportingRoutes(app, { service: reportingService, ...authDeps });
 
   // Redis is a required dependency for the event bus: connect last so wiring

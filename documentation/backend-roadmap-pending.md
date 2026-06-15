@@ -156,9 +156,14 @@ tab.
    from its TWR returns, benchmark from daily closes), with period/excess return,
    beta, correlation, and annualized tracking error (`benchmark.ts`, 4 tests).
    `PUT /portfolios/:id/benchmark` sets/clears `preferred_benchmark`; the
-   comparison defaults to it. *Follow-ups:* a curated benchmark **catalog** (vs
-   selecting by listing id), a benchmark web UI (picker + chart), and the
-   auth-owned `combined_benchmark` for the combined view.
+   comparison defaults to it. **Web UI shipped 2026-06-15:** a `BenchmarkPanel`
+   on the reports page (single-portfolio only) with the comparison stats, a
+   dual-line rebased-to-100 index chart, an instrument-search picker to
+   set/change/clear the benchmark, and a `?bperiod=` period selector.
+   *Follow-ups:* a curated benchmark **catalog** (vs selecting by listing id),
+   resolving the saved benchmark's display name on load (today only a
+   this-session pick shows a friendly label), and the auth-owned
+   `combined_benchmark` for the combined view.
 2. **Risk analytics.** ✅ `GET /reporting/risk?portfolio_id=&period=` — annualized
    volatility, max drawdown, Sharpe, Sortino, best/worst period, and closed-position
    win rate, over the TWR per-period return series (`risk.ts`, 6 tests). Web: a risk

@@ -138,12 +138,28 @@ tab.
    each ex-date, cost basis preserved) with an optional `asOf` so it is correct for
    the live snapshot and every historical sample — threaded through position
    recalc + view AND the reporting performance series + XIRR/TWR. 14 tests.
-   - *Scope/notes:* splits & reverse splits only (dividends → cash-flow ledger;
-     spin-offs / returns-of-capital are a follow-up). ~~`getOpenPositionCostBases`
-     (notifications alert) stays split-unaware.~~ ✅ **`getOpenPositionCostBases`
-     is now split-aware (2026-06-15)** — it fetches active splits and replays them
-     with an `asOf=today` so the target-zone alert's avg cost matches the live
-     snapshot. SQL verified by typecheck + unit tests, not yet run live.
+   - *Scope/notes:* splits & reverse splits only (dividends → cash-flow ledger).
+     ~~`getOpenPositionCostBases` (notifications alert) stays split-unaware.~~
+     ✅ **`getOpenPositionCostBases` is now split-aware (2026-06-15)** — it fetches
+     active splits and replays them with an `asOf=today` so the target-zone alert's
+     avg cost matches the live snapshot. SQL verified by typecheck + unit tests,
+     not yet run live.
+   - **⛔ Spin-off / return-of-capital — DEFERRED, needs a product decision
+     (2026-06-15).** Both would thread a new, non-ratio adjustment type through the
+     entire (safety-critical, live-DB-untested) realization engine, and both encode
+     accounting policy that should not be chosen unilaterally:
+     - *Return of capital* reduces cost basis (not income) at an ex-date. Open
+       questions: total amount vs per-share; and the contested **over-basis case** —
+       when RoC exceeds remaining basis, is the excess an immediate realized gain
+       (US-style) or deferred? A safe neutral primitive could reduce basis and
+       *reject* the over-basis case (record as a sale instead), if that is
+       acceptable.
+     - *Spin-off* splits parent basis into a new holding. Open questions: the
+       **basis-allocation %** (relative FMV — user-supplied?); whether the
+       spun-off instrument/listing must pre-exist or be created; the distributed
+       **quantity + fractional handling**; and which **acquisition date** carries to
+       the new lot for holding-period rules.
+     Recommend resolving these (jurisdiction default = ?) before implementation.
 3. **Market session/holiday-aware prior close.** ✅ **Done 2026-06-15.**
    `GET /listings/sessions?ids=` (instruments) returns each listing's market
    status (open/closed/holiday/weekend/unknown) and the exchange-local current +

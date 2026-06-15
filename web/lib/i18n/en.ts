@@ -59,6 +59,11 @@ export const en = {
     emptyTitle: "No positions yet",
     emptySubtitle: "Add your first holding to see performance data.",
     addFirstPosition: "Add a position",
+    performance: "Performance",
+    currentValue: "Value",
+    investedCapital: "Cost basis",
+    performanceEmpty: "Not enough history yet to chart performance.",
+    performancePartial: "Some days are missing prices or FX; values for those points are approximate.",
   },
 
   summary: {

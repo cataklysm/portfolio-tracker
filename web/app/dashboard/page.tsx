@@ -2,12 +2,19 @@ import Link from "next/link"
 import { apiFetch } from "@/lib/api"
 import { getLocale } from "@/lib/locale"
 import { DashboardOverview } from "@/components/DashboardOverview"
+import { PerformanceChart } from "@/components/PerformanceChart"
 import { CreatePortfolioForm } from "@/components/CreatePortfolioForm"
 import { getTranslations } from "@/lib/i18n"
-import type { PositionView, Portfolio, MeData, TaxReport } from "@/lib/types"
+import type { PositionView, Portfolio, MeData, TaxReport, PerformancePeriod, PerformanceReport } from "@/lib/types"
 
 interface Props {
-  searchParams: Promise<{ portfolio?: string }>
+  searchParams: Promise<{ portfolio?: string; period?: string }>
+}
+
+const PERIODS: PerformancePeriod[] = ["1W", "1M", "YTD", "1Y", "ALL"]
+
+function asPeriod(raw: string | undefined): PerformancePeriod {
+  return PERIODS.includes(raw as PerformancePeriod) ? (raw as PerformancePeriod) : "1Y"
 }
 
 async function fetchTaxReport(query: string): Promise<TaxReport | null> {
@@ -19,9 +26,19 @@ async function fetchTaxReport(query: string): Promise<TaxReport | null> {
   }
 }
 
+async function fetchPerformance(query: string): Promise<PerformanceReport | null> {
+  try {
+    const response = await apiFetch(`/reporting/performance${query}`, { cache: "no-store" })
+    return response.ok ? ((await response.json()) as PerformanceReport) : null
+  } catch {
+    return null
+  }
+}
+
 export default async function DashboardPage({ searchParams }: Props) {
   const t = getTranslations()
-  const { portfolio: selectedRaw } = await searchParams
+  const { portfolio: selectedRaw, period: periodRaw } = await searchParams
+  const period = asPeriod(periodRaw)
   const [portfoliosResp, meResp, locale] = await Promise.all([
     apiFetch("/portfolios", { cache: "no-store" }),
     apiFetch("/me", { cache: "no-store" }),
@@ -44,9 +61,11 @@ export default async function DashboardPage({ searchParams }: Props) {
 
   const selected = portfolios.find((p) => p.id === selectedRaw)?.id
   const query = selected ? `?portfolio_id=${selected}` : ""
-  const [positionsResp, taxReport] = await Promise.all([
+  const perfQuery = `?period=${period}${selected ? `&portfolio_id=${selected}` : ""}`
+  const [positionsResp, taxReport, performance] = await Promise.all([
     apiFetch(selected ? `/positions${query}` : "/positions", { cache: "no-store" }),
     fetchTaxReport(query),
+    fetchPerformance(perfQuery),
   ])
   const positions = (await positionsResp.json()) as PositionView[]
 
@@ -88,7 +107,16 @@ export default async function DashboardPage({ searchParams }: Props) {
           </Link>
         </div>
       ) : (
-        <DashboardOverview positions={positions} reportingCurrency={reporting} locale={locale} taxReport={taxReport} />
+        <div className="space-y-3">
+          <PerformanceChart
+            report={performance}
+            period={period}
+            portfolioId={selected}
+            currency={reporting}
+            locale={locale}
+          />
+          <DashboardOverview positions={positions} reportingCurrency={reporting} locale={locale} taxReport={taxReport} />
+        </div>
       )}
     </div>
   )

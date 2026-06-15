@@ -122,6 +122,28 @@ export interface SparklinePoint {
   price: string
 }
 
+export type PerformancePeriod = "1W" | "1M" | "YTD" | "1Y" | "ALL"
+
+export interface PerformancePoint {
+  date: string
+  value: string
+  invested_capital: string
+  net_contributed: string
+  realized_pnl: string
+  unrealized_pnl: string
+  dividends: string
+  total_pnl: string
+  complete: boolean
+}
+
+export interface PerformanceReport {
+  period: PerformancePeriod
+  reporting_currency: string
+  from: string
+  to: string
+  points: PerformancePoint[]
+}
+
 export interface PositionDetail extends PositionView {
   transactions: TransactionView[]
   sparkline: SparklinePoint[]

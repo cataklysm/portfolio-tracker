@@ -16,6 +16,7 @@ const UpdateProfileBody = Type.Object({
   reporting_currency: Type.Optional(ReportingCurrency),
   realization_accounting_method: Type.Optional(AccountingMethod),
   combined_headline_metric: Type.Optional(Type.String({ maxLength: 64 })),
+  combined_benchmark: Type.Optional(Type.Union([Type.String({ format: 'uuid' }), Type.Null()])),
   avatar_color: Type.Optional(Type.String({ maxLength: 32 })),
   locale: Type.Optional(Type.Union([Type.String({ maxLength: 32 }), Type.Null()])),
   timezone: Type.Optional(Type.Union([Type.String({ maxLength: 64 }), Type.Null()])),

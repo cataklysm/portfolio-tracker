@@ -6,10 +6,11 @@ interface MeResponse {
   preferences?: {
     reporting_currency?: string;
     realization_accounting_method?: AccountingMethod;
+    combined_benchmark?: string | null;
   };
 }
 
-const DEFAULTS: UserSettings = { reportingCurrency: 'EUR', accountingMethod: 'fifo' };
+const DEFAULTS: UserSettings = { reportingCurrency: 'EUR', accountingMethod: 'fifo', combinedBenchmark: null };
 
 /**
  * Reads the user's reporting currency and realization accounting method from
@@ -41,6 +42,7 @@ export class AuthSettingsClient implements SettingsReader {
       return {
         reportingCurrency: body.preferences?.reporting_currency ?? DEFAULTS.reportingCurrency,
         accountingMethod: body.preferences?.realization_accounting_method ?? DEFAULTS.accountingMethod,
+        combinedBenchmark: body.preferences?.combined_benchmark ?? null,
       };
     } catch {
       return DEFAULTS;

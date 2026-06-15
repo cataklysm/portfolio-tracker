@@ -250,6 +250,8 @@ export interface FxReader {
 export interface UserSettings {
   reportingCurrency: string;
   accountingMethod: AccountingMethod;
+  /** Benchmark listing id for the combined all-portfolios view, or null. Optional so fakes need not set it. */
+  combinedBenchmark?: string | null;
 }
 
 export interface SettingsReader {

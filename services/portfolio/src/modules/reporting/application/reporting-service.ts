@@ -292,14 +292,23 @@ export class ReportingService {
     benchmarkListingId?: string,
   ): Promise<BenchmarkReport> {
     let benchmarkId = benchmarkListingId ?? null;
-    if (!benchmarkId && portfolioId) {
-      const portfolios = await this.deps.portfolios.list(userId, true);
-      benchmarkId = portfolios.find((p) => p.id === portfolioId)?.preferred_benchmark ?? null;
+    if (!benchmarkId) {
+      if (portfolioId) {
+        // One portfolio: default to its saved preferred benchmark.
+        const portfolios = await this.deps.portfolios.list(userId, true);
+        benchmarkId = portfolios.find((p) => p.id === portfolioId)?.preferred_benchmark ?? null;
+      } else {
+        // Combined all-portfolios view: use the user's separate combined benchmark
+        // (auth-owned `user_preferences.combined_benchmark`), not a portfolio one.
+        benchmarkId = (await this.deps.settings.getUserSettings(bearerToken)).combinedBenchmark ?? null;
+      }
     }
     if (!benchmarkId) {
       throw AppError.badRequest(
         'benchmark_required',
-        'Set a preferred benchmark for the portfolio or pass benchmark_listing_id',
+        portfolioId
+          ? 'Set a preferred benchmark for the portfolio or pass benchmark_listing_id'
+          : 'Set a combined benchmark in your preferences or pass benchmark_listing_id',
       );
     }
 

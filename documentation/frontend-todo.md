@@ -25,6 +25,17 @@ here so nothing is lost. Each item notes the backend it depends on.
   `split`/`reverse_split` subtype, plus a "reversed" badge when `direction ===
   "reversed"`; for `transfer` show a move between portfolios. Backend shipped.
 
+## Combined-view benchmark
+- [ ] **Set the combined benchmark in the UI.** `PATCH /me/preferences`
+  `{ combined_benchmark: <listing_id> | null }` sets/clears the per-user benchmark
+  for the **combined all-portfolios** view; `GET /me` returns it at
+  `preferences.combined_benchmark`. The combined benchmark comparison
+  (`GET /reporting/benchmark` with **no** `portfolio_id`) now defaults to it.
+  UI: when "All portfolios" is selected (dashboard) or in user settings, offer an
+  instrument-search picker (reuse `searchInstrumentsAction`) wired to a
+  `setCombinedBenchmarkAction` server action. Distinct from the per-portfolio
+  benchmark (`PortfolioBenchmarkSettings`).
+
 ## Partial-lot position transfers
 - [ ] **Lot-transfer UI on the position detail.** `POST /positions/:id/transfer-lots`
   `{ destination_portfolio_id, lot_transaction_ids[], effective_at? }` moves a

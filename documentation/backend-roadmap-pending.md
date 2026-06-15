@@ -210,7 +210,16 @@ tab.
      meanwhile.
    - ~~Resolving the saved benchmark's display name on load~~ ✅ already handled in
      the web UI (`PortfolioBenchmarkSettings` receives a resolved `current.label`).
-   - The auth-owned `combined_benchmark` for the combined view.
+   - ~~The auth-owned `combined_benchmark` for the combined view.~~ ✅ **Done
+     2026-06-15** (backend). Auth now reads/writes/exposes
+     `user_preferences.combined_benchmark` (the column existed since migration 001;
+     stored as a listing-id jsonb string, legacy `{type,identifier}` default read as
+     unset) via `GET /me` + `PATCH /me/preferences`. Portfolio
+     `getUserSettings`/`AuthSettingsClient` carry it as `combinedBenchmark`, and
+     reporting `getBenchmark` with **no** `portfolio_id` defaults to it (the
+     per-portfolio path still uses `preferred_benchmark`). Web setter is a
+     frontend-todo item. Per spec §2.2: independent of portfolio preferences, does
+     not blend. Verified by typecheck + suite (174).
 2. **Risk analytics.** ✅ `GET /reporting/risk?portfolio_id=&period=` — annualized
    volatility, max drawdown, Sharpe, Sortino, best/worst period, and closed-position
    win rate, over the TWR per-period return series (`risk.ts`, 6 tests). Web: a risk

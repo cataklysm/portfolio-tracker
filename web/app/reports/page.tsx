@@ -1,9 +1,23 @@
 import Link from "next/link"
 import { apiFetch } from "@/lib/api"
 import { getLocale } from "@/lib/locale"
-import type { AllocationReport, Portfolio, PortfolioReportSummary, ReportHolding, TaxEvent, TaxReport } from "@/lib/types"
+import type {
+  AllocationReport,
+  Portfolio,
+  PortfolioReportSummary,
+  PortfolioTaxSettings,
+  ReportHolding,
+  TaxEstimate,
+  TaxEvent,
+  TaxReport,
+  TaxResidencyView,
+  TaxRule,
+} from "@/lib/types"
 import { ReportsOverview } from "@/components/ReportsOverview"
 import { TaxCenter } from "@/components/TaxCenter"
+import { TaxEstimatePanel } from "@/components/TaxEstimatePanel"
+import { PortfolioTaxConfigCard } from "@/components/PortfolioTaxConfigCard"
+import { TaxGlossary } from "@/components/TaxGlossary"
 
 interface Props {
   searchParams: Promise<{ portfolio?: string }>
@@ -27,12 +41,23 @@ export default async function ReportsPage({ searchParams }: Props) {
   ])
   const portfolios = portfoliosResponse.ok ? ((await portfoliosResponse.json()) as Portfolio[]) : []
   const selected = portfolios.find((portfolio) => portfolio.id === selectedRaw)?.id
-  const [summary, holdings, allocation, taxReport, taxEvents] = await Promise.all([
+  const selectedPortfolio = portfolios.find((portfolio) => portfolio.id === selected)
+  const [summary, holdings, allocation, taxReport, taxEvents, taxEstimate, residency] = await Promise.all([
     report<PortfolioReportSummary>("/reporting/summary", selected),
     report<ReportHolding[]>("/reporting/holdings", selected),
     report<AllocationReport>("/reporting/allocation", selected),
     report<TaxReport>("/reporting/tax", selected),
     report<TaxEvent[]>("/tax-events", selected),
+    report<TaxEstimate>("/reporting/tax/estimate", selected),
+    report<TaxResidencyView>("/tax-residency"),
+  ])
+
+  // Per-portfolio tax configuration is only offered when a single portfolio is
+  // selected; it needs the residence's rules and the portfolio's saved settings.
+  const country = residency?.current?.country_code ?? null
+  const [taxRules, portfolioTaxSettings] = await Promise.all([
+    selected && country ? report<TaxRule[]>(`/tax-rules?country=${country}`) : Promise.resolve(null),
+    selected ? report<PortfolioTaxSettings>(`/portfolios/${selected}/tax-settings`) : Promise.resolve(null),
   ])
 
   return (
@@ -53,6 +78,7 @@ export default async function ReportsPage({ searchParams }: Props) {
       {summary && holdings && allocation ? (
         <>
           <ReportsOverview summary={summary} holdings={holdings} allocation={allocation} locale={locale} />
+          {taxEstimate ? <TaxEstimatePanel estimate={taxEstimate} locale={locale} /> : null}
           {taxReport ? (
             <TaxCenter
               report={taxReport}
@@ -62,6 +88,14 @@ export default async function ReportsPage({ searchParams }: Props) {
               selectedPortfolioId={selected}
             />
           ) : null}
+          {selectedPortfolio && taxRules ? (
+            <PortfolioTaxConfigCard
+              portfolio={{ id: selectedPortfolio.id, name: selectedPortfolio.name }}
+              rules={taxRules}
+              current={portfolioTaxSettings}
+            />
+          ) : null}
+          <TaxGlossary />
         </>
       ) : (
         <section className="app-panel rounded-xl px-5 py-16 text-center">

@@ -43,6 +43,18 @@ import {
 } from './modules/tax-events/index.js';
 import { KyselyChangeLogRepository, registerChangeLogRoutes } from './modules/audit/index.js';
 import { ReportingService, registerReportingRoutes } from './modules/reporting/index.js';
+import {
+  TaxRuleService,
+  KyselyTaxRuleRepository,
+  registerTaxRuleRoutes,
+} from './modules/tax-rules/index.js';
+import {
+  TaxSettingsService,
+  KyselyUserTaxSettingsRepository,
+  KyselyPortfolioTaxSettingsRepository,
+  registerTaxSettingsRoutes,
+} from './modules/tax-settings/index.js';
+import { TaxEstimateService, registerTaxEstimateRoutes } from './modules/tax-calc/index.js';
 
 export interface BuiltService {
   app: FastifyInstance;
@@ -76,6 +88,8 @@ export async function buildApp(config: PortfolioConfig): Promise<BuiltService> {
   const positionRepo = new KyselyPositionRepository(db);
   const cashFlowRepo = new KyselyCashFlowRepository(db);
   const taxEventRepo = new KyselyTaxEventRepository(db);
+  const userTaxRepo = new KyselyUserTaxSettingsRepository(db);
+  const portfolioTaxRepo = new KyselyPortfolioTaxSettingsRepository(db);
   const changeLog = new KyselyChangeLogRepository(db);
   const portfolioService = new PortfolioService(portfolioRepo);
   const watchlistService = new WatchlistService({
@@ -94,6 +108,17 @@ export async function buildApp(config: PortfolioConfig): Promise<BuiltService> {
   });
   const cashFlowService = new CashFlowService(cashFlowRepo, changeLog);
   const taxEventService = new TaxEventService(taxEventRepo, changeLog);
+  const taxRuleService = new TaxRuleService(new KyselyTaxRuleRepository(db));
+  const taxSettingsService = new TaxSettingsService(userTaxRepo, portfolioTaxRepo, taxRuleService);
+  const taxEstimateService = new TaxEstimateService({
+    positions: positionRepo,
+    listings: listingClient,
+    fx: fxClient,
+    portfolioTax: portfolioTaxRepo,
+    userTax: userTaxRepo,
+    rules: taxRuleService,
+    taxEvents: taxEventRepo,
+  });
   const reportingService = new ReportingService({
     positions: positionService,
     cashFlows: cashFlowRepo,
@@ -124,6 +149,9 @@ export async function buildApp(config: PortfolioConfig): Promise<BuiltService> {
   registerWatchlistRoutes(app, { service: watchlistService, ...authDeps });
   registerCashFlowRoutes(app, { service: cashFlowService, ...authDeps });
   registerTaxEventRoutes(app, { service: taxEventService, ...authDeps });
+  registerTaxRuleRoutes(app, { service: taxRuleService, ...authDeps });
+  registerTaxSettingsRoutes(app, { service: taxSettingsService, ...authDeps });
+  registerTaxEstimateRoutes(app, { service: taxEstimateService, ...authDeps });
   registerChangeLogRoutes(app, { reader: changeLog, ...authDeps });
   registerReportingRoutes(app, { service: reportingService, ...authDeps });
 

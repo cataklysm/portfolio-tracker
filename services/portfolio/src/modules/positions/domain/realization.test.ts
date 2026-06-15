@@ -207,6 +207,26 @@ describe('computeRealization — lot consumptions (persistable allocations)', ()
     assert.equal(consumedFor('s2').toFixed(0), '7');
   });
 
+  test('each consumption carries acquisition/disposal dates and a realized amount that sums to the sell', () => {
+    const ledger2: LedgerTransaction[] = [
+      idTx('b1', 'buy', '5', '100', '0', '2024-01-02'),
+      idTx('b2', 'buy', '5', '120', '0', '2024-02-02'),
+      idTx('s1', 'sell', '8', '150', '8', '2024-06-03'),
+    ];
+    const r = computeRealization(ledger2, 'fifo');
+    const [c1, c2] = r.lotConsumptions;
+    assert.equal(c1!.acquisitionDate, '2024-01-02');
+    assert.equal(c1!.disposalDate, '2024-06-03');
+    assert.equal(c1!.currency, 'USD');
+    // Per-lot realized sums to the sell's total realized P&L (proceeds − fee − cost).
+    const totalRealized = r.lotConsumptions.reduce((s, c) => s.plus(c.realizedGainLoss), D(0));
+    const sell = r.realizedByDate.reduce((s, a) => s.plus(a.amount), D(0));
+    assert.equal(totalRealized.toFixed(2), sell.toFixed(2));
+    // 5 from b1 (cost 500) + 3 from b2 (cost 360); proceeds 1200, fee 8.
+    assert.equal(c1!.realizedGainLoss.toFixed(2), '245.00'); // 5*150 − 8*(5/8) − 500
+    assert.equal(c2!.realizedGainLoss.toFixed(2), '87.00'); // 3*150 − 8*(3/8) − 360
+  });
+
   test('average cost produces no lot consumptions', () => {
     const r = computeRealization(
       [idTx('b1', 'buy', '10', '100', '0', '2024-01-02'), idTx('s1', 'sell', '4', '150', '0', '2024-06-03')],

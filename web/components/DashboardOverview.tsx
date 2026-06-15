@@ -2,7 +2,7 @@
 import Link from "next/link"
 import { useMemo, useState } from "react"
 import { fmtCurrency, fmtPct, num } from "@/lib/format"
-import type { PositionView } from "@/lib/types"
+import type { PositionView, TaxReport } from "@/lib/types"
 
 type View = "holdings" | "allocation" | "activity"
 type HoldingSortKey = "name" | "price" | "dailyPct" | "value" | "allocation" | "returnPct"
@@ -24,6 +24,7 @@ interface Props {
   positions: PositionView[]
   reportingCurrency: string
   locale: string
+  taxReport: TaxReport | null
 }
 
 interface HoldingRow {
@@ -38,7 +39,7 @@ interface HoldingRow {
   allocation: number
 }
 
-export function DashboardOverview({ positions, reportingCurrency, locale }: Props) {
+export function DashboardOverview({ positions, reportingCurrency, locale, taxReport }: Props) {
   const [view, setView] = useState<View>("holdings")
   const [showClosed, setShowClosed] = useState(false)
 
@@ -77,7 +78,7 @@ export function DashboardOverview({ positions, reportingCurrency, locale }: Prop
         </section>
       </div>
 
-      <IntelligenceRail model={model} locale={locale} currency={reportingCurrency} />
+      <IntelligenceRail model={model} locale={locale} currency={reportingCurrency} taxReport={taxReport} />
     </div>
   )
 }
@@ -335,8 +336,10 @@ function ActivityPlaceholder() {
   )
 }
 
-function IntelligenceRail({ model, locale, currency }: { model: Model; locale: string; currency: string }) {
+function IntelligenceRail({ model, locale, currency, taxReport }: { model: Model; locale: string; currency: string; taxReport: TaxReport | null }) {
   const topThree = model.openRows.slice(0, 3).reduce((sum, row) => sum + row.allocation, 0)
+  const netTax = taxReport ? (num(taxReport.net_actual_tax) ?? 0) : null
+  const afterTaxRealized = taxReport ? (num(taxReport.realized_pnl_after_actual_tax) ?? 0) : null
   return (
     <aside className="app-panel h-fit overflow-hidden rounded-xl">
       <div className="border-b border-[var(--app-border)] px-4 py-3"><h2 className="text-xs font-semibold text-[var(--app-text)]">Portfolio intelligence</h2><p className="mt-0.5 text-[9px] text-[var(--app-text-faint)]">Based on currently available data</p></div>
@@ -345,6 +348,28 @@ function IntelligenceRail({ model, locale, currency }: { model: Model; locale: s
       </RailBlock>
       <RailBlock title="Biggest mover today">
         {model.biggestMover ? <div className="flex items-center justify-between gap-3"><div><p className="font-semibold text-[var(--app-text)]">{model.biggestMover.position.listing?.symbol}</p><p className="text-[10px] text-[var(--app-text-faint)]">{model.biggestMover.position.listing?.name}</p></div><p className={`font-semibold tabular-nums ${(model.biggestMover.dailyPct ?? 0) >= 0 ? "text-[var(--app-positive)]" : "text-[var(--app-negative)]"}`}>{fmtPct(model.biggestMover.dailyPct ?? 0)}</p></div> : <p className="text-xs text-[var(--app-text-muted)]">No daily quote movement available.</p>}
+      </RailBlock>
+      <RailBlock title="Recorded tax">
+        {taxReport && netTax !== null && afterTaxRealized !== null ? (
+          <div>
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <p className={`text-lg font-semibold tabular-nums ${netTax > 0 ? "text-[var(--app-negative)]" : netTax < 0 ? "text-[var(--app-positive)]" : "text-[var(--app-text)]"}`}>
+                  {netTax > 0 ? "+" : ""}{fmtCurrency(locale, netTax, currency)}
+                </p>
+                <p className="mt-1 text-[9px] text-[var(--app-text-faint)]">Net tax paid</p>
+              </div>
+              <span className={`rounded px-2 py-1 text-[9px] font-semibold ${taxReport.status === "actual_partial" ? "bg-[color-mix(in_srgb,var(--app-warning)_14%,transparent)] text-[var(--app-warning)]" : "bg-[var(--app-surface-raised)] text-[var(--app-text-muted)]"}`}>
+                {taxReport.status === "actual_partial" ? "Partial" : taxReport.event_count === 0 ? "None recorded" : `${taxReport.event_count} event${taxReport.event_count === 1 ? "" : "s"}`}
+              </span>
+            </div>
+            <p className="mt-3 text-[10px] text-[var(--app-text-muted)]">After-tax realized P&amp;L</p>
+            <p className={`mt-0.5 text-xs font-semibold tabular-nums ${afterTaxRealized >= 0 ? "text-[var(--app-positive)]" : "text-[var(--app-negative)]"}`}>
+              {afterTaxRealized >= 0 ? "+" : ""}{fmtCurrency(locale, afterTaxRealized, currency)}
+            </p>
+            <p className="mt-2 text-[9px] leading-4 text-[var(--app-text-faint)]">Negative net tax is a recorded refund or credit.</p>
+          </div>
+        ) : <p className="text-xs text-[var(--app-text-muted)]">Tax reporting is currently unavailable.</p>}
       </RailBlock>
       <RailBlock title="Asset allocation"><AllocationDonut model={model} locale={locale} currency={currency} /></RailBlock>
       <RailBlock title="Data quality">

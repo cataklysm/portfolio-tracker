@@ -2,8 +2,9 @@ import { apiFetch } from "@/lib/api"
 import { SettingsForm } from "./SettingsForm"
 import { ApiTokensSection } from "@/components/ApiTokensSection"
 import { TaxResidencyCard } from "@/components/TaxResidencyCard"
+import { UserTaxSettingsCard } from "@/components/UserTaxSettingsCard"
 import { getTranslations } from "@/lib/i18n"
-import type { ApiToken, MeData, TaxResidencyView } from "@/lib/types"
+import type { ApiToken, MeData, TaxRule, TaxResidencyView, UserTaxSettings } from "@/lib/types"
 
 export default async function SettingsPage() {
   const t = getTranslations()
@@ -20,6 +21,16 @@ export default async function SettingsPage() {
     ? ((await residencyResp.json()) as TaxResidencyView)
     : { current: null, history: [] }
 
+  // The user tax-settings schema is residence-level: any current rule for the
+  // residence supplies it. Saved values come from the portfolio service.
+  const country = residency.current?.country_code ?? null
+  const [rulesResp, taxSettingsResp] = await Promise.all([
+    country ? apiFetch(`/tax-rules?country=${country}`, { cache: "no-store" }) : Promise.resolve(null),
+    apiFetch("/tax-settings", { cache: "no-store" }),
+  ])
+  const rules = rulesResp?.ok ? ((await rulesResp.json()) as TaxRule[]) : []
+  const userTaxSettings = taxSettingsResp.ok ? ((await taxSettingsResp.json()) as UserTaxSettings | null) : null
+
   return (
     <div className="mx-auto max-w-xl px-4 py-8">
       <header className="mb-8">
@@ -29,6 +40,11 @@ export default async function SettingsPage() {
       <div className="space-y-6">
         <SettingsForm me={me} />
         <TaxResidencyCard residency={residency} />
+        <UserTaxSettingsCard
+          country={country}
+          schema={rules[0]?.user_settings_schema ?? null}
+          current={userTaxSettings?.settings ?? {}}
+        />
         <ApiTokensSection tokens={tokens} availableScopes={availableScopes} />
       </div>
     </div>

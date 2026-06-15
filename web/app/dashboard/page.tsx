@@ -4,10 +4,19 @@ import { getLocale } from "@/lib/locale"
 import { DashboardOverview } from "@/components/DashboardOverview"
 import { CreatePortfolioForm } from "@/components/CreatePortfolioForm"
 import { getTranslations } from "@/lib/i18n"
-import type { PositionView, Portfolio, MeData } from "@/lib/types"
+import type { PositionView, Portfolio, MeData, TaxReport } from "@/lib/types"
 
 interface Props {
   searchParams: Promise<{ portfolio?: string }>
+}
+
+async function fetchTaxReport(query: string): Promise<TaxReport | null> {
+  try {
+    const response = await apiFetch(`/reporting/tax${query}`, { cache: "no-store" })
+    return response.ok ? ((await response.json()) as TaxReport) : null
+  } catch {
+    return null
+  }
 }
 
 export default async function DashboardPage({ searchParams }: Props) {
@@ -34,10 +43,11 @@ export default async function DashboardPage({ searchParams }: Props) {
   }
 
   const selected = portfolios.find((p) => p.id === selectedRaw)?.id
-  const positionsResp = await apiFetch(
-    selected ? `/positions?portfolio_id=${selected}` : "/positions",
-    { cache: "no-store" },
-  )
+  const query = selected ? `?portfolio_id=${selected}` : ""
+  const [positionsResp, taxReport] = await Promise.all([
+    apiFetch(selected ? `/positions${query}` : "/positions", { cache: "no-store" }),
+    fetchTaxReport(query),
+  ])
   const positions = (await positionsResp.json()) as PositionView[]
 
   const latestQuote = positions
@@ -78,7 +88,7 @@ export default async function DashboardPage({ searchParams }: Props) {
           </Link>
         </div>
       ) : (
-        <DashboardOverview positions={positions} reportingCurrency={reporting} locale={locale} />
+        <DashboardOverview positions={positions} reportingCurrency={reporting} locale={locale} taxReport={taxReport} />
       )}
     </div>
   )

@@ -41,6 +41,19 @@ export interface LotConsumption {
   sellTransactionId: string;
   buyTransactionId: string;
   quantity: Decimal;
+  /** Value date of the consumed buy lot (acquisition) — for holding-period rules. */
+  acquisitionDate: string;
+  /** Value date of the sell (disposal). */
+  disposalDate: string;
+  /** Trade currency of the sell. */
+  currency: string;
+  /**
+   * Realized gain/loss for this consumed portion, in the trade currency:
+   * proceeds (take × price) − a proportional share of the sell fee − consumed cost
+   * (take × buy unit cost, fee-inclusive). The per-lot pieces sum to the sell's
+   * total realized P&L.
+   */
+  realizedGainLoss: Decimal;
 }
 
 /**
@@ -107,6 +120,8 @@ interface OpenLot {
   quantity: Decimal;
   /** Per-share cost including a proportional share of the buy fee. */
   unitCost: Decimal;
+  /** Value date of the buy that opened this lot (acquisition date). */
+  valueDate: string;
 }
 
 /**
@@ -149,7 +164,12 @@ function fifoLifo(transactions: LedgerTransaction[], method: 'fifo' | 'lifo'): R
     if (tx.side === 'buy') {
       totalContributedCapital = totalContributedCapital.plus(qty.times(price));
       const unitCost = qty.gt(0) ? qty.times(price).plus(fee).div(qty) : new D(0);
-      const lot: OpenLot = { transactionId: tx.id ?? '', quantity: qty, unitCost };
+      const lot: OpenLot = {
+        transactionId: tx.id ?? '',
+        quantity: qty,
+        unitCost,
+        valueDate: tx.tax_relevant_value_date ?? '',
+      };
       lots.push(lot);
       allLots.push({ tx, lot });
       continue;
@@ -166,8 +186,20 @@ function fifoLifo(transactions: LedgerTransaction[], method: 'fifo' | 'lifo'): R
         return invalidResult(totalContributedCapital, grossSellProceeds, totalFees);
       }
       const take = D.min(lot.quantity, remainingToSell);
-      consumedCost = consumedCost.plus(take.times(lot.unitCost));
-      lotConsumptions.push({ sellTransactionId: tx.id ?? '', buyTransactionId: lot.transactionId, quantity: take });
+      const takeCost = take.times(lot.unitCost);
+      consumedCost = consumedCost.plus(takeCost);
+      // Per-lot realized: proceeds − proportional sell fee − consumed cost.
+      const proportionalFee = qty.gt(0) ? fee.times(take).div(qty) : new D(0);
+      const takeRealized = take.times(price).minus(proportionalFee).minus(takeCost);
+      lotConsumptions.push({
+        sellTransactionId: tx.id ?? '',
+        buyTransactionId: lot.transactionId,
+        quantity: take,
+        acquisitionDate: lot.valueDate,
+        disposalDate: tx.tax_relevant_value_date ?? '',
+        currency: tx.currency ?? '',
+        realizedGainLoss: takeRealized,
+      });
       lot.quantity = lot.quantity.minus(take);
       remainingToSell = remainingToSell.minus(take);
       if (lot.quantity.lte(0)) {

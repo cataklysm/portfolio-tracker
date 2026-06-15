@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { fmtCurrency, num } from "@/lib/format"
 import type { TaxComponent, TaxEvent, TaxReport } from "@/lib/types"
 import { createTaxEventAction, deleteTaxEventAction } from "@/app/reports/tax-actions"
+import { TaxEventModal } from "./TaxEventModal"
 
 const COMPONENT_LABEL: Record<TaxComponent, string> = {
   capital_income: "Capital income tax",
@@ -90,7 +91,8 @@ function TaxEventList({ events, locale }: { events: TaxEvent[]; locale: string }
 
   async function remove(id: string) {
     setBusy(id)
-    await deleteTaxEventAction(id, null)
+    const event = events.find((item) => item.id === id)
+    await deleteTaxEventAction(id, event?.position_id ?? null, null)
     setBusy(null)
     router.refresh()
   }
@@ -109,10 +111,14 @@ function TaxEventList({ events, locale }: { events: TaxEvent[]; locale: string }
               <span className="font-medium text-[var(--app-text)]">{COMPONENT_LABEL[event.component]}</span>
               <span className={`ml-2 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase ${event.direction === "withheld" ? "bg-[color-mix(in_srgb,var(--app-negative)_12%,transparent)] text-[var(--app-negative)]" : "bg-[color-mix(in_srgb,var(--app-positive)_12%,transparent)] text-[var(--app-positive)]"}`}>{event.direction}</span>
               {event.note ? <span className="ml-2 text-[var(--app-text-faint)]">{event.note}</span> : null}
+              <span className="mt-1 block text-[9px] text-[var(--app-text-faint)]">
+                Source: {event.source} · {event.transaction_id ? "transaction linked · " : ""}{event.cash_flow_id ? "cash flow linked · " : ""}{event.position_id ? "position linked · " : ""}{event.portfolio_id ? "portfolio linked" : "no portfolio link"}
+              </span>
               <span className="ml-2 text-[var(--app-text-faint)]">· {event.booking_date}{event.portfolio_id ? "" : " · standalone"}</span>
             </div>
             <div className="flex items-center gap-3 whitespace-nowrap">
               <span className="tabular-nums text-[var(--app-text)]">{fmtCurrency(locale, num(event.amount) ?? 0, event.currency)}</span>
+              <TaxEventModal event={event} currency={event.currency} />
               <button onClick={() => remove(event.id)} disabled={busy === event.id} className="text-[var(--app-text-faint)] transition hover:text-[var(--app-negative)] disabled:opacity-50" title="Delete">✕</button>
             </div>
           </li>

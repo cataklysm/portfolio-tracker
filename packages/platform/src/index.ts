@@ -29,3 +29,13 @@ export {
   type EventHandler,
 } from './stream-consumer.js';
 export { WatchSet, type WatchSetEntry, type WatchSetOptions } from './watch-set.js';
+export {
+  validateTaxSettings,
+  type TaxSettingsFieldType,
+  type TaxSettingsSelectOption,
+  type TaxSettingsCondition,
+  type TaxSettingsField,
+  type TaxSettingsSchema,
+  type TaxSettingsValidationError,
+  type TaxSettingsValidationResult,
+} from './tax-settings-schema.js';

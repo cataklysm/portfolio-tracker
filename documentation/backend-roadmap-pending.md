@@ -193,14 +193,22 @@ tab.
    from its TWR returns, benchmark from daily closes), with period/excess return,
    beta, correlation, and annualized tracking error (`benchmark.ts`, 4 tests).
    `PUT /portfolios/:id/benchmark` sets/clears `preferred_benchmark`; the
-   comparison defaults to it. **Web UI shipped 2026-06-15:** a `BenchmarkPanel`
-   on the reports page (single-portfolio only) with the comparison stats, a
-   dual-line rebased-to-100 index chart, an instrument-search picker to
-   set/change/clear the benchmark, and a `?bperiod=` period selector.
-   *Follow-ups:* a curated benchmark **catalog** (vs selecting by listing id),
-   resolving the saved benchmark's display name on load (today only a
-   this-session pick shows a friendly label), and the auth-owned
-   `combined_benchmark` for the combined view.
+   comparison defaults to it. **Web UI:** a `BenchmarkPanel` + `benchmark-actions`
+   were built but the reports-page wiring was **reverted** by the user, so they are
+   currently dead code (re-integrate-or-remove is a frontend-todo item).
+   *Follow-ups:*
+   - **⛔ Curated benchmark catalog — DEFERRED, needs a product decision
+     (2026-06-15).** Today the benchmark is any listing id. A "catalog" raises
+     product questions I won't decide unilaterally: *which* benchmarks to curate
+     (index/region set?); and how a catalog entry **resolves to a tradable listing**
+     in this single-tenant instrument catalog, which may not contain the index/ETF
+     (seed the listings? resolve by symbol via instruments search? store the
+     catalog in instruments vs portfolio?). Its only consumer is the benchmark
+     **picker UI, which is currently shelved**, so backend value now is low.
+     Recommend deciding the curation set + listing-resolution model first.
+   - Resolving the saved benchmark's display name on load (frontend-todo; note
+     instruments already exposes `GET /listings/:id`).
+   - The auth-owned `combined_benchmark` for the combined view.
 2. **Risk analytics.** ✅ `GET /reporting/risk?portfolio_id=&period=` — annualized
    volatility, max drawdown, Sharpe, Sortino, best/worst period, and closed-position
    win rate, over the TWR per-period return series (`risk.ts`, 6 tests). Web: a risk

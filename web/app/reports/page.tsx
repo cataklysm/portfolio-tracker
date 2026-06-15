@@ -11,6 +11,7 @@ import type {
   TaxRule,
 } from "@/lib/types"
 import { ReportsOverview } from "@/components/ReportsOverview"
+import { RiskPanel, type RiskReport } from "@/components/RiskPanel"
 import { TaxCenter } from "@/components/TaxCenter"
 import { TaxEstimatePanel } from "@/components/TaxEstimatePanel"
 import { PortfolioTaxConfigCard } from "@/components/PortfolioTaxConfigCard"
@@ -41,11 +42,12 @@ export default async function ReportsPage({ searchParams }: Props) {
   const selectedPortfolio = portfolios.find((portfolio) => portfolio.id === selected)
   // One consistent snapshot for summary/holdings/allocation/tax (no cross-request
   // drift); the tax-events/estimate/residency reads are separate concerns.
-  const [snapshot, taxEvents, taxEstimate, residency] = await Promise.all([
+  const [snapshot, taxEvents, taxEstimate, residency, risk] = await Promise.all([
     report<ReportingSnapshot>("/reporting/snapshot", selected),
     report<TaxEvent[]>("/tax-events", selected),
     report<TaxEstimate>("/reporting/tax/estimate", selected),
     report<TaxResidencyView>("/tax-residency"),
+    report<RiskReport>("/reporting/risk", selected),
   ])
   const summary = snapshot?.summary ?? null
   const holdings = snapshot?.holdings ?? null
@@ -78,6 +80,7 @@ export default async function ReportsPage({ searchParams }: Props) {
       {summary && holdings && allocation ? (
         <>
           <ReportsOverview summary={summary} holdings={holdings} allocation={allocation} locale={locale} />
+          <RiskPanel report={risk} />
           {taxEstimate ? <TaxEstimatePanel estimate={taxEstimate} locale={locale} /> : null}
           {taxReport ? (
             <TaxCenter

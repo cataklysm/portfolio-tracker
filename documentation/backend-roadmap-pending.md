@@ -31,7 +31,7 @@ Each phase lists the **goal**, **owning service(s)**, **tables** (existing vs ne
 
 ## Recommended order
 
-**~~B-1~~ → ~~B-2~~ → ~~B-3~~ → ~~C-1~~ → D (D-1 done) → E.** (Phase B, C-1, D-1 done 2026-06-15.)
+**~~B-1~~ → ~~B-2~~ → ~~B-3~~ → ~~C-1~~ → D (D-1, D-3 done; D-2 left) → E.** (Phase B, C-1, D-1, D-3 done 2026-06-15.)
 
 B is the biggest unlock and gates C's richness and all of E. D (operations) can
 proceed in parallel with B. The "Universal Tracker" track (below) is separate and
@@ -119,11 +119,19 @@ tab.
    `portfolio.position_corporate_action_applications` that adjusts accounting
    (splits, spin-offs, returns of capital); events service already exposes the
    objective actions.
-3. **Market session/holiday-aware prior close.** Extend the market service beyond
-   the current UTC-calendar-day prior close to exchange-local session + holiday
-   calendars and explicit open/closed/holiday state.
-   - *Owners:* portfolio (1–2), market (3). *Tables:* exist for 1–2. *Dep:* feeds
-     Phase C and Phase E. *Size:* L overall (split per item).
+3. **Market session/holiday-aware prior close.** ✅ **Done 2026-06-15.**
+   `GET /listings/sessions?ids=` (instruments) returns each listing's market
+   status (open/closed/holiday/weekend/unknown) and the exchange-local current +
+   previous trading-session dates via the pure `computeMarketSession` (DST-correct
+   Intl local-time math + holiday/weekend walk). Web shows a status badge on the
+   position detail. *Placement:* built in **instruments** (owns exchange
+   timezone/hours/`holiday_calendar`) rather than market, avoiding a cross-service
+   round-trip. *Note:* the market quote prior-close SQL is unchanged — it already
+   skips non-trading days via data gaps; this exposes the authoritative session
+   state + `previous_trading_date` for consumers to adopt.
+
+   *Remaining D item:* **D-2 corporate-action apply/reverse** (signed workflow over
+   `position_corporate_action_applications`).
 
 ---
 

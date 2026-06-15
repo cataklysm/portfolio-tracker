@@ -31,7 +31,7 @@ Each phase lists the **goal**, **owning service(s)**, **tables** (existing vs ne
 
 ## Recommended order
 
-**~~B-1~~ → B-2 → B-3 → C-1 → D → E.** (B-1 done 2026-06-15.)
+**~~B-1~~ → ~~B-2~~ → B-3 → C-1 → D → E.** (B-1, B-2 done 2026-06-15.)
 
 B is the biggest unlock and gates C's richness and all of E. D (operations) can
 proceed in parallel with B. The "Universal Tracker" track (below) is separate and
@@ -59,9 +59,16 @@ performance, and make report reads internally consistent.
    - *Follow-up:* a cached daily-value table if read latency demands (the replay
      is O(positions × sample-dates)).
 
-2. **XIRR + time-weighted return.** Money-weighted (XIRR) over external cash flows
-   and TWR over sub-period returns, layered on B-1's series.
-   - *Owner:* portfolio. *Size:* M (pure domain + tests once the series exists).
+2. **XIRR + time-weighted return.** ✅ **Done 2026-06-15.**
+   `reporting/domain/returns.ts` adds `computeXirr` (annualized money-weighted,
+   ACT/365, Newton–Raphson + bisection) and `computeTwr` (chained sub-period
+   returns), built from the ledger by `computeReturns`: trades are the investment
+   flows (buy = capital deployed, sell = returned) plus dividends, with the
+   opening value as the initial outflow and the closing value the terminal inflow
+   (the trades-as-flows convention, matching per-position `total_return_pct`).
+   `GET /reporting/performance` returns a `returns { money_weighted, time_weighted }`
+   object; the dashboard chart shows both. 12 domain tests.
+   - *Approximation:* TWR sub-periods coarsen under strided (long `ALL`) sampling.
 
 3. **Consistent combined snapshot.** Either one endpoint returning
    summary+holdings+allocation+tax under a single `snapshot_at`/version, or a shared

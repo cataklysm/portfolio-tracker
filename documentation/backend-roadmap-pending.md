@@ -31,7 +31,7 @@ Each phase lists the **goal**, **owning service(s)**, **tables** (existing vs ne
 
 ## Recommended order
 
-**~~B-1~~ → ~~B-2~~ → ~~B-3~~ → ~~C-1~~ → D → E.** (Phase B + C-1 done 2026-06-15.)
+**~~B-1~~ → ~~B-2~~ → ~~B-3~~ → ~~C-1~~ → D (D-1 done) → E.** (Phase B, C-1, D-1 done 2026-06-15.)
 
 B is the biggest unlock and gates C's richness and all of E. D (operations) can
 proceed in parallel with B. The "Universal Tracker" track (below) is separate and
@@ -105,8 +105,16 @@ tab.
 
 **Goal:** the write workflows that change holdings beyond plain buy/sell.
 
-1. **Position transfers.** Implement the module over `portfolio.position_transfers`
-   (move/merge lots between portfolios while preserving cost basis & history).
+1. **Position transfers.** ✅ **Done 2026-06-15.**
+   `POST /positions/:id/transfer` moves a position (with its full ledger) to
+   another owned portfolio; `GET /positions/:id/transfers` lists the moves. Atomic
+   reassign, or — when the destination already holds the listing — re-point the
+   source ledger into the destination position (merge) and drop the empty source;
+   transaction ids survive so re-derivation over the combined ledger preserves
+   cost basis & history. Logged in `portfolio.position_transfers` (now typed). Web:
+   a "Move position" control on the position detail. *Scope:* whole-position only;
+   partial-lot splitting is a follow-up. *Caveat:* move/merge SQL verified by
+   typecheck + unit tests, not yet run against a live DB.
 2. **Corporate-action apply/reverse.** A signed apply/reverse workflow over
    `portfolio.position_corporate_action_applications` that adjusts accounting
    (splits, spin-offs, returns of capital); events service already exposes the

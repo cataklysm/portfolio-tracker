@@ -183,6 +183,12 @@ export interface PositionTransfersTable {
   source_portfolio_id: string;
   destination_portfolio_id: string;
   effective_at: ColumnType<Date, Date | string, Date | string>;
+  /** 'whole' (legacy reassign/merge) or 'partial' (a subset of open lots moved). */
+  kind: ColumnType<'whole' | 'partial', 'whole' | 'partial' | undefined, 'whole' | 'partial'>;
+  /** The position the lots landed in (partial moves; nullable for legacy rows). */
+  destination_position_id: ColumnType<string | null, string | null | undefined, string | null>;
+  /** Informational sum of moved (raw) lot quantities; null for whole moves. */
+  transferred_quantity: ColumnType<string | null, string | number | null | undefined, string | number | null>;
   creation_sequence: Generated<string>;
   created_at: Generated<Date>;
 }

@@ -27,4 +27,16 @@ here so nothing is lost. Each item notes the backend it depends on.
   `split`/`reverse_split` subtype, plus a "reversed" badge when `direction ===
   "reversed"`; for `transfer` show a move between portfolios. Backend shipped.
 
+## Partial-lot position transfers
+- [ ] **Lot-transfer UI on the position detail.** `POST /positions/:id/transfer-lots`
+  `{ destination_portfolio_id, lot_transaction_ids[], effective_at? }` moves a
+  subset of **fully-open** buy lots to a same-listing position in another
+  portfolio. UI needs: a multi-select of the position's open buy lots (the
+  transactions table already shows which buys are open) + a destination-portfolio
+  picker, calling the endpoint. Backend rejects consumed lots / average-cost
+  positions with sales / non-buys (surface those 400 messages). Distinct from the
+  existing whole-position "Move position" control (`TransferPositionControl`).
+  `listTransfers` now also returns `kind`, `destination_position_id`,
+  `transferred_quantity` for display.
+
 ## (add new items below as backend features ship)

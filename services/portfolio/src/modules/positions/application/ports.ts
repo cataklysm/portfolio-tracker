@@ -76,13 +76,16 @@ export interface RealizationAllocationView {
   average_cost_realizations: { sell_transaction_id: string; average_cost_basis: string; quantity: string }[];
 }
 
-/** A recorded move of a position between portfolios. */
+/** A recorded move of a position (or some of its lots) between portfolios. */
 export interface StoredTransfer {
   id: string;
   position_id: string;
   source_portfolio_id: string;
   destination_portfolio_id: string;
   effective_at: Date;
+  kind: 'whole' | 'partial';
+  destination_position_id: string | null;
+  transferred_quantity: string | null;
   created_at: Date;
 }
 
@@ -102,6 +105,28 @@ export interface TransferResult {
   merged: boolean;
 }
 
+/** Move a subset of a position's (fully-open) buy lots to another portfolio. */
+export interface LotTransferInput {
+  /** The source position the lots leave (it survives, with the remaining ledger). */
+  sourcePositionId: string;
+  listingId: string;
+  sourcePortfolioId: string;
+  destinationPortfolioId: string;
+  /** Transaction ids of the buy lots to move (re-pointed to the destination position). */
+  lotTransactionIds: string[];
+  /** Informational sum of the moved lots' raw quantities. */
+  transferredQuantity: string;
+  effectiveAt: Date;
+}
+
+export interface LotTransferResult {
+  transferId: string;
+  /** The destination position the lots were re-pointed into. */
+  destinationPositionId: string;
+  /** True when the destination position was newly created for this listing. */
+  createdDestination: boolean;
+}
+
 export interface PositionRepository {
   listPositionsForUser(userId: string, portfolioId?: string): Promise<PositionRecord[]>;
   getOwnedPosition(positionId: string, userId: string): Promise<PositionRecord | null>;
@@ -117,6 +142,13 @@ export interface PositionRepository {
    * source position removed. Records the move in `position_transfers`.
    */
   transferPosition(input: TransferInput): Promise<TransferResult>;
+  /**
+   * Moves the given (fully-open) buy lots into a same-listing position in the
+   * destination portfolio, creating that position when absent, atomically.
+   * Re-points the transactions (ids survive, so cost basis & history travel with
+   * them) and records the partial move in `position_transfers`.
+   */
+  transferLots(input: LotTransferInput): Promise<LotTransferResult>;
   /** Recorded transfers affecting a position, most recent first. */
   listTransfers(positionId: string): Promise<StoredTransfer[]>;
   listTransactions(positionId: string): Promise<StoredTransaction[]>;

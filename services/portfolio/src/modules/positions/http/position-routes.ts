@@ -35,6 +35,12 @@ const TransferBody = Type.Object({
   effective_at: Type.Optional(Type.String({ format: 'date-time' })),
 });
 
+const TransferLotsBody = Type.Object({
+  destination_portfolio_id: Type.String({ format: 'uuid' }),
+  lot_transaction_ids: Type.Array(Type.String({ format: 'uuid' }), { minItems: 1 }),
+  effective_at: Type.Optional(Type.String({ format: 'date-time' })),
+});
+
 const InternalPositionsQuery = Type.Object({ user_id: Type.String({ format: 'uuid' }) });
 
 type TransactionBodyType = Static<typeof TransactionBody>;
@@ -100,6 +106,17 @@ export function registerPositionRoutes(app: FastifyInstance, deps: PositionRoute
     const { id } = request.params as { id: string };
     return deps.service.transferPosition(userId(request.user?.sub), bearer(request.headers.authorization), id, {
       destinationPortfolioId: request.body.destination_portfolio_id,
+      effectiveAt: request.body.effective_at ? new Date(request.body.effective_at) : undefined,
+    });
+  });
+
+  // Move a subset of the position's fully-open buy lots to a same-listing
+  // position in another owned portfolio (the source position survives).
+  r.post('/positions/:id/transfer-lots', { preHandler: write, schema: { body: TransferLotsBody } }, async (request) => {
+    const { id } = request.params as { id: string };
+    return deps.service.transferLots(userId(request.user?.sub), bearer(request.headers.authorization), id, {
+      destinationPortfolioId: request.body.destination_portfolio_id,
+      lotTransactionIds: request.body.lot_transaction_ids,
       effectiveAt: request.body.effective_at ? new Date(request.body.effective_at) : undefined,
     });
   });

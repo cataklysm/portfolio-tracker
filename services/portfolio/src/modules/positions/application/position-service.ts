@@ -1,3 +1,4 @@
+import Decimal from 'decimal.js';
 import { AppError } from '@portfolio/platform';
 import { computeRealization, type AccountingMethod, type RealizationResult, type SplitAdjustment } from '../domain/realization.js';
 import type { TransactionPerformanceMetrics } from '../domain/transaction-performance.js';
@@ -44,6 +45,9 @@ export interface SerializedTransfer {
   source_portfolio_id: string;
   destination_portfolio_id: string;
   effective_at: string;
+  kind: 'whole' | 'partial';
+  destination_position_id: string | null;
+  transferred_quantity: string | null;
   created_at: string;
 }
 
@@ -54,6 +58,9 @@ function serializeTransfer(transfer: StoredTransfer): SerializedTransfer {
     source_portfolio_id: transfer.source_portfolio_id,
     destination_portfolio_id: transfer.destination_portfolio_id,
     effective_at: transfer.effective_at.toISOString(),
+    kind: transfer.kind,
+    destination_position_id: transfer.destination_position_id,
+    transferred_quantity: transfer.transferred_quantity,
     created_at: transfer.created_at.toISOString(),
   };
 }
@@ -480,6 +487,92 @@ export class PositionService {
     // The merged/destination ledger changed; re-derive its state and allocations.
     await this.recalculate(result.resultingPositionId, bearerToken);
     return { transfer_id: result.transferId, position_id: result.resultingPositionId, merged: result.merged };
+  }
+
+  /**
+   * Moves a subset of a position's **fully-open** buy lots to a same-listing
+   * position in another owned portfolio. The selected buy transactions are
+   * re-pointed (ids survive, so their cost basis, fees, and acquisition dates
+   * travel with them — no synthetic trades, no realized P&L); the source keeps
+   * its remaining ledger. Only lots untouched by any sell may move, so neither
+   * side's realized P&L changes; average-cost positions with sales are rejected
+   * (pooled basis has no movable lot identity). Both positions are re-derived.
+   */
+  async transferLots(
+    userId: string,
+    bearerToken: string,
+    positionId: string,
+    input: { destinationPortfolioId: string; lotTransactionIds: string[]; effectiveAt?: Date },
+  ): Promise<{ transfer_id: string; source_position_id: string; destination_position_id: string; created: boolean }> {
+    const position = await this.requireOwnedPosition(positionId, userId);
+    if (position.portfolio_id === input.destinationPortfolioId) {
+      throw AppError.badRequest('transfer_same_portfolio', 'The position is already in that portfolio');
+    }
+    if (!(await this.deps.repo.assertPortfolioOwned(input.destinationPortfolioId, userId))) {
+      throw AppError.notFound('portfolio_not_found', 'Destination portfolio not found');
+    }
+
+    const requested = [...new Set(input.lotTransactionIds)];
+    if (requested.length === 0) {
+      throw AppError.badRequest('no_lots_selected', 'Select at least one lot to transfer');
+    }
+
+    const [{ accountingMethod }, transactions, splitsByPosition] = await Promise.all([
+      this.deps.settings.getUserSettings(bearerToken),
+      this.deps.repo.listTransactions(position.id),
+      this.activeSplits([position.id]),
+    ]);
+    const byId = new Map(transactions.map((tx) => [tx.id, tx]));
+    const realization = computeRealization(
+      transactions,
+      accountingMethod,
+      splitsByPosition.get(position.id) ?? [],
+      todayIso(),
+    );
+    if (realization.invalid) {
+      throw AppError.badRequest('position_invalid', 'Resolve the invalid position before transferring lots');
+    }
+    // A lot is movable only if it is a buy that no sell has consumed (fully open),
+    // so removing it leaves the source's realized P&L unchanged. Average-cost
+    // pooling erases lot identity once anything has been sold.
+    const hasSells = transactions.some((tx) => tx.side === 'sell');
+    if (accountingMethod === 'average_cost' && hasSells) {
+      throw AppError.badRequest(
+        'partial_transfer_unsupported',
+        'Partial transfers are not supported for average-cost positions with sales',
+      );
+    }
+    const consumedBuyIds = new Set(realization.lotConsumptions.map((c) => c.buyTransactionId));
+
+    let transferredQuantity = new Decimal(0);
+    for (const id of requested) {
+      const tx = byId.get(id);
+      if (!tx) throw AppError.badRequest('lot_not_in_position', `Transaction ${id} is not in this position`);
+      if (tx.side !== 'buy') throw AppError.badRequest('lot_not_a_buy', 'Only buy lots can be transferred');
+      if (consumedBuyIds.has(id)) {
+        throw AppError.badRequest('lot_not_fully_open', 'Only lots untouched by a sale can be transferred');
+      }
+      transferredQuantity = transferredQuantity.plus(new Decimal(tx.quantity));
+    }
+
+    const result = await this.deps.repo.transferLots({
+      sourcePositionId: position.id,
+      listingId: position.listing_id,
+      sourcePortfolioId: position.portfolio_id,
+      destinationPortfolioId: input.destinationPortfolioId,
+      lotTransactionIds: requested,
+      transferredQuantity: transferredQuantity.toString(),
+      effectiveAt: input.effectiveAt ?? new Date(),
+    });
+    // Both ledgers changed: the source lost lots, the destination gained them.
+    await this.recalculate(position.id, bearerToken);
+    await this.recalculate(result.destinationPositionId, bearerToken);
+    return {
+      transfer_id: result.transferId,
+      source_position_id: position.id,
+      destination_position_id: result.destinationPositionId,
+      created: result.createdDestination,
+    };
   }
 
   /** Recorded transfers affecting an owned position, most recent first. */

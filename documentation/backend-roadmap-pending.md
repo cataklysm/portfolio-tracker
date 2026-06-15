@@ -124,9 +124,20 @@ tab.
    source ledger into the destination position (merge) and drop the empty source;
    transaction ids survive so re-derivation over the combined ledger preserves
    cost basis & history. Logged in `portfolio.position_transfers` (now typed). Web:
-   a "Move position" control on the position detail. *Scope:* whole-position only;
-   partial-lot splitting is a follow-up. *Caveat:* move/merge SQL verified by
-   typecheck + unit tests, not yet run against a live DB.
+   a "Move position" control on the position detail. ~~*Scope:* whole-position
+   only; partial-lot splitting is a follow-up.~~ ✅ **Partial-lot transfer added
+   2026-06-15.** `POST /positions/:id/transfer-lots` moves a subset of
+   **fully-open** buy lots (selected by transaction id) to a same-listing position
+   in another portfolio: it re-points those transactions (ids + cost basis + dates
+   survive, no synthetic trades / realized P&L), the source keeps its remaining
+   ledger, and both positions are re-derived. Only lots untouched by any sell may
+   move (so neither side's realized P&L changes); average-cost positions with sales
+   are rejected (pooled basis has no movable lot identity). Migration 016 adds
+   `kind`/`destination_position_id`/`transferred_quantity` to `position_transfers`;
+   the activity feed surfaces these as `transfer` rows. Web UI is a frontend-todo
+   item. *Caveat:* move/merge + lot-transfer SQL verified by typecheck + unit
+   tests, not yet run against a live DB. *Further follow-up:* splitting a single
+   lot (move part of one open buy's shares).
 2. **Corporate-action apply/reverse.** ✅ **Done 2026-06-15.**
    `POST /positions/:id/corporate-actions` applies a share-ratio action (split /
    reverse split): validates the ratio, snapshots the objective action with a

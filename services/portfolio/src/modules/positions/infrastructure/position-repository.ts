@@ -4,6 +4,8 @@ import type { PortfolioDatabase } from '../../../platform/database/schema.js';
 import type { AuditFn } from '../../audit/application/ports.js';
 import type { ChangeRecorder } from '../../audit/infrastructure/change-log-repository.js';
 import type {
+  LotTransferInput,
+  LotTransferResult,
   NewTransaction,
   PositionRecord,
   PositionRepository,
@@ -134,11 +136,74 @@ export class KyselyPositionRepository implements PositionRepository {
     });
   }
 
+  async transferLots(input: LotTransferInput): Promise<LotTransferResult> {
+    return this.db.transaction().execute(async (trx) => {
+      // Find or create the same-listing position in the destination portfolio.
+      const existing = await trx
+        .selectFrom('portfolio.positions')
+        .select('id')
+        .where('portfolio_id', '=', input.destinationPortfolioId)
+        .where('listing_id', '=', input.listingId)
+        .executeTakeFirst();
+
+      let destinationPositionId: string;
+      let createdDestination = false;
+      if (existing) {
+        destinationPositionId = existing.id;
+      } else {
+        const created = await trx
+          .insertInto('portfolio.positions')
+          .values({ portfolio_id: input.destinationPortfolioId, listing_id: input.listingId })
+          .returning('id')
+          .executeTakeFirstOrThrow();
+        destinationPositionId = created.id;
+        createdDestination = true;
+      }
+
+      // Re-point the selected lots, scoped to the source position so a stale id
+      // can never move another position's transaction.
+      await trx
+        .updateTable('portfolio.transactions')
+        .set({ position_id: destinationPositionId })
+        .where('position_id', '=', input.sourcePositionId)
+        .where('id', 'in', input.lotTransactionIds)
+        .execute();
+
+      const transfer = await trx
+        .insertInto('portfolio.position_transfers')
+        .values({
+          position_id: input.sourcePositionId,
+          source_portfolio_id: input.sourcePortfolioId,
+          destination_portfolio_id: input.destinationPortfolioId,
+          effective_at: input.effectiveAt,
+          kind: 'partial',
+          destination_position_id: destinationPositionId,
+          transferred_quantity: input.transferredQuantity,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      return { transferId: transfer.id, destinationPositionId, createdDestination };
+    });
+  }
+
   async listTransfers(positionId: string): Promise<StoredTransfer[]> {
     return this.db
       .selectFrom('portfolio.position_transfers')
-      .select(['id', 'position_id', 'source_portfolio_id', 'destination_portfolio_id', 'effective_at', 'created_at'])
-      .where('position_id', '=', positionId)
+      .select([
+        'id',
+        'position_id',
+        'source_portfolio_id',
+        'destination_portfolio_id',
+        'effective_at',
+        'kind',
+        'destination_position_id',
+        'transferred_quantity',
+        'created_at',
+      ])
+      // A position is involved either as the transfer subject (whole move / partial
+      // source) or as a partial move's destination.
+      .where((eb) => eb.or([eb('position_id', '=', positionId), eb('destination_position_id', '=', positionId)]))
       .orderBy('effective_at', 'desc')
       .orderBy('creation_sequence', 'desc')
       .execute();

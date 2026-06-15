@@ -64,6 +64,10 @@ export const en = {
     investedCapital: "Cost basis",
     performanceEmpty: "Not enough history yet to chart performance.",
     performancePartial: "Some days are missing prices or FX; values for those points are approximate.",
+    xirr: "XIRR",
+    twr: "TWR",
+    xirrHint: "Money-weighted annualized return (XIRR)",
+    twrHint: "Time-weighted return over the period",
   },
 
   summary: {

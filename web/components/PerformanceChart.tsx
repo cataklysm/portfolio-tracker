@@ -27,6 +27,8 @@ export function PerformanceChart({ report, period, portfolioId, currency, locale
   const up = totalPnl >= 0
   const color = up ? "var(--app-positive)" : "var(--app-negative)"
   const anyPartial = points.some((p) => !p.complete)
+  const xirr = num(report?.returns?.money_weighted ?? null)
+  const twr = num(report?.returns?.time_weighted ?? null)
 
   return (
     <section className="app-panel overflow-hidden rounded-xl">
@@ -44,20 +46,30 @@ export function PerformanceChart({ report, period, portfolioId, currency, locale
             {returnPct !== null && <span className="ml-1">({fmtPct(returnPct)})</span>}
           </p>
         </div>
-        <div className="flex gap-1">
-          {PERIODS.map((p) => (
-            <Link
-              key={p}
-              href={periodHref(portfolioId, p)}
-              className={`rounded-md border px-2 py-1 text-[10px] font-medium transition-all ${
-                p === period
-                  ? "border-[color-mix(in_srgb,var(--app-accent)_48%,var(--app-border))] bg-[var(--app-accent-soft)] text-[var(--app-accent)]"
-                  : "border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-muted)] hover:border-[var(--app-border-strong)] hover:text-[var(--app-text)]"
-              }`}
-            >
-              {p}
-            </Link>
-          ))}
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex gap-3">
+            {xirr !== null && (
+              <Metric label={t("dashboard.xirr")} hint={t("dashboard.xirrHint")} value={xirr} />
+            )}
+            {twr !== null && (
+              <Metric label={t("dashboard.twr")} hint={t("dashboard.twrHint")} value={twr} />
+            )}
+          </div>
+          <div className="flex gap-1">
+            {PERIODS.map((p) => (
+              <Link
+                key={p}
+                href={periodHref(portfolioId, p)}
+                className={`rounded-md border px-2 py-1 text-[10px] font-medium transition-all ${
+                  p === period
+                    ? "border-[color-mix(in_srgb,var(--app-accent)_48%,var(--app-border))] bg-[var(--app-accent-soft)] text-[var(--app-accent)]"
+                    : "border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-muted)] hover:border-[var(--app-border-strong)] hover:text-[var(--app-text)]"
+                }`}
+              >
+                {p}
+              </Link>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -159,6 +171,18 @@ function Chart({
         <span>{fmtDate(locale, points[points.length - 1]!.date)}</span>
       </div>
     </div>
+  )
+}
+
+function Metric({ label, hint, value }: { label: string; hint: string; value: number }) {
+  const color = value >= 0 ? "var(--app-positive)" : "var(--app-negative)"
+  return (
+    <span className="flex flex-col items-end leading-tight" title={hint}>
+      <span className="text-[9px] font-medium uppercase tracking-wide text-[var(--app-text-faint)]">{label}</span>
+      <span className="text-xs font-semibold tabular-nums" style={{ color }}>
+        {fmtPct(value)}
+      </span>
+    </span>
   )
 }
 

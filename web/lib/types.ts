@@ -136,12 +136,18 @@ export interface PerformancePoint {
   complete: boolean
 }
 
+export interface PerformanceReturns {
+  money_weighted: string | null
+  time_weighted: string | null
+}
+
 export interface PerformanceReport {
   period: PerformancePeriod
   reporting_currency: string
   from: string
   to: string
   points: PerformancePoint[]
+  returns: PerformanceReturns
 }
 
 export interface PositionDetail extends PositionView {

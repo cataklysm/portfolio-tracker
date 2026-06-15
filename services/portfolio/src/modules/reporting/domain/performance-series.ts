@@ -68,6 +68,25 @@ export interface PerformancePoint {
 const INCOME_TYPES = new Set<SeriesCashFlow['type']>(['dividend', 'cash_in_lieu']);
 
 /**
+ * Builds a converter from a trade currency to the reporting currency at a given
+ * date's EUR-based FX (pivoting through EUR), returning null when a needed rate
+ * is missing. Shared by the value series and the return calculations so both use
+ * identical conversion semantics.
+ */
+export function makeRateConverter(
+  rateOnOrBefore: (currency: string, date: string) => Decimal | null,
+  reportingCurrency: string,
+): (amount: Decimal, fromCurrency: string, atDate: string) => Decimal | null {
+  return (amount, fromCurrency, atDate) => {
+    if (fromCurrency === reportingCurrency) return amount;
+    const fromRate = fromCurrency === 'EUR' ? new D(1) : rateOnOrBefore(fromCurrency, atDate);
+    const toRate = reportingCurrency === 'EUR' ? new D(1) : rateOnOrBefore(reportingCurrency, atDate);
+    if (fromRate === null || toRate === null || fromRate.lte(0)) return null;
+    return amount.div(fromRate).times(toRate);
+  };
+}
+
+/**
  * Reconstructs a portfolio's value, contributed capital, and cumulative P&L at
  * each sample date by replaying every position's ledger as of that date and
  * marking holdings to the day's close. Conventions mirror the live snapshot
@@ -81,15 +100,8 @@ const INCOME_TYPES = new Set<SeriesCashFlow['type']>(['dividend', 'cash_in_lieu'
 export function computePerformanceSeries(input: PerformanceSeriesInput): PerformancePoint[] {
   const { sampleDates, reportingCurrency, positions, cashFlows, rateOnOrBefore } = input;
 
-  // Converts a trade-currency amount to the reporting currency at `atDate`'s FX,
-  // pivoting through EUR. Returns null if a needed rate is missing.
-  const convertAt = (amount: Decimal, fromCurrency: string, atDate: string): Decimal | null => {
-    if (fromCurrency === reportingCurrency) return amount;
-    const fromRate = fromCurrency === 'EUR' ? new D(1) : rateOnOrBefore(fromCurrency, atDate);
-    const toRate = reportingCurrency === 'EUR' ? new D(1) : rateOnOrBefore(reportingCurrency, atDate);
-    if (fromRate === null || toRate === null || fromRate.lte(0)) return null;
-    return amount.div(fromRate).times(toRate);
-  };
+  // Converts a trade-currency amount to the reporting currency at `atDate`'s FX.
+  const convertAt = makeRateConverter(rateOnOrBefore, reportingCurrency);
 
   // Converts at the event's own value date, falling back to the sample date's
   // rate when the value-date rate is missing (mirrors the snapshot fallback).

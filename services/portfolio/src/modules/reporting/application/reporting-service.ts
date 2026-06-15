@@ -24,6 +24,7 @@ import {
   type SeriesCashFlow,
   type SeriesPosition,
 } from '../domain/performance-series.js';
+import { computeReturns, type ReturnsResult } from '../domain/returns.js';
 
 export interface PortfolioNameReader {
   list(userId: string, includeArchived: boolean): Promise<{ id: string; name: string; preferred_headline_metric: string }[]>;
@@ -45,6 +46,8 @@ export interface PerformanceReport {
   from: string;
   to: string;
   points: PerformancePoint[];
+  /** Money-weighted (XIRR) and time-weighted return over the period, in percent. */
+  returns: ReturnsResult;
 }
 
 // "Dividend income" for the summary/holdings = received dividends and cash-in-lieu.
@@ -186,7 +189,15 @@ export class ReportingService {
       cashFlows,
       rateOnOrBefore,
     });
-    return { period, reporting_currency: reportingCurrency, from, to, points };
+    const returns = computeReturns({
+      sampleDates,
+      points,
+      positions,
+      cashFlows,
+      reportingCurrency,
+      rateOnOrBefore,
+    });
+    return { period, reporting_currency: reportingCurrency, from, to, points, returns };
   }
 
   /** Total received dividends/cash-in-lieu in the reporting currency, at value-date FX. */

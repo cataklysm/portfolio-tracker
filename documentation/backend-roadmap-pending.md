@@ -31,7 +31,7 @@ Each phase lists the **goal**, **owning service(s)**, **tables** (existing vs ne
 
 ## Recommended order
 
-**~~B-1~~ → ~~B-2~~ → ~~B-3~~ → ~~C-1~~ → D (D-1, D-3 done; D-2 left) → E.** (Phase B, C-1, D-1, D-3 done 2026-06-15.)
+**~~B-1~~ → ~~B-2~~ → ~~B-3~~ → ~~C-1~~ → ~~D~~ → E.** (Phase B, C, D done 2026-06-15; **E is the last phase left**.)
 
 B is the biggest unlock and gates C's richness and all of E. D (operations) can
 proceed in parallel with B. The "Universal Tracker" track (below) is separate and
@@ -115,10 +115,21 @@ tab.
    a "Move position" control on the position detail. *Scope:* whole-position only;
    partial-lot splitting is a follow-up. *Caveat:* move/merge SQL verified by
    typecheck + unit tests, not yet run against a live DB.
-2. **Corporate-action apply/reverse.** A signed apply/reverse workflow over
-   `portfolio.position_corporate_action_applications` that adjusts accounting
-   (splits, spin-offs, returns of capital); events service already exposes the
-   objective actions.
+2. **Corporate-action apply/reverse.** ✅ **Done 2026-06-15.**
+   `POST /positions/:id/corporate-actions` applies a share-ratio action (split /
+   reverse split): validates the ratio, snapshots the objective action with a
+   SHA-256 content hash (`token_signature_hash` — tamper-evident, not a crypto
+   signature), derives a UUID from the events stable id for the active-only unique
+   index, then re-derives the position. `POST /corporate-actions/:id/reverse`
+   un-applies; `GET /positions/:id/corporate-actions` lists. The **realization
+   engine is now split-aware** (restate open lots qty ×ratio / unit cost ÷ratio at
+   each ex-date, cost basis preserved) with an optional `asOf` so it is correct for
+   the live snapshot and every historical sample — threaded through position
+   recalc + view AND the reporting performance series + XIRR/TWR. 14 tests.
+   - *Scope/notes:* splits & reverse splits only (dividends → cash-flow ledger;
+     spin-offs / returns-of-capital are a follow-up). `getOpenPositionCostBases`
+     (notifications alert) stays split-unaware. SQL verified by typecheck + unit
+     tests, not yet run live.
 3. **Market session/holiday-aware prior close.** ✅ **Done 2026-06-15.**
    `GET /listings/sessions?ids=` (instruments) returns each listing's market
    status (open/closed/holiday/weekend/unknown) and the exchange-local current +

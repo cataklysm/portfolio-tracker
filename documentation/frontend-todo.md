@@ -8,15 +8,13 @@ here so nothing is lost. Each item notes the backend it depends on.
 > surface, add a checkbox item here instead of editing web/ in the backend work.
 
 ## Benchmark comparison UI
-- [ ] **Re-integrate or remove the benchmark panel.** `BenchmarkPanel.tsx` and
-  `app/reports/benchmark-actions.ts` were committed (4d7f556) but the reports
-  page wiring was reverted, so they are currently **dead code**. Decide: re-wire
-  into `/reports` (single-portfolio) or delete the two files.
-  Backend ready: `GET /reporting/benchmark`, `PUT /portfolios/:id/benchmark`.
-- [ ] **Resolve the saved benchmark's display name on load.** Today only a
-  this-session pick shows a friendly label; a fresh load shows the truncated
-  listing id. Needs a listing-by-id name lookup (see backend todo for a possible
-  `/listings/:id` name field or batch resolve).
+- [x] **Integrated & working** (corrected 2026-06-15). The comparison is wired on
+  the per-portfolio **dashboard** page (`web/app/dashboard/page.tsx` →
+  `fetchBenchmark` → `GET /reporting/benchmark`), and `PortfolioBenchmarkSettings`
+  (portfolio settings page, `portfolios/[id]/settings/actions.ts` →
+  `setPreferredBenchmarkAction`) sets/changes the benchmark. Display name is
+  resolved server-side and passed in as `current.label`, so the earlier
+  "resolve display name" concern is moot. Not on `/reports` by design.
 
 ## Activity feed — new kinds
 - [ ] **Render `corporate_action` and `transfer` activity items.** `GET /activity`

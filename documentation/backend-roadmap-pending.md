@@ -193,21 +193,23 @@ tab.
    from its TWR returns, benchmark from daily closes), with period/excess return,
    beta, correlation, and annualized tracking error (`benchmark.ts`, 4 tests).
    `PUT /portfolios/:id/benchmark` sets/clears `preferred_benchmark`; the
-   comparison defaults to it. **Web UI:** a `BenchmarkPanel` + `benchmark-actions`
-   were built but the reports-page wiring was **reverted** by the user, so they are
-   currently dead code (re-integrate-or-remove is a frontend-todo item).
+   comparison defaults to it. **Web UI: integrated & working** — the comparison is
+   on the per-portfolio **dashboard** page (not `/reports`, by design), and
+   `PortfolioBenchmarkSettings` on the portfolio settings page sets/changes the
+   benchmark (display name resolved server-side as `current.label`).
    *Follow-ups:*
    - **⛔ Curated benchmark catalog — DEFERRED, needs a product decision
-     (2026-06-15).** Today the benchmark is any listing id. A "catalog" raises
-     product questions I won't decide unilaterally: *which* benchmarks to curate
-     (index/region set?); and how a catalog entry **resolves to a tradable listing**
-     in this single-tenant instrument catalog, which may not contain the index/ETF
-     (seed the listings? resolve by symbol via instruments search? store the
-     catalog in instruments vs portfolio?). Its only consumer is the benchmark
-     **picker UI, which is currently shelved**, so backend value now is low.
-     Recommend deciding the curation set + listing-resolution model first.
-   - Resolving the saved benchmark's display name on load (frontend-todo; note
-     instruments already exposes `GET /listings/:id`).
+     (2026-06-15).** Today the picker is **free-text instrument search**
+     (`PortfolioBenchmarkSettings`), which works. A curated *catalog* is a UX
+     upgrade that raises product questions I won't decide unilaterally: *which*
+     benchmarks to curate (index/region set?); and how a catalog entry **resolves
+     to a tradable listing** in this single-tenant catalog, which may not contain
+     the index/ETF (seed the listings? resolve by symbol via instruments search?
+     store the catalog in instruments vs portfolio?). Decide the curation set +
+     listing-resolution model first; the existing search picker is the fallback
+     meanwhile.
+   - ~~Resolving the saved benchmark's display name on load~~ ✅ already handled in
+     the web UI (`PortfolioBenchmarkSettings` receives a resolved `current.label`).
    - The auth-owned `combined_benchmark` for the combined view.
 2. **Risk analytics.** ✅ `GET /reporting/risk?portfolio_id=&period=` — annualized
    volatility, max drawdown, Sharpe, Sortino, best/worst period, and closed-position

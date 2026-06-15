@@ -1,6 +1,8 @@
 import type { Kysely } from 'kysely';
 import { sql } from 'kysely';
 import type { PortfolioDatabase } from '../../../platform/database/schema.js';
+import type { AuditFn } from '../../audit/application/ports.js';
+import type { ChangeRecorder } from '../../audit/infrastructure/change-log-repository.js';
 import type {
   CashFlowRecord,
   CashFlowRepository,
@@ -45,28 +47,52 @@ const COLUMNS = [
 
 /** Kysely adapter for `portfolio.cash_flows`. */
 export class KyselyCashFlowRepository implements CashFlowRepository {
-  constructor(private readonly db: Kysely<PortfolioDatabase>) {}
+  constructor(
+    private readonly db: Kysely<PortfolioDatabase>,
+    private readonly recorder?: ChangeRecorder,
+  ) {}
 
-  async create(input: NewCashFlow): Promise<CashFlowRecord> {
-    const row = await this.db
-      .insertInto('portfolio.cash_flows')
-      .values({
-        user_id: input.userId,
-        portfolio_id: input.portfolioId,
-        position_id: input.positionId,
-        type: input.type,
-        gross_amount: input.grossAmount,
-        withholding_tax: input.withholdingTax,
-        fee: input.fee,
-        net_amount: input.netAmount,
-        currency: input.currency,
-        payment_date: input.paymentDate,
-        tax_relevant_value_date: input.taxRelevantValueDate,
-        note: input.note,
-      })
-      .returning(COLUMNS)
-      .executeTakeFirstOrThrow();
-    return toRecord(row as CashFlowRow);
+  /**
+   * Runs `write` and, when an audit builder and recorder are present, persists
+   * its change-log entry in the same transaction — so the write and its audit
+   * row commit (or roll back) together. Without a recorder it just runs `write`.
+   */
+  private async withAudit<T>(
+    audit: AuditFn<T> | undefined,
+    write: (exec: Kysely<PortfolioDatabase>) => Promise<T>,
+  ): Promise<T> {
+    if (!audit || !this.recorder) return write(this.db);
+    const recorder = this.recorder;
+    return this.db.transaction().execute(async (trx) => {
+      const result = await write(trx);
+      const change = audit(result);
+      if (change) await recorder.recordIn(trx, change);
+      return result;
+    });
+  }
+
+  async create(input: NewCashFlow, audit?: AuditFn<CashFlowRecord>): Promise<CashFlowRecord> {
+    return this.withAudit(audit, async (exec) => {
+      const row = await exec
+        .insertInto('portfolio.cash_flows')
+        .values({
+          user_id: input.userId,
+          portfolio_id: input.portfolioId,
+          position_id: input.positionId,
+          type: input.type,
+          gross_amount: input.grossAmount,
+          withholding_tax: input.withholdingTax,
+          fee: input.fee,
+          net_amount: input.netAmount,
+          currency: input.currency,
+          payment_date: input.paymentDate,
+          tax_relevant_value_date: input.taxRelevantValueDate,
+          note: input.note,
+        })
+        .returning(COLUMNS)
+        .executeTakeFirstOrThrow();
+      return toRecord(row as CashFlowRow);
+    });
   }
 
   async listForPortfolio(
@@ -102,7 +128,12 @@ export class KyselyCashFlowRepository implements CashFlowRepository {
     return row ? toRecord(row as CashFlowRow) : null;
   }
 
-  async update(userId: string, id: string, patch: UpdateCashFlow): Promise<CashFlowRecord | null> {
+  async update(
+    userId: string,
+    id: string,
+    patch: UpdateCashFlow,
+    audit?: AuditFn<CashFlowRecord | null>,
+  ): Promise<CashFlowRecord | null> {
     const values: Record<string, unknown> = { updated_at: sql`now()` };
     if (patch.grossAmount !== undefined) values.gross_amount = patch.grossAmount;
     if (patch.withholdingTax !== undefined) values.withholding_tax = patch.withholdingTax;
@@ -113,23 +144,27 @@ export class KyselyCashFlowRepository implements CashFlowRepository {
     if (patch.taxRelevantValueDate !== undefined) values.tax_relevant_value_date = patch.taxRelevantValueDate;
     if (patch.note !== undefined) values.note = patch.note;
 
-    const row = await this.db
-      .updateTable('portfolio.cash_flows')
-      .set(values)
-      .where('id', '=', id)
-      .where('user_id', '=', userId)
-      .returning(COLUMNS)
-      .executeTakeFirst();
-    return row ? toRecord(row as CashFlowRow) : null;
+    return this.withAudit(audit, async (exec) => {
+      const row = await exec
+        .updateTable('portfolio.cash_flows')
+        .set(values)
+        .where('id', '=', id)
+        .where('user_id', '=', userId)
+        .returning(COLUMNS)
+        .executeTakeFirst();
+      return row ? toRecord(row as CashFlowRow) : null;
+    });
   }
 
-  async delete(userId: string, id: string): Promise<boolean> {
-    const result = await this.db
-      .deleteFrom('portfolio.cash_flows')
-      .where('id', '=', id)
-      .where('user_id', '=', userId)
-      .executeTakeFirst();
-    return (result.numDeletedRows ?? 0n) > 0n;
+  async delete(userId: string, id: string, audit?: AuditFn<boolean>): Promise<boolean> {
+    return this.withAudit(audit, async (exec) => {
+      const result = await exec
+        .deleteFrom('portfolio.cash_flows')
+        .where('id', '=', id)
+        .where('user_id', '=', userId)
+        .executeTakeFirst();
+      return (result.numDeletedRows ?? 0n) > 0n;
+    });
   }
 
   async assertPortfolioOwned(userId: string, portfolioId: string): Promise<boolean> {

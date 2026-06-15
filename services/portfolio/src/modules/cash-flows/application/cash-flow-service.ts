@@ -1,7 +1,5 @@
 import Decimal from 'decimal.js';
 import { AppError } from '@portfolio/platform';
-import { safeRecord } from '../../audit/application/record.js';
-import type { ChangeLogWriter } from '../../audit/application/ports.js';
 import type {
   CashFlowRecord,
   CashFlowRepository,
@@ -41,10 +39,7 @@ const POSITION_LINKED: ReadonlySet<CashFlowType> = new Set(['dividend', 'cash_in
  * position linkage and ownership are enforced before any write.
  */
 export class CashFlowService {
-  constructor(
-    private readonly repo: CashFlowRepository,
-    private readonly changeLog?: ChangeLogWriter,
-  ) {}
+  constructor(private readonly repo: CashFlowRepository) {}
 
   list(
     userId: string,
@@ -65,30 +60,31 @@ export class CashFlowService {
     const fee = nonNegative(input.fee ?? '0', 'fee');
     const paymentDate = requireDate(input.paymentDate, 'payment_date');
 
-    const created = await this.repo.create({
-      userId,
-      portfolioId,
-      positionId,
-      type: input.type,
-      grossAmount: gross.toString(),
-      withholdingTax: withholding.toString(),
-      fee: fee.toString(),
-      netAmount: gross.minus(withholding).minus(fee).toString(),
-      currency: normalizeCurrency(input.currency),
-      paymentDate,
-      taxRelevantValueDate: requireDate(input.taxRelevantValueDate ?? paymentDate, 'tax_relevant_value_date'),
-      note: input.note?.trim() || null,
-    });
-    await safeRecord(this.changeLog, {
-      userId,
-      entityType: 'cash_flow',
-      entityId: created.id,
-      action: 'created',
-      after: created,
-      portfolioId: created.portfolio_id,
-      positionId: created.position_id,
-    });
-    return created;
+    return this.repo.create(
+      {
+        userId,
+        portfolioId,
+        positionId,
+        type: input.type,
+        grossAmount: gross.toString(),
+        withholdingTax: withholding.toString(),
+        fee: fee.toString(),
+        netAmount: gross.minus(withholding).minus(fee).toString(),
+        currency: normalizeCurrency(input.currency),
+        paymentDate,
+        taxRelevantValueDate: requireDate(input.taxRelevantValueDate ?? paymentDate, 'tax_relevant_value_date'),
+        note: input.note?.trim() || null,
+      },
+      (created) => ({
+        userId,
+        entityType: 'cash_flow',
+        entityId: created.id,
+        action: 'created',
+        after: created,
+        portfolioId: created.portfolio_id,
+        positionId: created.position_id,
+      }),
+    );
   }
 
   async update(userId: string, id: string, input: UpdateCashFlowInput): Promise<CashFlowRecord> {
@@ -114,35 +110,41 @@ export class CashFlowService {
       patch.netAmount = gross.minus(withholding).minus(fee).toString();
     }
 
-    const updated = await this.repo.update(userId, id, patch);
+    const updated = await this.repo.update(userId, id, patch, (row) =>
+      row
+        ? {
+            userId,
+            entityType: 'cash_flow',
+            entityId: id,
+            action: 'updated',
+            before: existing,
+            after: row,
+            portfolioId: row.portfolio_id,
+            positionId: row.position_id,
+          }
+        : null,
+    );
     if (!updated) throw AppError.notFound('cash_flow_not_found', 'Cash flow not found');
-    await safeRecord(this.changeLog, {
-      userId,
-      entityType: 'cash_flow',
-      entityId: id,
-      action: 'updated',
-      before: existing,
-      after: updated,
-      portfolioId: updated.portfolio_id,
-      positionId: updated.position_id,
-    });
     return updated;
   }
 
   async delete(userId: string, id: string): Promise<void> {
     const existing = await this.repo.get(userId, id);
-    if (!existing || !(await this.repo.delete(userId, id))) {
-      throw AppError.notFound('cash_flow_not_found', 'Cash flow not found');
-    }
-    await safeRecord(this.changeLog, {
-      userId,
-      entityType: 'cash_flow',
-      entityId: id,
-      action: 'deleted',
-      before: existing,
-      portfolioId: existing.portfolio_id,
-      positionId: existing.position_id,
-    });
+    if (!existing) throw AppError.notFound('cash_flow_not_found', 'Cash flow not found');
+    const deleted = await this.repo.delete(userId, id, (ok) =>
+      ok
+        ? {
+            userId,
+            entityType: 'cash_flow',
+            entityId: id,
+            action: 'deleted',
+            before: existing,
+            portfolioId: existing.portfolio_id,
+            positionId: existing.position_id,
+          }
+        : null,
+    );
+    if (!deleted) throw AppError.notFound('cash_flow_not_found', 'Cash flow not found');
   }
 
   /** Enforces the type→position-linkage rule and that the position is in this portfolio. */

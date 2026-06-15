@@ -41,10 +41,18 @@ export interface ChangeLogFilter {
   portfolioId?: string;
 }
 
-/** Appends to the audit log. Recording failures must never block the write. */
+/** Appends to the audit log in its own statement (no surrounding transaction). */
 export interface ChangeLogWriter {
   record(change: NewBookingChange): Promise<void>;
 }
+
+/**
+ * Builds the change-log entry for a write from its result, or `null` to record
+ * nothing (e.g. a delete that matched no row). A repository given an
+ * {@link ChangeLogWriter}-backed recorder persists the returned entry in the
+ * same transaction as the write, so the two commit (or roll back) together.
+ */
+export type AuditFn<T> = (result: T) => NewBookingChange | null;
 
 export interface ChangeLogReader {
   list(userId: string, filter: ChangeLogFilter): Promise<BookingChange[]>;

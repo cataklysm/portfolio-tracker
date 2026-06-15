@@ -1,3 +1,5 @@
+import type { AuditFn } from '../../audit/application/ports.js';
+
 export type TaxComponent =
   | 'capital_income'
   | 'solidarity'
@@ -63,14 +65,19 @@ export interface TaxEventFilter {
 }
 
 export interface TaxEventRepository {
-  create(input: NewTaxEvent): Promise<TaxEventRecord>;
+  create(input: NewTaxEvent, audit?: AuditFn<TaxEventRecord>): Promise<TaxEventRecord>;
   /** A user's tax events, optionally filtered by an attribution link. */
   listForUser(userId: string, filter: TaxEventFilter): Promise<TaxEventRecord[]>;
   /** A user's tax events linked to any of the given transaction IDs. */
   listForTransactions(userId: string, transactionIds: string[]): Promise<TaxEventRecord[]>;
   get(userId: string, id: string): Promise<TaxEventRecord | null>;
-  update(userId: string, id: string, patch: UpdateTaxEvent): Promise<TaxEventRecord | null>;
-  delete(userId: string, id: string): Promise<boolean>;
+  update(
+    userId: string,
+    id: string,
+    patch: UpdateTaxEvent,
+    audit?: AuditFn<TaxEventRecord | null>,
+  ): Promise<TaxEventRecord | null>;
+  delete(userId: string, id: string, audit?: AuditFn<boolean>): Promise<boolean>;
   /** True when the portfolio exists and belongs to the user. */
   assertPortfolioOwned(userId: string, portfolioId: string): Promise<boolean>;
   /** The owning portfolio of a position the user owns, else null. */

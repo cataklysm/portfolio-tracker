@@ -1,6 +1,8 @@
 import type { Kysely } from 'kysely';
 import { sql } from 'kysely';
 import type { PortfolioDatabase } from '../../../platform/database/schema.js';
+import type { AuditFn } from '../../audit/application/ports.js';
+import type { ChangeRecorder } from '../../audit/infrastructure/change-log-repository.js';
 import type {
   NewTaxEvent,
   TaxComponent,
@@ -48,28 +50,52 @@ const COLUMNS = [
 
 /** Kysely adapter for `portfolio.tax_events`. */
 export class KyselyTaxEventRepository implements TaxEventRepository {
-  constructor(private readonly db: Kysely<PortfolioDatabase>) {}
+  constructor(
+    private readonly db: Kysely<PortfolioDatabase>,
+    private readonly recorder?: ChangeRecorder,
+  ) {}
 
-  async create(input: NewTaxEvent): Promise<TaxEventRecord> {
-    const row = await this.db
-      .insertInto('portfolio.tax_events')
-      .values({
-        user_id: input.userId,
-        component: input.component,
-        direction: input.direction,
-        amount: input.amount,
-        currency: input.currency,
-        booking_date: input.bookingDate,
-        source: input.source,
-        note: input.note,
-        transaction_id: input.transactionId,
-        cash_flow_id: input.cashFlowId,
-        position_id: input.positionId,
-        portfolio_id: input.portfolioId,
-      })
-      .returning(COLUMNS)
-      .executeTakeFirstOrThrow();
-    return toRecord(row as TaxEventRow);
+  /**
+   * Runs `write` and, when an audit builder and recorder are present, persists
+   * its change-log entry in the same transaction — write and audit row commit
+   * (or roll back) together. Without a recorder it just runs `write`.
+   */
+  private async withAudit<T>(
+    audit: AuditFn<T> | undefined,
+    write: (exec: Kysely<PortfolioDatabase>) => Promise<T>,
+  ): Promise<T> {
+    if (!audit || !this.recorder) return write(this.db);
+    const recorder = this.recorder;
+    return this.db.transaction().execute(async (trx) => {
+      const result = await write(trx);
+      const change = audit(result);
+      if (change) await recorder.recordIn(trx, change);
+      return result;
+    });
+  }
+
+  async create(input: NewTaxEvent, audit?: AuditFn<TaxEventRecord>): Promise<TaxEventRecord> {
+    return this.withAudit(audit, async (exec) => {
+      const row = await exec
+        .insertInto('portfolio.tax_events')
+        .values({
+          user_id: input.userId,
+          component: input.component,
+          direction: input.direction,
+          amount: input.amount,
+          currency: input.currency,
+          booking_date: input.bookingDate,
+          source: input.source,
+          note: input.note,
+          transaction_id: input.transactionId,
+          cash_flow_id: input.cashFlowId,
+          position_id: input.positionId,
+          portfolio_id: input.portfolioId,
+        })
+        .returning(COLUMNS)
+        .executeTakeFirstOrThrow();
+      return toRecord(row as TaxEventRow);
+    });
   }
 
   async listForUser(userId: string, filter: TaxEventFilter): Promise<TaxEventRecord[]> {
@@ -104,7 +130,12 @@ export class KyselyTaxEventRepository implements TaxEventRepository {
     return row ? toRecord(row as TaxEventRow) : null;
   }
 
-  async update(userId: string, id: string, patch: UpdateTaxEvent): Promise<TaxEventRecord | null> {
+  async update(
+    userId: string,
+    id: string,
+    patch: UpdateTaxEvent,
+    audit?: AuditFn<TaxEventRecord | null>,
+  ): Promise<TaxEventRecord | null> {
     const values: Record<string, unknown> = { updated_at: sql`now()` };
     if (patch.component !== undefined) values.component = patch.component;
     if (patch.direction !== undefined) values.direction = patch.direction;
@@ -113,23 +144,27 @@ export class KyselyTaxEventRepository implements TaxEventRepository {
     if (patch.bookingDate !== undefined) values.booking_date = patch.bookingDate;
     if (patch.note !== undefined) values.note = patch.note;
 
-    const row = await this.db
-      .updateTable('portfolio.tax_events')
-      .set(values)
-      .where('id', '=', id)
-      .where('user_id', '=', userId)
-      .returning(COLUMNS)
-      .executeTakeFirst();
-    return row ? toRecord(row as TaxEventRow) : null;
+    return this.withAudit(audit, async (exec) => {
+      const row = await exec
+        .updateTable('portfolio.tax_events')
+        .set(values)
+        .where('id', '=', id)
+        .where('user_id', '=', userId)
+        .returning(COLUMNS)
+        .executeTakeFirst();
+      return row ? toRecord(row as TaxEventRow) : null;
+    });
   }
 
-  async delete(userId: string, id: string): Promise<boolean> {
-    const result = await this.db
-      .deleteFrom('portfolio.tax_events')
-      .where('id', '=', id)
-      .where('user_id', '=', userId)
-      .executeTakeFirst();
-    return (result.numDeletedRows ?? 0n) > 0n;
+  async delete(userId: string, id: string, audit?: AuditFn<boolean>): Promise<boolean> {
+    return this.withAudit(audit, async (exec) => {
+      const result = await exec
+        .deleteFrom('portfolio.tax_events')
+        .where('id', '=', id)
+        .where('user_id', '=', userId)
+        .executeTakeFirst();
+      return (result.numDeletedRows ?? 0n) > 0n;
+    });
   }
 
   async assertPortfolioOwned(userId: string, portfolioId: string): Promise<boolean> {

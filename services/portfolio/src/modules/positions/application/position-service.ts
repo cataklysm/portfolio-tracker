@@ -2,8 +2,6 @@ import { AppError } from '@portfolio/platform';
 import { computeRealization, type AccountingMethod, type RealizationResult, type SplitAdjustment } from '../domain/realization.js';
 import type { TransactionPerformanceMetrics } from '../domain/transaction-performance.js';
 import { deriveState } from '../domain/position-state.js';
-import { safeRecord } from '../../audit/application/record.js';
-import type { ChangeLogWriter } from '../../audit/application/ports.js';
 import type { CorporateActionReader } from './ports.js';
 import { buildPositionView, buildTransactionPerformance, type PositionView } from './build-position-view.js';
 import type {
@@ -29,7 +27,6 @@ export interface PositionServiceDeps {
   fx: FxReader;
   settings: SettingsReader;
   taxEvents: TaxEventReader;
-  changeLog?: ChangeLogWriter;
   /** Active split applications to replay in re-derivation (corporate actions). */
   corporateActions?: CorporateActionReader;
 }
@@ -271,6 +268,15 @@ export class PositionService {
     const { id: transactionId, aggregateVersion } = await this.deps.repo.insertTransaction(
       positionId,
       input.transaction,
+      (result) => ({
+        userId,
+        entityType: 'transaction',
+        entityId: result.id,
+        action: 'created',
+        after: transactionSnapshot(input.transaction),
+        portfolioId: input.portfolioId,
+        positionId,
+      }),
     );
 
     if (created) {
@@ -284,15 +290,6 @@ export class PositionService {
     }
 
     await this.recalculate(positionId, bearerToken);
-    await safeRecord(this.deps.changeLog, {
-      userId,
-      entityType: 'transaction',
-      entityId: transactionId,
-      action: 'created',
-      after: transactionSnapshot(input.transaction),
-      portfolioId: input.portfolioId,
-      positionId,
-    });
     return { position_id: positionId, transaction_id: transactionId };
   }
 
@@ -316,17 +313,16 @@ export class PositionService {
       }
     }
 
-    const { id } = await this.deps.repo.insertTransaction(position.id, tx);
-    await this.recalculate(position.id, bearerToken);
-    await safeRecord(this.deps.changeLog, {
+    const { id } = await this.deps.repo.insertTransaction(position.id, tx, (result) => ({
       userId,
       entityType: 'transaction',
-      entityId: id,
+      entityId: result.id,
       action: 'created',
       after: transactionSnapshot(tx),
       portfolioId: position.portfolio_id,
       positionId: position.id,
-    });
+    }));
+    await this.recalculate(position.id, bearerToken);
     return { transaction_id: id };
   }
 
@@ -346,9 +342,7 @@ export class PositionService {
     const position = await this.requireOwnedPosition(positionId, userId);
     await this.requireTransactionInPosition(txId, position.id);
     const before = await this.deps.repo.getTransaction(txId);
-    await this.deps.repo.updateTransaction(txId, tx);
-    await this.recalculate(position.id, bearerToken);
-    await safeRecord(this.deps.changeLog, {
+    await this.deps.repo.updateTransaction(txId, tx, () => ({
       userId,
       entityType: 'transaction',
       entityId: txId,
@@ -357,7 +351,8 @@ export class PositionService {
       after: transactionSnapshot(tx),
       portfolioId: position.portfolio_id,
       positionId: position.id,
-    });
+    }));
+    await this.recalculate(position.id, bearerToken);
     return { transaction_id: txId };
   }
 
@@ -371,9 +366,7 @@ export class PositionService {
     const position = await this.requireOwnedPosition(positionId, userId);
     await this.requireTransactionInPosition(txId, position.id);
     const before = await this.deps.repo.getTransaction(txId);
-    await this.deps.repo.deleteTransaction(txId);
-    await this.recalculate(position.id, bearerToken);
-    await safeRecord(this.deps.changeLog, {
+    await this.deps.repo.deleteTransaction(txId, () => ({
       userId,
       entityType: 'transaction',
       entityId: txId,
@@ -381,7 +374,8 @@ export class PositionService {
       before: before ? storedTransactionSnapshot(before) : null,
       portfolioId: position.portfolio_id,
       positionId: position.id,
-    });
+    }));
+    await this.recalculate(position.id, bearerToken);
   }
 
   /** Permanently deletes the position and all its transactions (cascade). */

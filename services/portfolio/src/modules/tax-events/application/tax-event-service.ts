@@ -1,7 +1,5 @@
 import Decimal from 'decimal.js';
 import { AppError } from '@portfolio/platform';
-import { safeRecord } from '../../audit/application/record.js';
-import type { ChangeLogWriter } from '../../audit/application/ports.js';
 import type {
   TaxComponent,
   TaxDirection,
@@ -41,10 +39,7 @@ export interface UpdateTaxEventInput {
  * resolves the owning portfolio so portfolio-scoped reports include the event.
  */
 export class TaxEventService {
-  constructor(
-    private readonly repo: TaxEventRepository,
-    private readonly changeLog?: ChangeLogWriter,
-  ) {}
+  constructor(private readonly repo: TaxEventRepository) {}
 
   list(userId: string, filter: TaxEventFilter): Promise<TaxEventRecord[]> {
     return this.repo.listForUser(userId, filter);
@@ -55,30 +50,31 @@ export class TaxEventService {
     const bookingDate = requireDate(input.bookingDate, 'booking_date');
     const portfolioId = await this.resolveLinks(userId, input);
 
-    const created = await this.repo.create({
-      userId,
-      component: input.component,
-      direction: input.direction,
-      amount: amount.toString(),
-      currency: normalizeCurrency(input.currency),
-      bookingDate,
-      source: 'manual',
-      note: input.note?.trim() || null,
-      transactionId: input.transactionId ?? null,
-      cashFlowId: input.cashFlowId ?? null,
-      positionId: input.positionId ?? null,
-      portfolioId,
-    });
-    await safeRecord(this.changeLog, {
-      userId,
-      entityType: 'tax_event',
-      entityId: created.id,
-      action: 'created',
-      after: created,
-      portfolioId: created.portfolio_id,
-      positionId: created.position_id,
-    });
-    return created;
+    return this.repo.create(
+      {
+        userId,
+        component: input.component,
+        direction: input.direction,
+        amount: amount.toString(),
+        currency: normalizeCurrency(input.currency),
+        bookingDate,
+        source: 'manual',
+        note: input.note?.trim() || null,
+        transactionId: input.transactionId ?? null,
+        cashFlowId: input.cashFlowId ?? null,
+        positionId: input.positionId ?? null,
+        portfolioId,
+      },
+      (created) => ({
+        userId,
+        entityType: 'tax_event',
+        entityId: created.id,
+        action: 'created',
+        after: created,
+        portfolioId: created.portfolio_id,
+        positionId: created.position_id,
+      }),
+    );
   }
 
   async update(userId: string, id: string, input: UpdateTaxEventInput): Promise<TaxEventRecord> {
@@ -93,35 +89,41 @@ export class TaxEventService {
     if (input.bookingDate !== undefined) patch.bookingDate = requireDate(input.bookingDate, 'booking_date');
     if (input.note !== undefined) patch.note = input.note?.trim() || null;
 
-    const updated = await this.repo.update(userId, id, patch);
+    const updated = await this.repo.update(userId, id, patch, (row) =>
+      row
+        ? {
+            userId,
+            entityType: 'tax_event',
+            entityId: id,
+            action: 'updated',
+            before: existing,
+            after: row,
+            portfolioId: row.portfolio_id,
+            positionId: row.position_id,
+          }
+        : null,
+    );
     if (!updated) throw AppError.notFound('tax_event_not_found', 'Tax event not found');
-    await safeRecord(this.changeLog, {
-      userId,
-      entityType: 'tax_event',
-      entityId: id,
-      action: 'updated',
-      before: existing,
-      after: updated,
-      portfolioId: updated.portfolio_id,
-      positionId: updated.position_id,
-    });
     return updated;
   }
 
   async delete(userId: string, id: string): Promise<void> {
     const existing = await this.repo.get(userId, id);
-    if (!existing || !(await this.repo.delete(userId, id))) {
-      throw AppError.notFound('tax_event_not_found', 'Tax event not found');
-    }
-    await safeRecord(this.changeLog, {
-      userId,
-      entityType: 'tax_event',
-      entityId: id,
-      action: 'deleted',
-      before: existing,
-      portfolioId: existing.portfolio_id,
-      positionId: existing.position_id,
-    });
+    if (!existing) throw AppError.notFound('tax_event_not_found', 'Tax event not found');
+    const deleted = await this.repo.delete(userId, id, (ok) =>
+      ok
+        ? {
+            userId,
+            entityType: 'tax_event',
+            entityId: id,
+            action: 'deleted',
+            before: existing,
+            portfolioId: existing.portfolio_id,
+            positionId: existing.position_id,
+          }
+        : null,
+    );
+    if (!deleted) throw AppError.notFound('tax_event_not_found', 'Tax event not found');
   }
 
   /**

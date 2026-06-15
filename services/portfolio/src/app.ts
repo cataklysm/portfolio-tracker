@@ -90,13 +90,16 @@ export async function buildApp(config: PortfolioConfig): Promise<BuiltService> {
   const fxClient = new MarketFxClient(config.marketBaseUrl, logger);
   const settingsClient = new AuthSettingsClient(config.authBaseUrl);
 
+  // The change-log repo also acts as the transactional ChangeRecorder injected
+  // into the booking repos, so each financial write and its audit row commit
+  // atomically (same DB transaction).
+  const changeLog = new KyselyChangeLogRepository(db);
   const portfolioRepo = new KyselyPortfolioRepository(db);
-  const positionRepo = new KyselyPositionRepository(db);
-  const cashFlowRepo = new KyselyCashFlowRepository(db);
-  const taxEventRepo = new KyselyTaxEventRepository(db);
+  const positionRepo = new KyselyPositionRepository(db, changeLog);
+  const cashFlowRepo = new KyselyCashFlowRepository(db, changeLog);
+  const taxEventRepo = new KyselyTaxEventRepository(db, changeLog);
   const userTaxRepo = new KyselyUserTaxSettingsRepository(db);
   const portfolioTaxRepo = new KyselyPortfolioTaxSettingsRepository(db);
-  const changeLog = new KyselyChangeLogRepository(db);
   const activityService = new ActivityService(new KyselyActivityRepository(db));
   const corporateActionRepo = new KyselyCorporateActionRepository(db);
   const portfolioService = new PortfolioService(portfolioRepo);
@@ -112,12 +115,11 @@ export async function buildApp(config: PortfolioConfig): Promise<BuiltService> {
     fx: fxClient,
     settings: settingsClient,
     taxEvents: taxEventRepo,
-    changeLog,
     corporateActions: corporateActionRepo,
   });
   const corporateActionService = new CorporateActionService({ repo: corporateActionRepo, positions: positionService });
-  const cashFlowService = new CashFlowService(cashFlowRepo, changeLog);
-  const taxEventService = new TaxEventService(taxEventRepo, changeLog);
+  const cashFlowService = new CashFlowService(cashFlowRepo);
+  const taxEventService = new TaxEventService(taxEventRepo);
   const taxRuleService = new TaxRuleService(new KyselyTaxRuleRepository(db));
   const taxSettingsService = new TaxSettingsService(userTaxRepo, portfolioTaxRepo, taxRuleService);
   const taxEstimateService = new TaxEstimateService({

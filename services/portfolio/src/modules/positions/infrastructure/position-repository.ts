@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { sql, type Kysely } from 'kysely';
 import type { PortfolioDatabase } from '../../../platform/database/schema.js';
+import type { AuditFn } from '../../audit/application/ports.js';
+import type { ChangeRecorder } from '../../audit/infrastructure/change-log-repository.js';
 import type {
   NewTransaction,
   PositionRecord,
@@ -18,7 +20,30 @@ import type {
  * authoritative transactions, and the transactional outbox.
  */
 export class KyselyPositionRepository implements PositionRepository {
-  constructor(private readonly db: Kysely<PortfolioDatabase>) {}
+  constructor(
+    private readonly db: Kysely<PortfolioDatabase>,
+    private readonly recorder?: ChangeRecorder,
+  ) {}
+
+  /**
+   * Runs `write` and, when an audit builder and recorder are present, persists
+   * its change-log entry in the same transaction — the transaction-ledger write
+   * and its audit row commit (or roll back) together. Recalculation of the
+   * position is a separate, idempotent projection done after this commits.
+   */
+  private async withAudit<T>(
+    audit: AuditFn<T> | undefined,
+    write: (exec: Kysely<PortfolioDatabase>) => Promise<T>,
+  ): Promise<T> {
+    if (!audit || !this.recorder) return write(this.db);
+    const recorder = this.recorder;
+    return this.db.transaction().execute(async (trx) => {
+      const result = await write(trx);
+      const change = audit(result);
+      if (change) await recorder.recordIn(trx, change);
+      return result;
+    });
+  }
 
   async listPositionsForUser(userId: string, portfolioId?: string): Promise<PositionRecord[]> {
     let query = this.db
@@ -170,25 +195,28 @@ export class KyselyPositionRepository implements PositionRepository {
   async insertTransaction(
     positionId: string,
     tx: NewTransaction,
+    audit?: AuditFn<{ id: string; aggregateVersion: string }>,
   ): Promise<{ id: string; aggregateVersion: string }> {
-    const row = await this.db
-      .insertInto('portfolio.transactions')
-      .values({
-        position_id: positionId,
-        side: tx.side,
-        effective_at: tx.effectiveAt,
-        quantity: tx.quantity,
-        price: tx.price,
-        fee: tx.fee,
-        currency: tx.currency,
-        booking_fx_rate: tx.bookingFxRate,
-        tax_relevant_value_date: tx.taxRelevantValueDate,
-        savings_plan: tx.savingsPlan,
-        note: tx.note,
-      })
-      .returning(['id', 'creation_sequence'])
-      .executeTakeFirstOrThrow();
-    return { id: row.id, aggregateVersion: String(row.creation_sequence) };
+    return this.withAudit(audit, async (exec) => {
+      const row = await exec
+        .insertInto('portfolio.transactions')
+        .values({
+          position_id: positionId,
+          side: tx.side,
+          effective_at: tx.effectiveAt,
+          quantity: tx.quantity,
+          price: tx.price,
+          fee: tx.fee,
+          currency: tx.currency,
+          booking_fx_rate: tx.bookingFxRate,
+          tax_relevant_value_date: tx.taxRelevantValueDate,
+          savings_plan: tx.savingsPlan,
+          note: tx.note,
+        })
+        .returning(['id', 'creation_sequence'])
+        .executeTakeFirstOrThrow();
+      return { id: row.id, aggregateVersion: String(row.creation_sequence) };
+    });
   }
 
   async getTransaction(txId: string): Promise<StoredTransaction | null> {
@@ -210,28 +238,32 @@ export class KyselyPositionRepository implements PositionRepository {
     return row !== undefined;
   }
 
-  async updateTransaction(txId: string, tx: NewTransaction): Promise<void> {
-    await this.db
-      .updateTable('portfolio.transactions')
-      .set({
-        side: tx.side,
-        effective_at: tx.effectiveAt,
-        quantity: tx.quantity,
-        price: tx.price,
-        fee: tx.fee,
-        currency: tx.currency,
-        booking_fx_rate: tx.bookingFxRate,
-        tax_relevant_value_date: tx.taxRelevantValueDate,
-        savings_plan: tx.savingsPlan,
-        note: tx.note,
-        updated_at: new Date(),
-      })
-      .where('id', '=', txId)
-      .execute();
+  async updateTransaction(txId: string, tx: NewTransaction, audit?: AuditFn<void>): Promise<void> {
+    await this.withAudit(audit, async (exec) => {
+      await exec
+        .updateTable('portfolio.transactions')
+        .set({
+          side: tx.side,
+          effective_at: tx.effectiveAt,
+          quantity: tx.quantity,
+          price: tx.price,
+          fee: tx.fee,
+          currency: tx.currency,
+          booking_fx_rate: tx.bookingFxRate,
+          tax_relevant_value_date: tx.taxRelevantValueDate,
+          savings_plan: tx.savingsPlan,
+          note: tx.note,
+          updated_at: new Date(),
+        })
+        .where('id', '=', txId)
+        .execute();
+    });
   }
 
-  async deleteTransaction(txId: string): Promise<void> {
-    await this.db.deleteFrom('portfolio.transactions').where('id', '=', txId).execute();
+  async deleteTransaction(txId: string, audit?: AuditFn<void>): Promise<void> {
+    await this.withAudit(audit, async (exec) => {
+      await exec.deleteFrom('portfolio.transactions').where('id', '=', txId).execute();
+    });
   }
 
   async deletePosition(positionId: string): Promise<void> {

@@ -184,16 +184,26 @@ correction/audit model they depend on. Rough internal order:
 3. Import preview → validation → instrument matching → explicit confirmation; safe rollback of a batch.
 4. Reconciliation view + discrepancy queue (holdings, cash, tax, fees, dividends vs. a statement).
 
-A hardening follow-up also carries over from Phase A-2: make change-history
-recording **same-transaction** with the write (currently best-effort right after).
+~~A hardening follow-up also carries over from Phase A-2: make change-history
+recording **same-transaction** with the write (currently best-effort right
+after).~~ ✅ **Done 2026-06-15** — see the hardening section below.
 
 ---
 
 ## Hardening / smaller follow-ups carried over
 
-- **Change-history durability:** record `booking_changes` in the same DB
+- ~~**Change-history durability:** record `booking_changes` in the same DB
   transaction as the write (today it is appended right after, so a crash in between
-  drops one log row).
+  drops one log row).~~ ✅ **Done 2026-06-15.** The change-log repo now also acts
+  as a transactional `ChangeRecorder`; the cash-flow, tax-event, and position
+  (transaction) repos take it and run each financial write + its audit row in one
+  `db.transaction()` via a shared `withAudit` helper. Services pass a pure
+  `AuditFn` builder instead of calling the old fire-and-forget `safeRecord`
+  (removed). The trade-off is now **durability over availability**: an audit-row
+  failure rolls the write back. Position recalculation stays a separate idempotent
+  projection after the commit (it makes external calls and must not hold a txn
+  open). *Verified by typecheck + the full suite (168 pass); the DB-transaction
+  path itself is not unit-tested (needs a live DB).*
 - **Transaction-level tax UI completeness:** position-detail already returns linked
   tax events per transaction; richer correction/reversal UX is part of the
   provenance follow-up.

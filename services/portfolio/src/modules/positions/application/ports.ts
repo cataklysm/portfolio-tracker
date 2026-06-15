@@ -1,4 +1,5 @@
 import type { AccountingMethod, LedgerTransaction, SplitAdjustment } from '../domain/realization.js';
+import type { AuditFn } from '../../audit/application/ports.js';
 
 /** Active (non-reversed) split adjustments applied to positions, for re-derivation. */
 export interface CorporateActionReader {
@@ -122,10 +123,14 @@ export interface PositionRepository {
   listTransactionsForPositions(positionIds: string[]): Promise<Map<string, StoredTransaction[]>>;
   /** A single transaction by ID (for audit before-snapshots), or null. */
   getTransaction(txId: string): Promise<StoredTransaction | null>;
-  insertTransaction(positionId: string, tx: NewTransaction): Promise<{ id: string; aggregateVersion: string }>;
+  insertTransaction(
+    positionId: string,
+    tx: NewTransaction,
+    audit?: AuditFn<{ id: string; aggregateVersion: string }>,
+  ): Promise<{ id: string; aggregateVersion: string }>;
   transactionBelongsToPosition(txId: string, positionId: string): Promise<boolean>;
-  updateTransaction(txId: string, tx: NewTransaction): Promise<void>;
-  deleteTransaction(txId: string): Promise<void>;
+  updateTransaction(txId: string, tx: NewTransaction, audit?: AuditFn<void>): Promise<void>;
+  deleteTransaction(txId: string, audit?: AuditFn<void>): Promise<void>;
   deletePosition(positionId: string): Promise<void>;
   applyPositionState(positionId: string, write: PositionWriteState): Promise<void>;
   /** The persisted realization allocations for a position, at its current version. */

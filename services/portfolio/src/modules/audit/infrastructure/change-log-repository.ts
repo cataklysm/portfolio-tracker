@@ -41,12 +41,32 @@ const COLUMNS = [
 
 const MAX_ROWS = 200;
 
+/**
+ * Appends a change entry against a caller-supplied executor (the live db or a
+ * transaction). Threading the transaction lets a domain write and its audit row
+ * commit atomically — see {@link ChangeRecorder}.
+ */
+export interface ChangeRecorder {
+  recordIn(executor: Kysely<PortfolioDatabase>, change: NewBookingChange): Promise<void>;
+}
+
 /** Kysely adapter for the append-only `portfolio.booking_changes` audit log. */
-export class KyselyChangeLogRepository implements ChangeLogWriter, ChangeLogReader {
+export class KyselyChangeLogRepository implements ChangeLogWriter, ChangeLogReader, ChangeRecorder {
   constructor(private readonly db: Kysely<PortfolioDatabase>) {}
 
+  /** Appends in its own statement (no surrounding transaction). */
   async record(change: NewBookingChange): Promise<void> {
-    await this.db
+    await this.recordIn(this.db, change);
+  }
+
+  /**
+   * Appends within `executor` — pass a Kysely transaction to make the audit row
+   * part of the same atomic unit as the financial write it records. A failure
+   * here then rolls the whole write back (durability over availability), which
+   * is the intended guarantee for booking changes.
+   */
+  async recordIn(executor: Kysely<PortfolioDatabase>, change: NewBookingChange): Promise<void> {
+    await executor
       .insertInto('portfolio.booking_changes')
       .values({
         user_id: change.userId,

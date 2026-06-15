@@ -5,17 +5,21 @@ import { AppError } from '@portfolio/platform';
 import type { ReportingService } from '../application/reporting-service.js';
 
 const ScopeQuery = Type.Object({ portfolio_id: Type.Optional(Type.String({ format: 'uuid' })) });
+const PeriodUnion = Type.Union([
+  Type.Literal('1W'),
+  Type.Literal('1M'),
+  Type.Literal('YTD'),
+  Type.Literal('1Y'),
+  Type.Literal('ALL'),
+]);
 const PerformanceQuery = Type.Object({
   portfolio_id: Type.Optional(Type.String({ format: 'uuid' })),
-  period: Type.Optional(
-    Type.Union([
-      Type.Literal('1W'),
-      Type.Literal('1M'),
-      Type.Literal('YTD'),
-      Type.Literal('1Y'),
-      Type.Literal('ALL'),
-    ]),
-  ),
+  period: Type.Optional(PeriodUnion),
+});
+const BenchmarkQuery = Type.Object({
+  portfolio_id: Type.Optional(Type.String({ format: 'uuid' })),
+  period: Type.Optional(PeriodUnion),
+  benchmark_listing_id: Type.Optional(Type.String({ format: 'uuid' })),
 });
 
 export interface ReportingRouteDeps {
@@ -67,6 +71,16 @@ export function registerReportingRoutes(app: FastifyInstance, deps: ReportingRou
       bearer(request.headers.authorization),
       request.query.period ?? '1Y',
       request.query.portfolio_id,
+    ),
+  );
+
+  r.get('/reporting/benchmark', { preHandler: read, schema: { querystring: BenchmarkQuery } }, async (request) =>
+    deps.service.getBenchmark(
+      uid(request.user?.sub),
+      bearer(request.headers.authorization),
+      request.query.period ?? '1Y',
+      request.query.portfolio_id,
+      request.query.benchmark_listing_id,
     ),
   );
 }

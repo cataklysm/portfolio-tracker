@@ -45,4 +45,11 @@ export class PortfolioService {
   reorder(userId: string, orderedIds: string[]): Promise<void> {
     return this.repo.reorder(userId, orderedIds);
   }
+
+  /** Sets or clears the portfolio's benchmark listing (the comparison default). */
+  async setBenchmark(userId: string, id: string, listingId: string | null): Promise<void> {
+    if (!(await this.repo.setPreferredBenchmark(id, userId, listingId))) {
+      throw AppError.notFound('portfolio_not_found', 'Portfolio not found');
+    }
+  }
 }

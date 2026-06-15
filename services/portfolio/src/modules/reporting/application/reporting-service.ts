@@ -1,4 +1,5 @@
 import Decimal from 'decimal.js';
+import { AppError } from '@portfolio/platform';
 import { makeDatedConverter } from '../../positions/domain/currency.js';
 import type { PositionView } from '../../positions/application/build-position-view.js';
 import type { PositionService } from '../../positions/application/position-service.js';
@@ -26,9 +27,13 @@ import {
 } from '../domain/performance-series.js';
 import { computeReturns, buildTwrIntervals, intervalReturn, type ReturnsResult } from '../domain/returns.js';
 import { computeRisk, type RiskMetrics } from '../domain/risk.js';
+import { computeBenchmarkComparison, type BenchmarkComparison } from '../domain/benchmark.js';
 
 export interface PortfolioNameReader {
-  list(userId: string, includeArchived: boolean): Promise<{ id: string; name: string; preferred_headline_metric: string }[]>;
+  list(
+    userId: string,
+    includeArchived: boolean,
+  ): Promise<{ id: string; name: string; preferred_headline_metric: string; preferred_benchmark: string | null }[]>;
 }
 
 export interface ReportingServiceDeps {
@@ -56,6 +61,15 @@ export interface RiskReport extends RiskMetrics {
   period: PerformancePeriod;
   reporting_currency: string;
   closed_positions: { count: number; wins: number; losses: number; win_rate_pct: string | null };
+}
+
+/** Period-relative portfolio-vs-benchmark comparison. */
+export interface BenchmarkReport extends BenchmarkComparison {
+  period: PerformancePeriod;
+  reporting_currency: string;
+  from: string;
+  to: string;
+  benchmark_listing_id: string;
 }
 
 /** Shared period-series inputs reused by performance, risk, and benchmark reads. */
@@ -261,6 +275,65 @@ export class ReportingService {
       reporting_currency: ctx.reportingCurrency,
       ...metrics,
       closed_positions: closedPositionStats(views),
+    };
+  }
+
+  /**
+   * Period-relative comparison of the portfolio against a benchmark listing. The
+   * benchmark is the query's `benchmarkListingId` or, when omitted, the portfolio's
+   * saved `preferred_benchmark`. Reuses the time-weighted series for the portfolio
+   * and the benchmark's daily closes (via the quotes history) for the index.
+   */
+  async getBenchmark(
+    userId: string,
+    bearerToken: string,
+    period: PerformancePeriod,
+    portfolioId?: string,
+    benchmarkListingId?: string,
+  ): Promise<BenchmarkReport> {
+    let benchmarkId = benchmarkListingId ?? null;
+    if (!benchmarkId && portfolioId) {
+      const portfolios = await this.deps.portfolios.list(userId, true);
+      benchmarkId = portfolios.find((p) => p.id === portfolioId)?.preferred_benchmark ?? null;
+    }
+    if (!benchmarkId) {
+      throw AppError.badRequest(
+        'benchmark_required',
+        'Set a preferred benchmark for the portfolio or pass benchmark_listing_id',
+      );
+    }
+
+    const ctx = await this.buildSeriesContext(userId, bearerToken, period, portfolioId);
+    const intervals = buildTwrIntervals({
+      sampleDates: ctx.sampleDates,
+      points: ctx.points,
+      positions: ctx.positions,
+      cashFlows: ctx.cashFlows,
+      reportingCurrency: ctx.reportingCurrency,
+      rateOnOrBefore: ctx.rateOnOrBefore,
+    });
+    const portfolioReturns = intervals.map((iv) => intervalReturn(iv) ?? 0);
+
+    const history = await this.deps.quotes.getDailyHistory(benchmarkId, ctx.from, ctx.to, bearerToken);
+    const closeAt = lastOnOrBefore(history, (p: DailyClose) => p.price);
+    const benchmarkCloses = ctx.sampleDates.map((date) => {
+      const close = closeAt(date);
+      return close === null ? null : close.toNumber();
+    });
+
+    const comparison = computeBenchmarkComparison({
+      sampleDates: ctx.sampleDates,
+      portfolioReturns,
+      benchmarkCloses,
+      periodsPerYear: annualizationFactor(ctx.from, ctx.to, intervals.length),
+    });
+    return {
+      period,
+      reporting_currency: ctx.reportingCurrency,
+      from: ctx.from,
+      to: ctx.to,
+      benchmark_listing_id: benchmarkId,
+      ...comparison,
     };
   }
 

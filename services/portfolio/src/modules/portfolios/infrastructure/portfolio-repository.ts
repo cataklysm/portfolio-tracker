@@ -7,6 +7,8 @@ export interface PortfolioRow {
   sort_order: number;
   archived: boolean;
   preferred_headline_metric: string;
+  /** The listing id this portfolio is benchmarked against, or null. */
+  preferred_benchmark: string | null;
   created_at: string;
 }
 
@@ -17,7 +19,7 @@ export class KyselyPortfolioRepository {
   async list(userId: string, includeArchived: boolean): Promise<PortfolioRow[]> {
     let query = this.db
       .selectFrom('portfolio.portfolios')
-      .select(['id', 'name', 'sort_order', 'archived_at', 'preferred_headline_metric', 'created_at'])
+      .select(['id', 'name', 'sort_order', 'archived_at', 'preferred_headline_metric', 'preferred_benchmark', 'created_at'])
       .where('user_id', '=', userId);
     if (!includeArchived) query = query.where('archived_at', 'is', null);
     const rows = await query.orderBy('sort_order').orderBy('created_at').execute();
@@ -27,8 +29,20 @@ export class KyselyPortfolioRepository {
       sort_order: row.sort_order,
       archived: row.archived_at !== null,
       preferred_headline_metric: row.preferred_headline_metric,
+      preferred_benchmark: parseBenchmark(row.preferred_benchmark),
       created_at: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
     }));
+  }
+
+  /** Sets (or clears) the portfolio's benchmark listing. Returns false if not owned. */
+  async setPreferredBenchmark(id: string, userId: string, listingId: string | null): Promise<boolean> {
+    const result = await this.db
+      .updateTable('portfolio.portfolios')
+      .set({ preferred_benchmark: listingId === null ? null : JSON.stringify(listingId), updated_at: new Date() })
+      .where('id', '=', id)
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows) > 0;
   }
 
   async nameExists(userId: string, name: string): Promise<boolean> {
@@ -74,6 +88,9 @@ export class KyselyPortfolioRepository {
     return Number(result.numDeletedRows) > 0;
   }
 
+  // jsonb stores the bare listing-id string; tolerate a legacy { listing_id } shape.
+  // (declared after the class methods below)
+
   async reorder(userId: string, orderedIds: string[]): Promise<void> {
     await this.db.transaction().execute(async (trx) => {
       for (let index = 0; index < orderedIds.length; index += 1) {
@@ -86,4 +103,14 @@ export class KyselyPortfolioRepository {
       }
     });
   }
+}
+
+/** Extracts the benchmark listing id from the jsonb column (string or `{ listing_id }`). */
+function parseBenchmark(raw: unknown): string | null {
+  if (typeof raw === 'string') return raw;
+  if (raw && typeof raw === 'object' && 'listing_id' in raw) {
+    const id = (raw as { listing_id: unknown }).listing_id;
+    return typeof id === 'string' ? id : null;
+  }
+  return null;
 }

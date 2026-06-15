@@ -7,6 +7,9 @@ import type { PortfolioService } from '../application/portfolio-service.js';
 const CreatePortfolioBody = Type.Object({ name: Type.String({ minLength: 1, maxLength: 120 }) });
 const ReorderBody = Type.Object({ ordered_ids: Type.Array(Type.String({ format: 'uuid' })) });
 const ListQuery = Type.Object({ include_archived: Type.Optional(Type.Boolean()) });
+const BenchmarkBody = Type.Object({
+  listing_id: Type.Union([Type.String({ format: 'uuid' }), Type.Null()]),
+});
 
 export interface PortfolioRouteDeps {
   service: PortfolioService;
@@ -47,6 +50,12 @@ export function registerPortfolioRoutes(app: FastifyInstance, deps: PortfolioRou
 
   r.patch('/portfolios/order', { preHandler: write, schema: { body: ReorderBody } }, async (request) => {
     await deps.service.reorder(uid(request.user?.sub), request.body.ordered_ids);
+    return { ok: true };
+  });
+
+  // Set or clear the portfolio's benchmark listing (used by the benchmark comparison).
+  r.put('/portfolios/:id/benchmark', { preHandler: write, schema: { body: BenchmarkBody } }, async (request) => {
+    await deps.service.setBenchmark(uid(request.user?.sub), (request.params as { id: string }).id, request.body.listing_id);
     return { ok: true };
   });
 }

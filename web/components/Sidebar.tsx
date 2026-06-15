@@ -7,6 +7,7 @@ import type { MeData } from "@/lib/types"
 const ICONS = {
   portfolio: "M4 19V9m5 10V5m5 14v-7m5 7V3",
   reports: "M5 3h14v18H5zM8 8h8M8 12h8M8 16h5",
+  activity: "M4 12h4l2-7 4 14 2-7h4",
   watchlist: "m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z",
   notifications: "M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0v1a3 3 0 1 1-6 0v-1m6 0H9",
   news: "M5 4h14v16H5zM8 8h8M8 12h8M8 16h5",
@@ -22,6 +23,7 @@ interface NavItem { labelKey: MessageKey; icon: IconKey; href: string | null }
 const NAV_ITEMS: NavItem[] = [
   { labelKey: "nav.portfolio", icon: "portfolio", href: "/dashboard" },
   { labelKey: "nav.reports", icon: "reports", href: "/reports" },
+  { labelKey: "nav.activity", icon: "activity", href: "/activity" },
   { labelKey: "nav.watchlist", icon: "watchlist", href: "/watchlist" },
   { labelKey: "nav.notifications", icon: "notifications", href: "/notifications" },
   { labelKey: "nav.news", icon: "news", href: "/news" },

@@ -25,6 +25,7 @@ export const en = {
   nav: {
     portfolio: "Portfolio",
     reports: "Reports",
+    activity: "Activity",
     watchlist: "Watchlist",
     notifications: "Notifications",
     news: "News",

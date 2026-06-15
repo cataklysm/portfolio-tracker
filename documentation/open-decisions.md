@@ -661,6 +661,27 @@ Authentication, all user-owned services, deletion workflows, and tests.
 
 ## Resolved Decisions
 
+### 2026-06-15: Portfolio Pulse (Explainable Intelligence Score)
+- `GET /reporting/intelligence?portfolio_id=&period=` returns a versioned
+  (`v1`) portfolio-health score from a pure `computePortfolioPulse`.
+- Component weights: **Structure 45% · Risk 30% · Data quality 25%**.
+- Structure = `100·(1−HHI)` over instrument-level concentration; the **combined
+  all-portfolios view aggregates identical instruments across portfolios** before
+  computing weights/HHI (consistent with combined asset cards).
+- Risk blends annualized volatility (cap 40%), downside volatility (cap 40%), and
+  |max drawdown| (cap 50%) over the period TWR return series.
+- Data quality = value-weighted price coverage (50%) + quote freshness (30%) +
+  ledger validity (20%).
+- Unavailable components (no holdings → no structure; <2 risk samples → no risk)
+  are dropped and the remaining base weights renormalized; `confidence` =
+  available-weight × priced-value coverage. With neither structure nor risk
+  available the result is `insufficient_data` with a null score (never a silent
+  healthy score). Status bands: ≥75 strong, ≥60 balanced, ≥40 fragile, else
+  at_risk. `primary_driver` is the lowest-scoring available component.
+- **Deferred:** user risk profiles adjusting risk thresholds.
+- Not yet folded into `prompt.md` (it is a roadmap follow-up, not a §2 functional
+  requirement); recorded here + in `backend-roadmap-pending.md`.
+
 ### 2026-06-12: Remaining Design Decisions
 - Combined-view benchmark selection is configured per user and is not derived
   or blended from portfolio-level benchmarks.

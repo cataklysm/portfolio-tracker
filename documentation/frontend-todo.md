@@ -48,4 +48,17 @@ here so nothing is lost. Each item notes the backend it depends on.
   `listTransfers` now also returns `kind`, `destination_position_id`,
   `transferred_quantity` for display.
 
+## Portfolio pulse (intelligence)
+- [ ] **Render the explainable portfolio pulse.** `GET /reporting/intelligence?portfolio_id=&period=`
+  returns a versioned health score: `{ version, score (0–100 | null), status
+  (strong|balanced|fragile|at_risk|insufficient_data), confidence (0–1),
+  primary_driver (structure|risk|data_quality|null), components{ structure{score,
+  weight,top1_pct,top3_pct,hhi}, risk{score,weight}, data_quality{score,weight,
+  priced_value_pct,fresh_value_pct,ledger_valid} } }`. UI: a pulse card (gauge/
+  badge by status + score), the primary-driver headline, an expandable component
+  breakdown, and a confidence indicator. Handle `score: null` /
+  `insufficient_data` (show why — no holdings / not enough history). Combined view
+  aggregates concentration across portfolios. Period selector reuses the existing
+  performance periods.
+
 ## (add new items below as backend features ship)

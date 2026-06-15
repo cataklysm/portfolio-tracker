@@ -246,7 +246,23 @@ tab.
 
 ## Portfolio Intelligence Follow-up
 
-1. **Explainable portfolio pulse.**
+1. **Explainable portfolio pulse.** ✅ **Done 2026-06-15.**
+   `GET /reporting/intelligence?portfolio_id=&period=` returns a versioned health
+   score (`computePortfolioPulse`, v1) from **Structure 45% / Risk 30% / Data
+   quality 25%** (product decision): structure = `100·(1−HHI)` over instrument
+   concentration (combined view **aggregates identical instruments across
+   portfolios**); risk = blended volatility/downside/drawdown over the period TWR
+   series; data quality = value-weighted price coverage + freshness + ledger
+   validity. Unavailable components (no holdings / too little history) are dropped,
+   the rest reweighted, and `confidence` falls (further scaled by priced-value
+   coverage); neither structure nor risk available → `insufficient_data` with a
+   null score. Response exposes total score, status, version, per-component scores
+   + effective weights, confidence, and the `primary_driver`. 11 domain tests; web
+   pulse card is a frontend-todo item. *Decisions recorded in open-decisions.md;
+   deferred: user risk-profiles adjusting thresholds.*
+
+   <details><summary>original spec</summary>
+
    Add `GET /reporting/intelligence?portfolio_id=&period=` to calculate a
    versioned portfolio-health score in the portfolio service. The score must be
    derived from authoritative reporting data and remain independent of frontend
@@ -275,6 +291,8 @@ tab.
      all included portfolios.
    - How incomplete or stale valuations affect the score and confidence.
    - Whether future user risk profiles adjust risk thresholds.
+
+   </details>
 
 ---
 

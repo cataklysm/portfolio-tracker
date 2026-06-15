@@ -28,6 +28,7 @@ import {
 import { computeReturns, buildTwrIntervals, intervalReturn, type ReturnsResult } from '../domain/returns.js';
 import { computeRisk, type RiskMetrics } from '../domain/risk.js';
 import { computeBenchmarkComparison, type BenchmarkComparison } from '../domain/benchmark.js';
+import { computePortfolioPulse, type PortfolioPulse } from '../domain/portfolio-pulse.js';
 
 export interface PortfolioNameReader {
   list(
@@ -61,6 +62,12 @@ export interface RiskReport extends RiskMetrics {
   period: PerformancePeriod;
   reporting_currency: string;
   closed_positions: { count: number; wins: number; losses: number; win_rate_pct: string | null };
+}
+
+/** Explainable portfolio-health pulse for a period (see `computePortfolioPulse`). */
+export interface IntelligenceReport extends PortfolioPulse {
+  period: PerformancePeriod;
+  reporting_currency: string;
 }
 
 /** Period-relative portfolio-vs-benchmark comparison. */
@@ -276,6 +283,55 @@ export class ReportingService {
       ...metrics,
       closed_positions: closedPositionStats(views),
     };
+  }
+
+  /**
+   * Explainable portfolio "pulse": a versioned health score over the period from
+   * structure (instrument concentration), risk (the same period risk series as
+   * `getRisk`), and data quality (value-weighted price coverage, freshness, ledger
+   * validity). The combined view aggregates identical instruments across the
+   * user's portfolios before measuring concentration. Weights/thresholds live in
+   * the pure `computePortfolioPulse`; this only assembles its inputs.
+   */
+  async getIntelligence(
+    userId: string,
+    bearerToken: string,
+    period: PerformancePeriod,
+    portfolioId?: string,
+  ): Promise<IntelligenceReport> {
+    const [ctx, views] = await Promise.all([
+      this.buildSeriesContext(userId, bearerToken, period, portfolioId),
+      this.deps.positions.listPositions(userId, bearerToken, portfolioId),
+    ]);
+
+    // Risk over the time-weighted per-period return series (as in getRisk).
+    const intervals = buildTwrIntervals({
+      sampleDates: ctx.sampleDates,
+      points: ctx.points,
+      positions: ctx.positions,
+      cashFlows: ctx.cashFlows,
+      reportingCurrency: ctx.reportingCurrency,
+      rateOnOrBefore: ctx.rateOnOrBefore,
+    });
+    const returns = intervals.map(intervalReturn).filter((r): r is number => r !== null);
+    const risk =
+      returns.length >= 2
+        ? (() => {
+            const m = computeRisk({ returns, periodsPerYear: annualizationFactor(ctx.from, ctx.to, returns.length) });
+            return {
+              volatilityPct: parseNum(m.volatility_pct),
+              downsideVolatilityPct: parseNum(m.downside_volatility_pct),
+              maxDrawdownPct: parseNum(m.max_drawdown_pct),
+            };
+          })()
+        : null;
+
+    const pulse = computePortfolioPulse({
+      instrumentValues: instrumentConcentration(views),
+      risk,
+      dataQuality: dataQualityFromViews(views),
+    });
+    return { period, reporting_currency: ctx.reportingCurrency, ...pulse };
   }
 
   /**
@@ -495,6 +551,65 @@ function annualizationFactor(from: string, to: string, intervals: number): numbe
   const spanYears = spanDays / 365.25;
   if (!Number.isFinite(spanYears) || spanYears <= 0) return 252; // single-day span fallback
   return intervals / spanYears;
+}
+
+/**
+ * Open-holding value aggregated by instrument (reporting currency), for the pulse
+ * concentration component. Identical instruments — including the same instrument
+ * held in several portfolios under the combined view — sum into one weight.
+ * Unpriced holdings fall back to open cost basis so they still count as exposure.
+ */
+function instrumentConcentration(views: PositionView[]): number[] {
+  const byInstrument = new Map<string, number>();
+  for (const view of views) {
+    if (view.state !== 'open') continue;
+    const value = parseNum(view.performance.current_value_reporting) ?? parseNum(view.performance.open_cost_basis_reporting) ?? 0;
+    if (value <= 0) continue;
+    const key = view.listing?.instrument_id ?? view.listing_id;
+    byInstrument.set(key, (byInstrument.get(key) ?? 0) + value);
+  }
+  return [...byInstrument.values()];
+}
+
+/**
+ * Value-weighted data-quality inputs for the pulse: the share of open value that
+ * could be priced and that has a fresh quote (weighted by open cost basis, which
+ * is available even when a quote is missing), and whether any position is invalid.
+ */
+function dataQualityFromViews(views: PositionView[]): {
+  pricedValueRatio: number;
+  freshValueRatio: number;
+  hasInvalidPositions: boolean;
+} {
+  let total = 0;
+  let priced = 0;
+  let fresh = 0;
+  let hasInvalidPositions = false;
+  for (const view of views) {
+    if (view.state === 'invalid') {
+      hasInvalidPositions = true;
+      continue;
+    }
+    if (view.state !== 'open') continue;
+    const basis = parseNum(view.performance.open_cost_basis_reporting) ?? 0;
+    if (basis <= 0) continue;
+    total += basis;
+    if (view.performance.current_price !== null) priced += basis;
+    if (view.freshness_status === 'fresh') fresh += basis;
+  }
+  // No open value → coverage/freshness are vacuously complete.
+  return {
+    pricedValueRatio: total > 0 ? priced / total : 1,
+    freshValueRatio: total > 0 ? fresh / total : 1,
+    hasInvalidPositions,
+  };
+}
+
+/** Parses a stringified decimal to a finite number, or null. */
+function parseNum(value: string | null): number | null {
+  if (value === null) return null;
+  const n = Number.parseFloat(value);
+  return Number.isFinite(n) ? n : null;
 }
 
 /** Win/loss tally over closed positions (realized P&L sign), in the reporting currency. */

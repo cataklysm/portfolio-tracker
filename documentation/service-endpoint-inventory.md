@@ -180,6 +180,7 @@ Portfolio-Präferenzen und Watchlists.
 | `GET` | `/reporting/performance` | `portfolio:read` | Passend |
 | `GET` | `/reporting/risk` | `portfolio:read` | Passend |
 | `GET` | `/reporting/benchmark` | `portfolio:read` | Passend |
+| `GET` | `/reporting/intelligence` | `portfolio:read` | Passend: erklärbarer Portfolio-Pulse (Struktur/Risiko/Datenqualität) |
 | `GET` | `/changes` | `portfolio:read` | Passend: technischer Audit-Log der Buchungen |
 | `GET` | `/activity` | `portfolio:read` | Passend: fachlicher Aktivitätsstrom |
 

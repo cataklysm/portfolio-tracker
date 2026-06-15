@@ -74,6 +74,15 @@ export function registerReportingRoutes(app: FastifyInstance, deps: ReportingRou
     ),
   );
 
+  r.get('/reporting/intelligence', { preHandler: read, schema: { querystring: PerformanceQuery } }, async (request) =>
+    deps.service.getIntelligence(
+      uid(request.user?.sub),
+      bearer(request.headers.authorization),
+      request.query.period ?? '1Y',
+      request.query.portfolio_id,
+    ),
+  );
+
   r.get('/reporting/benchmark', { preHandler: read, schema: { querystring: BenchmarkQuery } }, async (request) =>
     deps.service.getBenchmark(
       uid(request.user?.sub),

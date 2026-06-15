@@ -24,7 +24,8 @@ import {
   type SeriesCashFlow,
   type SeriesPosition,
 } from '../domain/performance-series.js';
-import { computeReturns, type ReturnsResult } from '../domain/returns.js';
+import { computeReturns, buildTwrIntervals, intervalReturn, type ReturnsResult } from '../domain/returns.js';
+import { computeRisk, type RiskMetrics } from '../domain/risk.js';
 
 export interface PortfolioNameReader {
   list(userId: string, includeArchived: boolean): Promise<{ id: string; name: string; preferred_headline_metric: string }[]>;
@@ -48,6 +49,25 @@ export interface PerformanceReport {
   points: PerformancePoint[];
   /** Money-weighted (XIRR) and time-weighted return over the period, in percent. */
   returns: ReturnsResult;
+}
+
+/** Risk analytics + closed-position win rate for a period. */
+export interface RiskReport extends RiskMetrics {
+  period: PerformancePeriod;
+  reporting_currency: string;
+  closed_positions: { count: number; wins: number; losses: number; win_rate_pct: string | null };
+}
+
+/** Shared period-series inputs reused by performance, risk, and benchmark reads. */
+interface SeriesContext {
+  reportingCurrency: string;
+  sampleDates: string[];
+  from: string;
+  to: string;
+  positions: SeriesPosition[];
+  cashFlows: SeriesCashFlow[];
+  rateOnOrBefore: (currency: string, date: string) => Decimal | null;
+  points: PerformancePoint[];
 }
 
 /** Summary, holdings, allocation, and tax under a single consistent snapshot. */
@@ -190,6 +210,67 @@ export class ReportingService {
     period: PerformancePeriod,
     portfolioId?: string,
   ): Promise<PerformanceReport> {
+    const ctx = await this.buildSeriesContext(userId, bearerToken, period, portfolioId);
+    const returns = computeReturns({
+      sampleDates: ctx.sampleDates,
+      points: ctx.points,
+      positions: ctx.positions,
+      cashFlows: ctx.cashFlows,
+      reportingCurrency: ctx.reportingCurrency,
+      rateOnOrBefore: ctx.rateOnOrBefore,
+    });
+    return {
+      period,
+      reporting_currency: ctx.reportingCurrency,
+      from: ctx.from,
+      to: ctx.to,
+      points: ctx.points,
+      returns,
+    };
+  }
+
+  /**
+   * Risk analytics for a portfolio (or combined set) over a period, derived from
+   * the time-weighted per-period return series (so cash flows do not distort
+   * volatility): annualized volatility, Sharpe, Sortino, max drawdown, best/worst
+   * period, plus the closed-position win rate. Annualization uses the actual
+   * sample spacing.
+   */
+  async getRisk(
+    userId: string,
+    bearerToken: string,
+    period: PerformancePeriod,
+    portfolioId?: string,
+  ): Promise<RiskReport> {
+    const [ctx, views] = await Promise.all([
+      this.buildSeriesContext(userId, bearerToken, period, portfolioId),
+      this.deps.positions.listPositions(userId, bearerToken, portfolioId),
+    ]);
+    const intervals = buildTwrIntervals({
+      sampleDates: ctx.sampleDates,
+      points: ctx.points,
+      positions: ctx.positions,
+      cashFlows: ctx.cashFlows,
+      reportingCurrency: ctx.reportingCurrency,
+      rateOnOrBefore: ctx.rateOnOrBefore,
+    });
+    const returns = intervals.map(intervalReturn).filter((r): r is number => r !== null);
+    const metrics = computeRisk({ returns, periodsPerYear: annualizationFactor(ctx.from, ctx.to, returns.length) });
+    return {
+      period,
+      reporting_currency: ctx.reportingCurrency,
+      ...metrics,
+      closed_positions: closedPositionStats(views),
+    };
+  }
+
+  /** Builds the period sample series + replay inputs shared by performance/risk/benchmark reads. */
+  private async buildSeriesContext(
+    userId: string,
+    bearerToken: string,
+    period: PerformancePeriod,
+    portfolioId?: string,
+  ): Promise<SeriesContext> {
     const [{ reportingCurrency, method, ledgers }, flows] = await Promise.all([
       this.deps.positions.listPositionLedgers(userId, bearerToken, portfolioId),
       this.deps.cashFlows.listForUser(userId, portfolioId),
@@ -244,15 +325,7 @@ export class ReportingService {
       cashFlows,
       rateOnOrBefore,
     });
-    const returns = computeReturns({
-      sampleDates,
-      points,
-      positions,
-      cashFlows,
-      reportingCurrency,
-      rateOnOrBefore,
-    });
-    return { period, reporting_currency: reportingCurrency, from, to, points, returns };
+    return { reportingCurrency, sampleDates, from, to, positions, cashFlows, rateOnOrBefore, points };
   }
 
   /** Total received dividends/cash-in-lieu in the reporting currency, at value-date FX. */
@@ -330,6 +403,31 @@ export class ReportingService {
     const rates = await this.deps.fx.getEurRatesAt(pairs, bearerToken);
     return makeDatedConverter(rates, reportingCurrency);
   }
+}
+
+/** Sampling frequency per year from the span and interval count (for annualization). */
+function annualizationFactor(from: string, to: string, intervals: number): number {
+  if (intervals < 1) return 0;
+  const spanDays = (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000;
+  const spanYears = spanDays / 365.25;
+  if (!Number.isFinite(spanYears) || spanYears <= 0) return 252; // single-day span fallback
+  return intervals / spanYears;
+}
+
+/** Win/loss tally over closed positions (realized P&L sign), in the reporting currency. */
+function closedPositionStats(views: PositionView[]): RiskReport['closed_positions'] {
+  let count = 0;
+  let wins = 0;
+  let losses = 0;
+  for (const view of views) {
+    if (view.state !== 'closed') continue;
+    count += 1;
+    const realized = Number.parseFloat(view.performance.realized_pnl_reporting ?? '');
+    if (Number.isFinite(realized) && realized > 0) wins += 1;
+    else if (Number.isFinite(realized) && realized < 0) losses += 1;
+  }
+  const win_rate_pct = count > 0 ? ((wins / count) * 100).toFixed(2) : null;
+  return { count, wins, losses, win_rate_pct };
 }
 
 /** Earliest value date across all ledger transactions and cash flows, or null. */

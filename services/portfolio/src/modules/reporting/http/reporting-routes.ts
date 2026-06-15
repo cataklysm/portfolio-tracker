@@ -60,6 +60,15 @@ export function registerReportingRoutes(app: FastifyInstance, deps: ReportingRou
       request.query.portfolio_id,
     ),
   );
+
+  r.get('/reporting/risk', { preHandler: read, schema: { querystring: PerformanceQuery } }, async (request) =>
+    deps.service.getRisk(
+      uid(request.user?.sub),
+      bearer(request.headers.authorization),
+      request.query.period ?? '1Y',
+      request.query.portfolio_id,
+    ),
+  );
 }
 
 function uid(sub: string | undefined): string {

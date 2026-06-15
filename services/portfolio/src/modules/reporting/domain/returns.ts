@@ -83,7 +83,24 @@ export function computeReturns(input: ReturnsInput): ReturnsResult {
   }
   flows.push({ date: to, amount: valueTo });
 
-  // --- Time-weighted intervals between consecutive sample points ---
+  const intervals = buildTwrIntervals(input);
+  const xirr = computeXirr(flows);
+  const twr = computeTwr(intervals);
+  return {
+    money_weighted: xirr === null ? null : pct(xirr),
+    time_weighted: twr === null ? null : pct(twr),
+  };
+}
+
+/**
+ * Time-weighted sub-period intervals between consecutive sample points: the start
+ * and end value, plus net capital contributed (buys − sells) and income received
+ * within each, all at value-date FX. Shared by `computeReturns` (TWR) and the
+ * risk analytics (per-period return series).
+ */
+export function buildTwrIntervals(input: ReturnsInput): TwrInterval[] {
+  const { sampleDates, points, positions, cashFlows, reportingCurrency, rateOnOrBefore } = input;
+  const convert = makeRateConverter(rateOnOrBefore, reportingCurrency);
   const intervals: TwrInterval[] = [];
   for (let i = 1; i < points.length; i += 1) {
     const prev = sampleDates[i - 1] ?? '';
@@ -111,13 +128,14 @@ export function computeReturns(input: ReturnsInput): ReturnsResult {
       income: income.toNumber(),
     });
   }
+  return intervals;
+}
 
-  const xirr = computeXirr(flows);
-  const twr = computeTwr(intervals);
-  return {
-    money_weighted: xirr === null ? null : pct(xirr),
-    time_weighted: twr === null ? null : pct(twr),
-  };
+/** Per-period simple return of a TWR interval, or null when the base is non-positive. */
+export function intervalReturn(interval: TwrInterval): number | null {
+  const base = interval.startValue + interval.netContribution;
+  if (base <= 0) return null;
+  return (interval.endValue + interval.income) / base - 1;
 }
 
 /**

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import type { AlertRule, CorporateAction, EarningsRow, FairValueEstimate, Fundamentals, ListingDetail, NewsItem, NotificationInbox, NotificationItem, PositionDetail, PriceTarget, RealizationAllocationView, SparklinePoint, TaxEvent, TransactionTaxEvent } from "@/lib/types"
+import type { AlertRule, CorporateAction, EarningsRow, FairValueEstimate, Fundamentals, ListingDetail, NewsItem, NotificationInbox, NotificationItem, Portfolio, PositionDetail, PriceTarget, RealizationAllocationView, SparklinePoint, TaxEvent, TransactionTaxEvent } from "@/lib/types"
 import { apiFetch } from "@/lib/api"
 import { getLocale } from "@/lib/locale"
 import { getTranslations } from "@/lib/i18n"
@@ -14,6 +14,7 @@ import { FundamentalsSection } from "@/components/FundamentalsSection"
 import { EventsSection, NewsSection } from "@/components/EventsSection"
 import { PriceTargetsSection } from "@/components/PriceTargetsSection"
 import { DeletePositionButton } from "@/components/DeletePositionButton"
+import { TransferPositionControl } from "@/components/TransferPositionControl"
 import { AssetAlerts } from "@/components/AssetAlerts"
 
 async function fetchInsights<T>(instrumentId: string | null, path: string): Promise<T[]> {
@@ -173,10 +174,11 @@ export default async function PositionDetailPage({ params }: Props) {
 
   const pos = (await resp.json()) as PositionDetail
   const instrumentId = pos.listing?.instrument_id ?? null
-  const [listingResp, seriesResp, allocationResp, fairValues, priceTargets, fundamentals, events, notificationData] = await Promise.all([
+  const [listingResp, seriesResp, allocationResp, portfoliosResp, fairValues, priceTargets, fundamentals, events, notificationData] = await Promise.all([
     apiFetch(`/listings/${pos.listing_id}`, { cache: "no-store" }),
     apiFetch(`/quotes/${pos.listing_id}/series?limit=365`, { cache: "no-store" }),
     apiFetch(`/positions/${pos.id}/allocations`, { cache: "no-store" }),
+    apiFetch("/portfolios", { cache: "no-store" }),
     fetchInsights<FairValueEstimate>(instrumentId, "fair-values"),
     fetchInsights<PriceTarget>(instrumentId, "price-targets"),
     fetchFundamentals(instrumentId),
@@ -184,6 +186,8 @@ export default async function PositionDetailPage({ params }: Props) {
     fetchNotificationData(instrumentId),
   ])
   const listing = listingResp.ok ? ((await listingResp.json()) as ListingDetail) : null
+  const portfolios = portfoliosResp.ok ? ((await portfoliosResp.json()) as Portfolio[]) : []
+  const otherPortfolios = portfolios.filter((p) => p.id !== pos.portfolio_id).map((p) => ({ id: p.id, name: p.name }))
   const chartSeries = seriesResp.ok ? ((await seriesResp.json()) as SparklinePoint[]) : pos.sparkline
   const allocations = allocationResp.ok ? ((await allocationResp.json()) as RealizationAllocationView) : null
   const p = pos.performance
@@ -301,6 +305,11 @@ export default async function PositionDetailPage({ params }: Props) {
           ) : null}
 
           {listing ? <Section title={t("positionDetail.instrumentAndData")}><ListingSettings positionId={pos.id} listing={listing} instrumentName={pos.listing?.name ?? ""} firstTransactionDate={firstTransactionDate} /></Section> : null}
+
+          <Section title={t("positionDetail.moveTitle")}>
+            <p className="mb-3 text-[10px] leading-4 text-[var(--app-text-muted)]">{t("positionDetail.moveDesc")}</p>
+            <TransferPositionControl positionId={pos.id} portfolios={otherPortfolios} />
+          </Section>
 
           <Section title={t("positionDetail.dangerZone")}>
             <p className="mb-3 text-[10px] leading-4 text-[var(--app-text-muted)]">{t("positionDetail.dangerZoneDesc")}</p>

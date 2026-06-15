@@ -12,14 +12,17 @@ import type {
 } from "@/lib/types"
 import { ReportsOverview } from "@/components/ReportsOverview"
 import { RiskPanel, type RiskReport } from "@/components/RiskPanel"
+import { BenchmarkPanel, type BenchmarkReport } from "@/components/BenchmarkPanel"
 import { TaxCenter } from "@/components/TaxCenter"
 import { TaxEstimatePanel } from "@/components/TaxEstimatePanel"
 import { PortfolioTaxConfigCard } from "@/components/PortfolioTaxConfigCard"
 import { TaxGlossary } from "@/components/TaxGlossary"
 
 interface Props {
-  searchParams: Promise<{ portfolio?: string }>
+  searchParams: Promise<{ portfolio?: string; bperiod?: string }>
 }
+
+const BENCHMARK_PERIODS = ["1W", "1M", "YTD", "1Y", "ALL"]
 
 async function report<T>(path: string, portfolioId?: string): Promise<T | null> {
   try {
@@ -32,7 +35,8 @@ async function report<T>(path: string, portfolioId?: string): Promise<T | null> 
 }
 
 export default async function ReportsPage({ searchParams }: Props) {
-  const { portfolio: selectedRaw } = await searchParams
+  const { portfolio: selectedRaw, bperiod: bperiodRaw } = await searchParams
+  const bperiod = BENCHMARK_PERIODS.includes(bperiodRaw ?? "") ? bperiodRaw! : "1Y"
   const [portfoliosResponse, locale] = await Promise.all([
     apiFetch("/portfolios", { cache: "no-store" }),
     getLocale(),
@@ -53,6 +57,13 @@ export default async function ReportsPage({ searchParams }: Props) {
   const holdings = snapshot?.holdings ?? null
   const allocation = snapshot?.allocation ?? null
   const taxReport = snapshot?.tax ?? null
+
+  // Benchmark comparison applies to a single selected portfolio (it defaults to
+  // that portfolio's saved benchmark); the combined view has no benchmark. A
+  // 400 (no benchmark set) returns null and renders the "set a benchmark" state.
+  const benchmark = selected
+    ? await report<BenchmarkReport>(`/reporting/benchmark?portfolio_id=${selected}&period=${bperiod}`)
+    : null
 
   // Per-portfolio tax configuration is only offered when a single portfolio is
   // selected; it needs the residence's rules and the portfolio's saved settings.
@@ -81,6 +92,7 @@ export default async function ReportsPage({ searchParams }: Props) {
         <>
           <ReportsOverview summary={summary} holdings={holdings} allocation={allocation} locale={locale} />
           <RiskPanel report={risk} />
+          {selected ? <BenchmarkPanel portfolioId={selected} report={benchmark} period={bperiod} /> : null}
           {taxEstimate ? <TaxEstimatePanel estimate={taxEstimate} locale={locale} /> : null}
           {taxReport ? (
             <TaxCenter

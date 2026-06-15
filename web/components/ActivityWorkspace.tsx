@@ -5,12 +5,14 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { deleteCashFlowAction } from "@/app/activity/actions"
 import { fmtCurrency, num } from "@/lib/format"
-import type { BookingChange, CashFlow, Portfolio, PositionView } from "@/lib/types"
+import type { ActivityPage, BookingChange, CashFlow, Portfolio, PositionView } from "@/lib/types"
+import { ActivityFeed } from "./ActivityFeed"
 import { CashFlowModal } from "./CashFlowModal"
 import { TaxEventModal } from "./TaxEventModal"
 
 interface Props {
-  tab: "cash" | "changes"
+  tab: "feed" | "cash" | "changes"
+  feed: ActivityPage
   cashFlows: CashFlow[]
   changes: BookingChange[]
   portfolios: Portfolio[]
@@ -27,27 +29,43 @@ export function ActivityWorkspace(props: Props) {
   return <div className="space-y-4">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex gap-1 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] p-1">
+        <Tab href={query({ tab: "feed", portfolio: props.selectedPortfolio })} active={props.tab === "feed"}>Feed</Tab>
         <Tab href={query({ tab: "cash", portfolio: props.selectedPortfolio })} active={props.tab === "cash"}>Cash flows</Tab>
         <Tab href={query({ tab: "changes", portfolio: props.selectedPortfolio })} active={props.tab === "changes"}>Change history</Tab>
       </div>
-      {props.tab === "cash" ? <CashFlowModal portfolios={props.portfolios} positions={props.positions} /> : <span className="text-[10px] text-[var(--app-text-faint)]">Latest 200 changes · not paginated</span>}
+      {props.tab === "cash" ? <CashFlowModal portfolios={props.portfolios} positions={props.positions} /> : props.tab === "changes" ? <span className="text-[10px] text-[var(--app-text-faint)]">Latest 200 changes · not paginated</span> : <span className="text-[10px] text-[var(--app-text-faint)]">Trades, cash flows &amp; tax events</span>}
     </div>
     <Filters {...props} />
-    {props.tab === "cash"
+    {props.tab === "feed"
+      ? <ActivityFeed initial={props.feed} type={props.selectedType} portfolioId={props.selectedPortfolio} portfolioNames={portfolioNames} positionNames={positionNames} locale={props.locale} />
+      : props.tab === "cash"
       ? <CashFlowTable flows={props.cashFlows} portfolios={props.portfolios} positions={props.positions} locale={props.locale} portfolioNames={portfolioNames} positionNames={positionNames} />
       : <ChangeList changes={props.changes} locale={props.locale} portfolioNames={portfolioNames} positionNames={positionNames} />}
   </div>
 }
 
+const TYPE_VALUES: Record<Props["tab"], string[]> = {
+  feed: ["trade", "cash_flow", "tax_event"],
+  cash: ["dividend", "deposit", "withdrawal", "cash_in_lieu"],
+  changes: ["transaction", "cash_flow", "tax_event"],
+}
+
 function Filters(props: Props) {
-  const base = props.tab === "cash" ? { tab: "cash", type: props.selectedType } : { tab: "changes", entity: props.selectedEntity }
+  // The "changes" tab filters by entity; "feed" and "cash" filter by type.
+  const withPortfolio = (portfolio?: string) =>
+    props.tab === "changes"
+      ? query({ tab: "changes", entity: props.selectedEntity, portfolio })
+      : query({ tab: props.tab, type: props.selectedType, portfolio })
+
   return <div className="flex flex-wrap gap-1">
-    <Pill href={query(base)} active={!props.selectedPortfolio}>All portfolios</Pill>
-    {props.portfolios.map((p) => <Pill key={p.id} href={query({ ...base, portfolio: p.id })} active={props.selectedPortfolio === p.id}>{p.name}</Pill>)}
+    <Pill href={withPortfolio(undefined)} active={!props.selectedPortfolio}>All portfolios</Pill>
+    {props.portfolios.map((p) => <Pill key={p.id} href={withPortfolio(p.id)} active={props.selectedPortfolio === p.id}>{p.name}</Pill>)}
     <span className="mx-1 border-l border-[var(--app-border)]" />
-    {(props.tab === "cash" ? ["dividend", "deposit", "withdrawal", "cash_in_lieu"] : ["transaction", "cash_flow", "tax_event"]).map((value) => {
-      const active = props.tab === "cash" ? props.selectedType === value : props.selectedEntity === value
-      const href = props.tab === "cash" ? query({ tab: "cash", portfolio: props.selectedPortfolio, type: active ? undefined : value }) : query({ tab: "changes", portfolio: props.selectedPortfolio, entity: active ? undefined : value })
+    {TYPE_VALUES[props.tab].map((value) => {
+      const active = props.tab === "changes" ? props.selectedEntity === value : props.selectedType === value
+      const href = props.tab === "changes"
+        ? query({ tab: "changes", portfolio: props.selectedPortfolio, entity: active ? undefined : value })
+        : query({ tab: props.tab, portfolio: props.selectedPortfolio, type: active ? undefined : value })
       return <Pill key={value} href={href} active={active}>{value.replaceAll("_", " ")}</Pill>
     })}
   </div>

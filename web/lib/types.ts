@@ -300,6 +300,31 @@ export interface ReportingSnapshot {
   tax: TaxReport
 }
 
+// ---- Activity feed (portfolio service) -------------------------------------
+
+export type ActivityKind = "trade" | "cash_flow" | "tax_event"
+
+export interface ActivityItem {
+  id: string
+  kind: ActivityKind
+  occurred_at: string
+  portfolio_id: string | null
+  position_id: string | null
+  subtype: string
+  currency: string
+  amount: string
+  quantity: string | null
+  price: string | null
+  fee: string | null
+  direction: string | null
+  note: string | null
+}
+
+export interface ActivityPage {
+  items: ActivityItem[]
+  next_cursor: string | null
+}
+
 export interface TaxResidency {
   id: string
   country_code: string

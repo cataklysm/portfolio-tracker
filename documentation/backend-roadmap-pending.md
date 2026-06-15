@@ -31,7 +31,7 @@ Each phase lists the **goal**, **owning service(s)**, **tables** (existing vs ne
 
 ## Recommended order
 
-**~~B-1~~ → ~~B-2~~ → B-3 → C-1 → D → E.** (B-1, B-2 done 2026-06-15.)
+**~~B-1~~ → ~~B-2~~ → ~~B-3~~ → C-1 → D → E.** (Phase B done 2026-06-15.)
 
 B is the biggest unlock and gates C's richness and all of E. D (operations) can
 proceed in parallel with B. The "Universal Tracker" track (below) is separate and
@@ -70,10 +70,14 @@ performance, and make report reads internally consistent.
    object; the dashboard chart shows both. 12 domain tests.
    - *Approximation:* TWR sub-periods coarsen under strided (long `ALL`) sampling.
 
-3. **Consistent combined snapshot.** Either one endpoint returning
-   summary+holdings+allocation+tax under a single `snapshot_at`/version, or a shared
-   snapshot id across the existing reads, to remove cross-request drift.
-   - *Owner:* portfolio. *Size:* S–M.
+3. **Consistent combined snapshot.** ✅ **Done 2026-06-15.**
+   `GET /reporting/snapshot` returns summary+holdings+allocation+tax from a single
+   fetch of positions/flows/quotes/FX/tax events under one `snapshot_at`, so the
+   four reports always reconcile (tax uses the snapshot's own realized P&L). The
+   reports page reads it instead of four separate calls. A shared `buildTaxReport`
+   is reused by `getTaxReport` and `getSnapshot`.
+   - *Note:* the period-scoped `GET /reporting/performance` (B-1/B-2) stays a
+     separate read; the snapshot is the current-state set.
 
 ---
 

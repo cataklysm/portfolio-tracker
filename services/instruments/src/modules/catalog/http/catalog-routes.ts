@@ -114,6 +114,16 @@ export function registerCatalogRoutes(app: FastifyInstance, deps: CatalogRouteDe
     return deps.service.getListingsByIds(ids);
   });
 
+  // Current market-session state (open/closed/holiday/weekend) for listings'
+  // exchanges. Static path; registered before /listings/:id so it is not shadowed.
+  r.get('/listings/sessions', { preHandler: read, schema: { querystring: BatchListingsQuery } }, async (request) => {
+    const ids = request.query.ids
+      .split(',')
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0);
+    return deps.service.getListingSessions(ids);
+  });
+
   r.get('/listings/:id', { preHandler: read }, async (request) =>
     deps.service.getListing((request.params as { id: string }).id),
   );

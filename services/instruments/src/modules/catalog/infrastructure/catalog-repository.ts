@@ -7,6 +7,7 @@ import type {
   ExchangeView,
   InstrumentWithListings,
   ListingDetail,
+  ListingSessionCalendar,
   ListingSummary,
   ListingView,
   ProviderListing,
@@ -114,6 +115,33 @@ export class KyselyCatalogRepository implements CatalogRepository {
       name: row.name,
       asset_type: row.asset_type,
       currency: row.currency,
+    }));
+  }
+
+  async getListingSessionCalendars(ids: string[]): Promise<ListingSessionCalendar[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.db
+      .selectFrom('instruments.listings as l')
+      .innerJoin('instruments.exchanges as e', 'e.id', 'l.exchange_id')
+      .select([
+        'l.id as listing_id',
+        'e.mic as mic',
+        'e.timezone as timezone',
+        'e.regular_open_local as open_local',
+        'e.regular_close_local as close_local',
+        'e.holiday_calendar as holiday_calendar',
+      ])
+      .where('l.id', 'in', ids)
+      .execute();
+    return rows.map((row) => ({
+      listing_id: row.listing_id,
+      mic: row.mic,
+      timezone: row.timezone,
+      open_local: row.open_local,
+      close_local: row.close_local,
+      holidays: Array.isArray(row.holiday_calendar)
+        ? row.holiday_calendar.filter((h): h is string => typeof h === 'string')
+        : [],
     }));
   }
 

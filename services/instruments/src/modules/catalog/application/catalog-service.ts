@@ -6,6 +6,7 @@ import {
   normalizeSymbol,
   type AssetType,
 } from '../domain/identifiers.js';
+import { computeMarketSession, type MarketStatus } from '../domain/session.js';
 import type {
   CatalogRepository,
   CreateExchangeInput,
@@ -17,6 +18,17 @@ import type {
   RegisterListingResult,
   UpdateListingInput,
 } from './ports.js';
+
+/** Current market-session state for a listing's exchange. */
+export interface ListingSessionView {
+  listing_id: string;
+  mic: string | null;
+  timezone: string | null;
+  status: MarketStatus;
+  local_date: string | null;
+  current_trading_date: string | null;
+  previous_trading_date: string | null;
+}
 
 export interface CreateInstrumentInput {
   instrument: {
@@ -84,6 +96,38 @@ export class CatalogService {
   getListingsByIds(ids: string[]): Promise<ListingSummary[]> {
     if (ids.length === 0) return Promise.resolve([]);
     return this.repo.getListingsByIds(ids);
+  }
+
+  /**
+   * Current exchange-local market session for each listing: open/closed/holiday/
+   * weekend, with the current and previous trading-session dates. Listings with no
+   * exchange (e.g. crypto) resolve to `unknown`.
+   */
+  async getListingSessions(ids: string[]): Promise<ListingSessionView[]> {
+    if (ids.length === 0) return [];
+    const calendars = await this.repo.getListingSessionCalendars(ids);
+    const byListing = new Map(calendars.map((c) => [c.listing_id, c]));
+    const now = new Date();
+    return ids.map((listingId) => {
+      const calendar = byListing.get(listingId);
+      const session = computeMarketSession(
+        now,
+        calendar
+          ? {
+              timezone: calendar.timezone,
+              openLocal: calendar.open_local,
+              closeLocal: calendar.close_local,
+              holidays: calendar.holidays,
+            }
+          : null,
+      );
+      return {
+        listing_id: listingId,
+        mic: calendar?.mic ?? null,
+        timezone: calendar?.timezone ?? null,
+        ...session,
+      };
+    });
   }
 
   resolveProviderListings(ids: string[], provider: string): Promise<ProviderListing[]> {

@@ -31,7 +31,7 @@ Each phase lists the **goal**, **owning service(s)**, **tables** (existing vs ne
 
 ## Recommended order
 
-**~~B-1~~ → ~~B-2~~ → ~~B-3~~ → C-1 → D → E.** (Phase B done 2026-06-15.)
+**~~B-1~~ → ~~B-2~~ → ~~B-3~~ → ~~C-1~~ → D → E.** (Phase B + C-1 done 2026-06-15.)
 
 B is the biggest unlock and gates C's richness and all of E. D (operations) can
 proceed in parallel with B. The "Universal Tracker" track (below) is separate and
@@ -86,20 +86,18 @@ performance, and make report reads internally consistent.
 **Goal:** a single chronological, paginated stream behind the dashboard "Activity"
 tab.
 
-> **Web slice done (2026-06-15):** the `/activity` page (`ActivityWorkspace`)
-> already merges trades, cash flows, and tax events into one chronological,
-> filterable stream by aggregating the existing per-entity reads client/server
-> side. **Still pending:** the backend union read model + cursor pagination below
-> (`GET /activity`), and folding in Phase D's corporate actions / transfers.
-
-1. **Cross-portfolio activity feed.** Merge trades, cash flows, **tax events**, and
-   (once Phase D lands) applied corporate actions / transfers into one paginated,
-   filterable read model.
-   - *Owner:* portfolio. *Contract:* `GET /activity?cursor=&type=&portfolio_id=`.
-   - *Dep:* none for the trade/cash-flow/tax slice; corporate actions/transfers
-     plug in from Phase D. The `portfolio.booking_changes` log (Phase A-2) is a
-     useful adjacent source but is an *audit* trail, not the activity feed.
-   - *Size:* M. A union read model + cursor pagination; no new write paths.
+1. **Cross-portfolio activity feed.** ✅ **Done 2026-06-15.**
+   `modules/activity` adds `GET /activity?cursor=&type=&portfolio_id=`: a union
+   read model over `transactions` (trades, scoped via positions→portfolios),
+   `cash_flows`, and `tax_events`, projected to one shape and ordered by
+   `(occurred_at, id)` DESC with keyset (cursor) pagination. `ActivityService`
+   handles opaque cursor encoding and a fetch-limit+1 has-more probe; amounts are
+   unsigned with meaning carried by `subtype`/`direction`. The web `/activity` page
+   gained a real "Feed" tab (default) with filters and cursor "Load more",
+   alongside the existing cash-flow management and change-history tabs.
+   - *Still pending:* folding in Phase D's applied corporate actions / transfers
+     once those write paths exist. The `portfolio.booking_changes` log (Phase A-2)
+     is an adjacent *audit* trail, not part of this feed.
 
 ---
 

@@ -32,7 +32,7 @@ export interface ExchangesTable {
 export interface InstrumentsTable {
   id: Generated<string>;
   name: string;
-  asset_type: 'equity' | 'crypto' | 'fund';
+  asset_type: 'equity' | 'crypto' | 'fund' | 'index';
   isin: string | null;
   underlying_identifier: string | null;
   primary_listing_id: string | null;
@@ -59,6 +59,16 @@ export interface ListingProviderIdentifiersTable {
   metadata: Json;
   created_at: Generated<Date>;
   updated_at: Timestamp;
+}
+
+/** Curated benchmark catalog: a stable key resolving to a seeded index listing. */
+export interface BenchmarkCatalogTable {
+  key: string;
+  name: string;
+  listing_id: string;
+  region: string | null;
+  sort_order: ColumnType<number, number | undefined, number>;
+  created_at: Generated<Date>;
 }
 
 export interface WatchInterestsTable {
@@ -103,6 +113,7 @@ export interface InstrumentsDatabase {
   'instruments.instruments': InstrumentsTable;
   'instruments.listings': ListingsTable;
   'instruments.listing_provider_identifiers': ListingProviderIdentifiersTable;
+  'instruments.benchmark_catalog': BenchmarkCatalogTable;
   'instruments.watch_interests': WatchInterestsTable;
   'instruments.outbox_events': OutboxEventsTable;
   'portfolio.positions': PortfolioPositionsReferencesTable;

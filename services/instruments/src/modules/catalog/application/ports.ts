@@ -65,6 +65,17 @@ export interface ListingSummary {
   currency: string;
 }
 
+/** A curated benchmark catalog entry, resolved to its seeded index listing. */
+export interface BenchmarkCatalogEntry {
+  key: string;
+  name: string;
+  region: string | null;
+  listing_id: string;
+  instrument_id: string;
+  symbol: string;
+  currency: string;
+}
+
 /** A listing's exchange trading calendar, for market-session computation. */
 export interface ListingSessionCalendar {
   listing_id: string;
@@ -122,6 +133,8 @@ export interface CatalogRepository {
   getInstrument(id: string): Promise<InstrumentWithListings | null>;
   updateInstrument(id: string, patch: { name?: string; isin?: string | null }): Promise<void>;
   getListingsByIds(ids: string[]): Promise<ListingSummary[]>;
+  /** The curated benchmark catalog, ordered, each resolved to its index listing. */
+  listBenchmarkCatalog(): Promise<BenchmarkCatalogEntry[]>;
   /** Exchange trading calendars for listings that map to an exchange. */
   getListingSessionCalendars(ids: string[]): Promise<ListingSessionCalendar[]>;
   getProviderListings(ids: string[], provider: string): Promise<ProviderListing[]>;

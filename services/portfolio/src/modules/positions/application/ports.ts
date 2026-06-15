@@ -192,7 +192,8 @@ export interface ListingSummary {
   instrument_id: string;
   symbol: string;
   name: string;
-  asset_type: 'equity' | 'crypto' | 'fund';
+  /** `index` listings are non-holdable benchmark references — they cannot open positions. */
+  asset_type: 'equity' | 'crypto' | 'fund' | 'index';
   currency: string;
 }
 

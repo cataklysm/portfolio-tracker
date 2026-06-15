@@ -9,6 +9,7 @@ import {
 import { computeMarketSession, type MarketStatus } from '../domain/session.js';
 import type {
   AdminSymbolView,
+  BenchmarkCatalogEntry,
   CatalogRepository,
   CreateExchangeInput,
   ExchangeView,
@@ -75,6 +76,11 @@ export class CatalogService {
     if (trimmed.length === 0) return [];
     const capped = Math.min(Math.max(limit ?? MAX_SEARCH_LIMIT, 1), MAX_SEARCH_LIMIT);
     return this.repo.searchInstruments(trimmed, capped);
+  }
+
+  /** The curated benchmark catalog (each entry resolves to a seeded index listing). */
+  listBenchmarkCatalog(): Promise<BenchmarkCatalogEntry[]> {
+    return this.repo.listBenchmarkCatalog();
   }
 
   async getInstrument(id: string): Promise<InstrumentWithListings> {

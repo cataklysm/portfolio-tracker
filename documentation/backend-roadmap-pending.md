@@ -215,16 +215,15 @@ tab.
    `PortfolioBenchmarkSettings` on the portfolio settings page sets/changes the
    benchmark (display name resolved server-side as `current.label`).
    *Follow-ups:*
-   - **⛔ Curated benchmark catalog — DEFERRED, needs a product decision
-     (2026-06-15).** Today the picker is **free-text instrument search**
-     (`PortfolioBenchmarkSettings`), which works. A curated *catalog* is a UX
-     upgrade that raises product questions I won't decide unilaterally: *which*
-     benchmarks to curate (index/region set?); and how a catalog entry **resolves
-     to a tradable listing** in this single-tenant catalog, which may not contain
-     the index/ETF (seed the listings? resolve by symbol via instruments search?
-     store the catalog in instruments vs portfolio?). Decide the curation set +
-     listing-resolution model first; the existing search picker is the fallback
-     meanwhile.
+   - ~~Curated benchmark catalog~~ ✅ **Done 2026-06-15** (spec §2.2). Instruments
+     owns `benchmark_catalog` (migration 017): a stable key → seeded **index**
+     listing with provider mappings. Added a non-holdable **`index`** asset type;
+     seeded MSCI World / S&P 500 / NASDAQ-100 / DAX index instruments + listings +
+     Yahoo provider ids (verify the Yahoo symbols at deploy). `GET /benchmarks`
+     (instruments, gateway-routed) returns the catalog; portfolio still stores only
+     the chosen `listing_id`, and `createPosition` now rejects index listings
+     (`index_not_holdable`). Free-text search remains the fallback. Web quick-pick
+     is a frontend-todo item.
    - ~~Resolving the saved benchmark's display name on load~~ ✅ already handled in
      the web UI (`PortfolioBenchmarkSettings` receives a resolved `current.label`).
    - ~~The auth-owned `combined_benchmark` for the combined view.~~ ✅ **Done

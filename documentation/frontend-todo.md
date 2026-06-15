@@ -25,6 +25,16 @@ here so nothing is lost. Each item notes the backend it depends on.
   `split`/`reverse_split` subtype, plus a "reversed" badge when `direction ===
   "reversed"`; for `transfer` show a move between portfolios. Backend shipped.
 
+## Benchmark catalog quick-pick
+- [ ] **Offer the curated catalog in the benchmark pickers.** `GET /benchmarks`
+  returns `[{ key, name, region, listing_id, instrument_id, symbol, currency }]`
+  (MSCI World, S&P 500, NASDAQ-100, DAX). In `PortfolioBenchmarkSettings` (and the
+  combined-benchmark setter) show these as one-click chips that set the benchmark
+  to the entry's `listing_id`, keeping the free-text instrument search as the
+  fallback for benchmarks outside the catalog. Index listings are non-holdable —
+  the position "add" flow should hide/disable `asset_type: "index"` results
+  (backend already rejects them with `index_not_holdable`).
+
 ## Combined-view benchmark
 - [ ] **Set the combined benchmark in the UI.** `PATCH /me/preferences`
   `{ combined_benchmark: <listing_id> | null }` sets/clears the per-user benchmark
@@ -49,7 +59,7 @@ here so nothing is lost. Each item notes the backend it depends on.
   `transferred_quantity` for display.
 
 ## Portfolio pulse (intelligence)
-- [ ] **Render the explainable portfolio pulse.** `GET /reporting/intelligence?portfolio_id=&period=`
+- [x] **Render the explainable portfolio pulse.** `GET /reporting/intelligence?portfolio_id=&period=`
   returns a versioned health score: `{ version, score (0–100 | null), status
   (strong|balanced|fragile|at_risk|insufficient_data), confidence (0–1),
   primary_driver (structure|risk|data_quality|null), components{ structure{score,
@@ -60,5 +70,18 @@ here so nothing is lost. Each item notes the backend it depends on.
   `insufficient_data` (show why — no holdings / not enough history). Combined view
   aggregates concentration across portfolios. Period selector reuses the existing
   performance periods.
+
+## Dashboard notifications
+- [x] **Add a compact notifications card to the dashboard intelligence rail.**
+  Show a small selection of open/unread notifications from `GET /notifications`
+  and link a "More" action to the full `/notifications` page. In a selected
+  single-portfolio view, prefer notifications whose `listing_id` belongs to a
+  position in that portfolio; the combined view may show notifications across all
+  holdings.
+- [ ] **Later: mark holdings with open notifications.** Show a subtle warning
+  indicator, such as a yellow warning triangle, beside a holding when it has one
+  or more open/unread notifications associated through `listing_id`. The
+  indicator should link to or reveal the relevant notifications and must not
+  imply that every notification is critical.
 
 ## (add new items below as backend features ship)

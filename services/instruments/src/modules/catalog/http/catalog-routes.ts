@@ -76,6 +76,9 @@ export function registerCatalogRoutes(app: FastifyInstance, deps: CatalogRouteDe
 
   r.get('/exchanges', { preHandler: read }, async () => deps.service.listExchanges());
 
+  // Curated benchmark catalog: stable keys resolving to seeded index listings.
+  r.get('/benchmarks', { preHandler: read }, async () => deps.service.listBenchmarkCatalog());
+
   r.post('/exchanges', { preHandler: write, schema: { body: CreateExchangeBody } }, async (request, reply) => {
     const result = await deps.service.createExchange({
       mic: request.body.mic,

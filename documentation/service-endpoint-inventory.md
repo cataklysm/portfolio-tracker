@@ -92,7 +92,7 @@ Edge-Authentifizierung, CORS, Security Header und Rate Limiting beschränkt.
 | `/portfolios`, `/positions`, `/reporting` | portfolio | Bearer | Passend |
 | `/tax-events`, `/tax-rules`, `/tax-settings` | portfolio | Bearer | Passend innerhalb einer Portfolio-Steuerdomäne |
 | `/changes`, `/activity`, `/corporate-actions`, `/watchlist` | portfolio | Bearer | Passend |
-| `/instruments`, `/exchanges`, `/listings` | instruments | Bearer | Passend |
+| `/instruments`, `/exchanges`, `/listings`, `/benchmarks` | instruments | Bearer | Passend |
 | `/quotes`, `/fx` | market | Bearer | Passend |
 | `/fair-values`, `/price-targets` | insights | Bearer | Passend |
 | `/fundamentals` | fundamentals | Bearer | Passend |
@@ -236,6 +236,7 @@ Provider-Identifier.
 |---|---|---|---|
 | `GET` | `/exchanges` | `instruments:read` | Passend |
 | `POST` | `/exchanges` | `instruments:write` | Passend |
+| `GET` | `/benchmarks` | `instruments:read` | Passend: kuratierter Benchmark-Katalog (Key → Index-Listing) |
 | `GET` | `/instruments/search` | `instruments:read` | Passend, sucht aktuell nur lokal |
 | `GET` | `/instruments/:id` | `instruments:read` | Passend |
 | `PATCH` | `/instruments/:id` | `instruments:write` | Passend |

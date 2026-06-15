@@ -332,8 +332,14 @@ export class PositionService {
     if (!owned) throw AppError.notFound('portfolio_not_found', 'Portfolio not found');
 
     const listings = await this.deps.listings.getListings([input.listingId], bearerToken);
-    if (!listings.has(input.listingId)) {
+    const listing = listings.get(input.listingId);
+    if (!listing) {
       throw AppError.notFound('listing_not_found', 'Listing not found');
+    }
+    // Index listings are non-holdable benchmark references (spec §2.2); hold the
+    // corresponding fund/ETF listing instead.
+    if (listing.asset_type === 'index') {
+      throw AppError.badRequest('index_not_holdable', 'Index listings are benchmark references and cannot be held');
     }
 
     const { id: positionId, created } = await this.deps.repo.upsertPosition(

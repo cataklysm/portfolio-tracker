@@ -34,6 +34,7 @@ export const GATEWAY_ROUTES: GatewayRoute[] = [
   { prefix: '/instruments', upstream: 'instruments', protected: true },
   { prefix: '/exchanges', upstream: 'instruments', protected: true },
   { prefix: '/listings', upstream: 'instruments', protected: true },
+  { prefix: '/benchmarks', upstream: 'instruments', protected: true },
   { prefix: '/quotes', upstream: 'market', protected: true },
   { prefix: '/fx', upstream: 'market', protected: true },
   { prefix: '/fair-values', upstream: 'insights', protected: true },

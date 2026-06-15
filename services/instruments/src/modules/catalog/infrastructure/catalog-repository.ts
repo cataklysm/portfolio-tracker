@@ -3,6 +3,7 @@ import type { Kysely, Transaction } from 'kysely';
 import type { InstrumentsDatabase } from '../../../platform/database/schema.js';
 import type {
   AdminSymbolView,
+  BenchmarkCatalogEntry,
   CatalogRepository,
   CreateExchangeInput,
   ExchangeView,
@@ -115,6 +116,33 @@ export class KyselyCatalogRepository implements CatalogRepository {
       symbol: row.symbol,
       name: row.name,
       asset_type: row.asset_type,
+      currency: row.currency,
+    }));
+  }
+
+  async listBenchmarkCatalog(): Promise<BenchmarkCatalogEntry[]> {
+    const rows = await this.db
+      .selectFrom('instruments.benchmark_catalog as b')
+      .innerJoin('instruments.listings as l', 'l.id', 'b.listing_id')
+      .select([
+        'b.key as key',
+        'b.name as name',
+        'b.region as region',
+        'l.id as listing_id',
+        'l.instrument_id as instrument_id',
+        'l.symbol as symbol',
+        'l.currency as currency',
+      ])
+      .orderBy('b.sort_order', 'asc')
+      .orderBy('b.key', 'asc')
+      .execute();
+    return rows.map((row) => ({
+      key: row.key,
+      name: row.name,
+      region: row.region,
+      listing_id: row.listing_id,
+      instrument_id: row.instrument_id,
+      symbol: row.symbol,
       currency: row.currency,
     }));
   }

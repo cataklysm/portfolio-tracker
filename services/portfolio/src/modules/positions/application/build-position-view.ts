@@ -18,7 +18,7 @@ export interface PositionView {
     instrument_id: string;
     symbol: string;
     name: string;
-    asset_type: 'equity' | 'crypto' | 'fund';
+    asset_type: 'equity' | 'crypto' | 'fund' | 'index';
     currency: string;
   } | null;
   quote_as_of: string | null;

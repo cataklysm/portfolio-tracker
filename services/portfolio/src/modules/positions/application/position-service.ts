@@ -1,9 +1,10 @@
 import { AppError } from '@portfolio/platform';
-import { computeRealization, type AccountingMethod, type RealizationResult } from '../domain/realization.js';
+import { computeRealization, type AccountingMethod, type RealizationResult, type SplitAdjustment } from '../domain/realization.js';
 import type { TransactionPerformanceMetrics } from '../domain/transaction-performance.js';
 import { deriveState } from '../domain/position-state.js';
 import { safeRecord } from '../../audit/application/record.js';
 import type { ChangeLogWriter } from '../../audit/application/ports.js';
+import type { CorporateActionReader } from './ports.js';
 import { buildPositionView, buildTransactionPerformance, type PositionView } from './build-position-view.js';
 import type {
   DatedRateRequest,
@@ -29,6 +30,8 @@ export interface PositionServiceDeps {
   settings: SettingsReader;
   taxEvents: TaxEventReader;
   changeLog?: ChangeLogWriter;
+  /** Active split applications to replay in re-derivation (corporate actions). */
+  corporateActions?: CorporateActionReader;
 }
 
 export interface CreatePositionInput {
@@ -63,6 +66,8 @@ export interface PositionLedger {
   listingId: string;
   listingCurrency: string;
   transactions: StoredTransaction[];
+  /** Active split adjustments to replay for this position. */
+  splits: SplitAdjustment[];
 }
 
 /** Every position ledger for a scope, with the reporting currency and method. */
@@ -118,10 +123,12 @@ export class PositionService {
 
     const currencies = collectCurrencies(listings.values(), reportingCurrency);
     const allTxns = [...txnsByPosition.values()].flat();
-    const [eurRates, historicalRates] = await Promise.all([
+    const [eurRates, historicalRates, splitsByPosition] = await Promise.all([
       this.deps.fx.getEurRates(currencies, bearerToken),
       this.deps.fx.getEurRatesAt(collectDatedRatePairs(allTxns, reportingCurrency), bearerToken),
+      this.activeSplits(positionIds),
     ]);
+    const today = todayIso();
 
     return positions.map((position) =>
       buildPositionView({
@@ -133,6 +140,8 @@ export class PositionService {
         historicalRates,
         reportingCurrency,
         method: accountingMethod,
+        splits: splitsByPosition.get(position.id) ?? [],
+        asOf: today,
       }),
     );
   }
@@ -150,10 +159,11 @@ export class PositionService {
 
     const listing = listings.get(position.listing_id);
     const currencies = collectCurrencies(listings.values(), reportingCurrency);
-    const [eurRates, historicalRates, taxEvents] = await Promise.all([
+    const [eurRates, historicalRates, taxEvents, splitsByPosition] = await Promise.all([
       this.deps.fx.getEurRates(currencies, bearerToken),
       this.deps.fx.getEurRatesAt(collectDatedRatePairs(transactions, reportingCurrency), bearerToken),
       this.deps.taxEvents.listForTransactions(userId, transactions.map((tx) => tx.id)),
+      this.activeSplits([position.id]),
     ]);
     const taxEventsByTransaction = groupByTransaction(taxEvents);
 
@@ -166,6 +176,8 @@ export class PositionService {
       historicalRates,
       reportingCurrency,
       method: accountingMethod,
+      splits: splitsByPosition.get(position.id) ?? [],
+      asOf: todayIso(),
     };
     const view = buildPositionView(viewArgs);
     const txPerformance = buildTransactionPerformance(viewArgs);
@@ -222,14 +234,16 @@ export class PositionService {
       return { reportingCurrency, method: accountingMethod, ledgers: [] };
     }
     const listingIds = [...new Set(positions.map((p) => p.listing_id))];
-    const [listings, txnsByPosition] = await Promise.all([
+    const [listings, txnsByPosition, splitsByPosition] = await Promise.all([
       this.deps.listings.getListings(listingIds, bearerToken),
       this.deps.repo.listTransactionsForPositions(positions.map((p) => p.id)),
+      this.activeSplits(positions.map((p) => p.id)),
     ]);
     const ledgers = positions.map((position) => ({
       listingId: position.listing_id,
       listingCurrency: listings.get(position.listing_id)?.currency ?? 'EUR',
       transactions: txnsByPosition.get(position.id) ?? [],
+      splits: splitsByPosition.get(position.id) ?? [],
     }));
     return { reportingCurrency, method: accountingMethod, ledgers };
   }
@@ -382,11 +396,23 @@ export class PositionService {
     }
   }
 
+  /** Public recalculation hook for sibling write workflows (e.g. corporate actions). */
+  async recalculatePosition(positionId: string, bearerToken: string): Promise<void> {
+    await this.recalculate(positionId, bearerToken);
+  }
+
+  /** Active split adjustments per position (empty when no corporate-action reader is wired). */
+  private async activeSplits(positionIds: string[]): Promise<Map<string, SplitAdjustment[]>> {
+    if (!this.deps.corporateActions || positionIds.length === 0) return new Map();
+    return this.deps.corporateActions.activeSplitsForPositions(positionIds);
+  }
+
   /** Recomputes derived state from the ledger and persists it. */
   private async recalculate(positionId: string, bearerToken: string): Promise<void> {
     const { accountingMethod } = await this.deps.settings.getUserSettings(bearerToken);
     const transactions = await this.deps.repo.listTransactions(positionId);
-    const realization = computeRealization(transactions, accountingMethod);
+    const splits = (await this.activeSplits([positionId])).get(positionId) ?? [];
+    const realization = computeRealization(transactions, accountingMethod, splits, todayIso());
     const state = deriveState(realization);
 
     if (state === 'invalid') {
@@ -457,11 +483,21 @@ export class PositionService {
     return transfers.map(serializeTransfer);
   }
 
+  /** The owned position record, or a 404 — for sibling workflows (corporate actions). */
+  async getOwnedPositionRecord(userId: string, positionId: string) {
+    return this.requireOwnedPosition(positionId, userId);
+  }
+
   private async requireOwnedPosition(positionId: string, userId: string) {
     const position = await this.deps.repo.getOwnedPosition(positionId, userId);
     if (!position) throw AppError.notFound('position_not_found', 'Position not found');
     return position;
   }
+}
+
+/** Today's date as YYYY-MM-DD (UTC) — the `asOf` for live re-derivation. */
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function collectCurrencies(

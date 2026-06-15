@@ -1,4 +1,9 @@
-import type { AccountingMethod, LedgerTransaction } from '../domain/realization.js';
+import type { AccountingMethod, LedgerTransaction, SplitAdjustment } from '../domain/realization.js';
+
+/** Active (non-reversed) split adjustments applied to positions, for re-derivation. */
+export interface CorporateActionReader {
+  activeSplitsForPositions(positionIds: string[]): Promise<Map<string, SplitAdjustment[]>>;
+}
 
 /** A position row plus the portfolio it belongs to (ownership already checked). */
 export interface PositionRecord {

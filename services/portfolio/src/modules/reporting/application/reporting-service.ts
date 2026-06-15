@@ -228,6 +228,7 @@ export class ReportingService {
       method,
       listingCurrency: l.listingCurrency,
       priceOnOrBefore: priceByListing.get(l.listingId) ?? (() => null),
+      splits: l.splits,
     }));
     const cashFlows: SeriesCashFlow[] = flows.map((f) => ({
       type: f.type,

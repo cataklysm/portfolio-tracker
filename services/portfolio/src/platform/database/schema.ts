@@ -153,6 +153,30 @@ export interface AverageCostRealizationsTable {
   created_at: Generated<Date>;
 }
 
+export interface PositionCorporateActionApplicationsTable {
+  id: Generated<string>;
+  position_id: string;
+  /** Deterministic UUID derived from the events service's stable action id. */
+  corporate_action_id: string;
+  corporate_action_version: number;
+  signed_action_snapshot: Json;
+  token_signature_hash: string;
+  ratio_numerator: ColumnType<string | null, string | number | null | undefined, string | number | null>;
+  ratio_denominator: ColumnType<string | null, string | number | null | undefined, string | number | null>;
+  effective_at: ColumnType<Date, Date | string, Date | string>;
+  creation_sequence: Generated<string>;
+  fractional_handling: ColumnType<
+    'keep_fractional' | 'cash_settlement',
+    'keep_fractional' | 'cash_settlement' | undefined,
+    'keep_fractional' | 'cash_settlement'
+  >;
+  applied_by: string;
+  applied_at: Generated<Date>;
+  reversed_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+  reversed_by: ColumnType<string | null, string | null | undefined, string | null>;
+  reversal_reason: ColumnType<string | null, string | null | undefined, string | null>;
+}
+
 export interface PositionTransfersTable {
   id: Generated<string>;
   position_id: string;
@@ -214,6 +238,7 @@ export interface PortfolioDatabase {
   'portfolio.realization_allocations': RealizationAllocationsTable;
   'portfolio.average_cost_realizations': AverageCostRealizationsTable;
   'portfolio.position_transfers': PositionTransfersTable;
+  'portfolio.position_corporate_action_applications': PositionCorporateActionApplicationsTable;
   'portfolio.booking_changes': BookingChangesTable;
   'portfolio.watchlist_items': WatchlistItemsTable;
   'portfolio.outbox_events': OutboxEventsTable;

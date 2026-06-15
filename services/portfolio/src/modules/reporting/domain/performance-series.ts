@@ -4,6 +4,7 @@ import {
   computeRealization,
   type AccountingMethod,
   type LedgerTransaction,
+  type SplitAdjustment,
 } from '../../positions/domain/realization.js';
 
 export type PerformancePeriod = '1W' | '1M' | 'YTD' | '1Y' | 'ALL';
@@ -21,6 +22,8 @@ export interface SeriesPosition {
   listingCurrency: string;
   /** Daily close on or before a date (YYYY-MM-DD), in the listing currency; null if none. */
   priceOnOrBefore: (date: string) => Decimal | null;
+  /** Applied split adjustments; only those effective on/before each sample date apply. */
+  splits?: SplitAdjustment[];
 }
 
 /** An external/​income cash flow contributing to contributed capital and dividends. */
@@ -122,7 +125,7 @@ export function computePerformanceSeries(input: PerformanceSeriesInput): Perform
       const ledger = pos.transactions.filter((tx) => (tx.tax_relevant_value_date ?? '') <= date);
       if (ledger.length === 0) continue;
 
-      const r = computeRealization(ledger, pos.method);
+      const r = computeRealization(ledger, pos.method, pos.splits ?? [], date);
       if (r.invalid) {
         complete = false; // a broken ledger as of this date — cannot value it
         continue;

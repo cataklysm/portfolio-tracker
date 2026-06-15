@@ -32,6 +32,32 @@ export interface DatedAmount {
 }
 
 /**
+ * An applied share-ratio corporate action (split or reverse split). On its
+ * effective date every open lot's quantity is multiplied by `ratioNumerator /
+ * ratioDenominator` and its per-share cost divided by the same factor, so the
+ * lot's total cost basis is preserved while the share count is restated.
+ */
+export interface SplitAdjustment {
+  effectiveDate: string;
+  ratioNumerator: string;
+  ratioDenominator: string;
+}
+
+interface PreparedSplit {
+  date: string;
+  factor: Decimal;
+}
+
+/** Active split factors at/under `asOf`, ascending by date (invalid/≤0 dropped). */
+function prepareSplits(splits: SplitAdjustment[], asOf: string | undefined): PreparedSplit[] {
+  return splits
+    .filter((s) => (asOf ? s.effectiveDate <= asOf : true))
+    .map((s) => ({ date: s.effectiveDate, factor: dec(s.ratioNumerator).div(dec(s.ratioDenominator)) }))
+    .filter((s) => s.factor.isFinite() && s.factor.gt(0))
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+}
+
+/**
  * One buy lot consumed by one sell under FIFO/LIFO — the durable, persistable
  * unit of realized-gain attribution. Quantity is the amount of the buy lot the
  * sell consumed; cost is derivable from the buy transaction. Not produced under
@@ -134,12 +160,15 @@ interface OpenLot {
 export function computeRealization(
   transactions: LedgerTransaction[],
   method: AccountingMethod,
+  splits: SplitAdjustment[] = [],
+  asOf?: string,
 ): RealizationResult {
-  if (method === 'average_cost') return averageCost(transactions);
-  return fifoLifo(transactions, method);
+  const prepared = prepareSplits(splits, asOf);
+  if (method === 'average_cost') return averageCost(transactions, prepared);
+  return fifoLifo(transactions, method, prepared);
 }
 
-function fifoLifo(transactions: LedgerTransaction[], method: 'fifo' | 'lifo'): RealizationResult {
+function fifoLifo(transactions: LedgerTransaction[], method: 'fifo' | 'lifo', splits: PreparedSplit[]): RealizationResult {
   const lots: OpenLot[] = [];
   // Every buy lot in ledger order, kept by reference even after it leaves the
   // active queue, so the final remaining quantity (possibly zero) is readable.
@@ -154,7 +183,22 @@ function fifoLifo(transactions: LedgerTransaction[], method: 'fifo' | 'lifo'): R
   const feesByDate: DatedAmount[] = [];
   const lotConsumptions: LotConsumption[] = [];
 
+  // Restate open lots on each split's effective date (qty ×factor, unit cost
+  // ÷factor) so post-split sells consume post-split shares at preserved cost.
+  let splitCursor = 0;
+  const applySplitsUpTo = (dateInclusive: string): void => {
+    while (splitCursor < splits.length && splits[splitCursor]!.date <= dateInclusive) {
+      const { factor } = splits[splitCursor]!;
+      for (const lot of lots) {
+        lot.quantity = lot.quantity.times(factor);
+        lot.unitCost = lot.unitCost.div(factor);
+      }
+      splitCursor += 1;
+    }
+  };
+
   for (const tx of transactions) {
+    applySplitsUpTo(tx.tax_relevant_value_date ?? '');
     const qty = dec(tx.quantity);
     const price = dec(tx.price);
     const fee = dec(tx.fee);
@@ -215,6 +259,7 @@ function fifoLifo(transactions: LedgerTransaction[], method: 'fifo' | 'lifo'): R
     sells.push({ tx, realized: sellRealized, consumedCost, consumedQty: qty });
   }
 
+  applySplitsUpTo('9999-12-31'); // splits dated after the last trade still restate current holdings
   const openQuantity = lots.reduce((s, l) => s.plus(l.quantity), new D(0));
   const openCostBasis = lots.reduce((s, l) => s.plus(l.quantity.times(l.unitCost)), new D(0));
 
@@ -239,7 +284,7 @@ function fifoLifo(transactions: LedgerTransaction[], method: 'fifo' | 'lifo'): R
   };
 }
 
-function averageCost(transactions: LedgerTransaction[]): RealizationResult {
+function averageCost(transactions: LedgerTransaction[], splits: PreparedSplit[]): RealizationResult {
   let openQuantity = new D(0);
   let openCostBasis = new D(0); // running cost of held shares (incl. buy fees)
   let realizedPnl = new D(0);
@@ -251,7 +296,17 @@ function averageCost(transactions: LedgerTransaction[]): RealizationResult {
   const feesByDate: DatedAmount[] = [];
   const byTransaction: TransactionRealization[] = [];
 
+  // Splits restate the pooled share count; the pooled cost basis is unchanged.
+  let splitCursor = 0;
+  const applySplitsUpTo = (dateInclusive: string): void => {
+    while (splitCursor < splits.length && splits[splitCursor]!.date <= dateInclusive) {
+      openQuantity = openQuantity.times(splits[splitCursor]!.factor);
+      splitCursor += 1;
+    }
+  };
+
   for (const tx of transactions) {
+    applySplitsUpTo(tx.tax_relevant_value_date ?? '');
     const qty = dec(tx.quantity);
     const price = dec(tx.price);
     const fee = dec(tx.fee);
@@ -281,6 +336,8 @@ function averageCost(transactions: LedgerTransaction[]): RealizationResult {
     openQuantity = openQuantity.minus(qty);
     openCostBasis = openCostBasis.minus(consumedCost);
   }
+
+  applySplitsUpTo('9999-12-31'); // splits after the last trade still restate the share count
 
   return {
     invalid: false,

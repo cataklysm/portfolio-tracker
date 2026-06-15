@@ -43,6 +43,11 @@ import {
 } from './modules/tax-events/index.js';
 import { KyselyChangeLogRepository, registerChangeLogRoutes } from './modules/audit/index.js';
 import { ActivityService, KyselyActivityRepository, registerActivityRoutes } from './modules/activity/index.js';
+import {
+  CorporateActionService,
+  KyselyCorporateActionRepository,
+  registerCorporateActionRoutes,
+} from './modules/corporate-actions/index.js';
 import { ReportingService, registerReportingRoutes } from './modules/reporting/index.js';
 import {
   TaxRuleService,
@@ -93,6 +98,7 @@ export async function buildApp(config: PortfolioConfig): Promise<BuiltService> {
   const portfolioTaxRepo = new KyselyPortfolioTaxSettingsRepository(db);
   const changeLog = new KyselyChangeLogRepository(db);
   const activityService = new ActivityService(new KyselyActivityRepository(db));
+  const corporateActionRepo = new KyselyCorporateActionRepository(db);
   const portfolioService = new PortfolioService(portfolioRepo);
   const watchlistService = new WatchlistService({
     repo: new KyselyWatchlistRepository(db),
@@ -107,7 +113,9 @@ export async function buildApp(config: PortfolioConfig): Promise<BuiltService> {
     settings: settingsClient,
     taxEvents: taxEventRepo,
     changeLog,
+    corporateActions: corporateActionRepo,
   });
+  const corporateActionService = new CorporateActionService({ repo: corporateActionRepo, positions: positionService });
   const cashFlowService = new CashFlowService(cashFlowRepo, changeLog);
   const taxEventService = new TaxEventService(taxEventRepo, changeLog);
   const taxRuleService = new TaxRuleService(new KyselyTaxRuleRepository(db));
@@ -157,6 +165,7 @@ export async function buildApp(config: PortfolioConfig): Promise<BuiltService> {
   registerTaxEstimateRoutes(app, { service: taxEstimateService, ...authDeps });
   registerChangeLogRoutes(app, { reader: changeLog, ...authDeps });
   registerActivityRoutes(app, { service: activityService, ...authDeps });
+  registerCorporateActionRoutes(app, { service: corporateActionService, ...authDeps });
   registerReportingRoutes(app, { service: reportingService, ...authDeps });
 
   // Redis is a required dependency for the event bus: connect last so wiring

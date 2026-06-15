@@ -239,3 +239,59 @@ describe('computeRealization — lot consumptions (persistable allocations)', ()
     assert.equal(sell.consumedQuantity!.toFixed(0), '4');
   });
 });
+
+describe('computeRealization — splits', () => {
+  const splits = (date: string, num: string, den: string) => [
+    { effectiveDate: date, ratioNumerator: num, ratioDenominator: den },
+  ];
+
+  test('2:1 split doubles open quantity and halves unit cost (FIFO); cost basis preserved', () => {
+    const r = computeRealization([idTx('b1', 'buy', '10', '100', '0', '2024-01-02')], 'fifo', splits('2024-06-01', '2', '1'));
+    assert.equal(r.openQuantity.toFixed(0), '20');
+    assert.equal(r.openCostBasis.toFixed(0), '1000');
+    const b1 = byId(r).get('b1')!;
+    assert.equal(b1.remainingQuantity!.toFixed(0), '20');
+    assert.equal(b1.remainingCostBasis!.toFixed(0), '1000');
+  });
+
+  test('a sell after a 2:1 split consumes post-split shares at preserved cost', () => {
+    const r = computeRealization(
+      [idTx('b1', 'buy', '10', '100', '0', '2024-01-02'), idTx('s1', 'sell', '20', '60', '0', '2024-07-01')],
+      'fifo',
+      splits('2024-06-01', '2', '1'),
+    );
+    assert.equal(r.realizedPnl.toFixed(0), '200'); // 20×60 − cost 1000
+    assert.equal(r.openQuantity.toFixed(0), '0');
+  });
+
+  test('reverse split 1:2 halves quantity, doubles unit cost', () => {
+    const r = computeRealization([idTx('b1', 'buy', '10', '100', '0', '2024-01-02')], 'fifo', splits('2024-06-01', '1', '2'));
+    assert.equal(r.openQuantity.toFixed(0), '5');
+    assert.equal(r.openCostBasis.toFixed(0), '1000');
+  });
+
+  test('asOf excludes splits with a later effective date', () => {
+    const r = computeRealization([idTx('b1', 'buy', '10', '100', '0', '2024-01-02')], 'fifo', splits('2024-06-01', '2', '1'), '2024-05-01');
+    assert.equal(r.openQuantity.toFixed(0), '10');
+  });
+
+  test('a split after the last trade still restates current holdings', () => {
+    const r = computeRealization([idTx('b1', 'buy', '10', '100', '0', '2024-01-02')], 'fifo', splits('2025-01-01', '2', '1'), '2025-06-01');
+    assert.equal(r.openQuantity.toFixed(0), '20');
+  });
+
+  test('average cost: split scales pooled quantity, not pooled cost', () => {
+    const r = computeRealization([idTx('b1', 'buy', '10', '100', '0', '2024-01-02')], 'average_cost', splits('2024-06-01', '2', '1'));
+    assert.equal(r.openQuantity.toFixed(0), '20');
+    assert.equal(r.openCostBasis.toFixed(0), '1000');
+  });
+
+  test('only pre-split lots are scaled; a post-split buy is unaffected', () => {
+    const r = computeRealization(
+      [idTx('b1', 'buy', '10', '100', '0', '2024-01-02'), idTx('b2', 'buy', '5', '50', '0', '2024-07-01')],
+      'fifo',
+      splits('2024-06-01', '2', '1'),
+    );
+    assert.equal(r.openQuantity.toFixed(0), '25'); // 20 (scaled) + 5 (post-split)
+  });
+});

@@ -1,6 +1,6 @@
 import { dec } from '../domain/money.js';
 import { makeConverter, makeDatedConverter } from '../domain/currency.js';
-import { computeRealization, type AccountingMethod } from '../domain/realization.js';
+import { computeRealization, type AccountingMethod, type SplitAdjustment } from '../domain/realization.js';
 import { computePerformance, type PerformanceMetrics } from '../domain/performance.js';
 import {
   computeTransactionPerformance,
@@ -36,6 +36,9 @@ export interface BuildPositionViewArgs {
   historicalRates?: Map<string, string>;
   reportingCurrency: string;
   method: AccountingMethod;
+  /** Applied split adjustments to replay; restate holdings as of `asOf` (default today). */
+  splits?: SplitAdjustment[];
+  asOf?: string;
 }
 
 /**
@@ -46,7 +49,7 @@ export interface BuildPositionViewArgs {
  */
 export function buildPositionView(args: BuildPositionViewArgs): PositionView {
   const listingCurrency = args.listing?.currency ?? 'EUR';
-  const realization = computeRealization(args.transactions, args.method);
+  const realization = computeRealization(args.transactions, args.method, args.splits ?? [], args.asOf);
   const state = deriveState(realization);
 
   const latestPrice = args.quote?.latest ? dec(args.quote.latest) : null;
@@ -96,7 +99,7 @@ export function buildTransactionPerformance(
   args: BuildPositionViewArgs,
 ): Map<string, TransactionPerformanceMetrics> {
   const listingCurrency = args.listing?.currency ?? 'EUR';
-  const realization = computeRealization(args.transactions, args.method);
+  const realization = computeRealization(args.transactions, args.method, args.splits ?? [], args.asOf);
   const latestPrice = args.quote?.latest ? dec(args.quote.latest) : null;
   const convertToReporting = makeConverter(args.eurRates, listingCurrency, args.reportingCurrency);
   const convertAt = args.historicalRates

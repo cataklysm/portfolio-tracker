@@ -1,6 +1,6 @@
 import type { Kysely } from 'kysely';
 import type { MarketDatabase } from '../../../platform/database/schema.js';
-import type { FxRateRecord, FxRepository } from '../application/ports.js';
+import type { FxRatePoint, FxRateRecord, FxRepository } from '../application/ports.js';
 
 /** Kysely adapter for the `market.fx_rates` table (EUR-based daily rates). */
 export class KyselyFxRepository implements FxRepository {
@@ -36,6 +36,47 @@ export class KyselyFxRepository implements FxRepository {
       .limit(1)
       .executeTakeFirst();
     return row ? { date: row.effective_date, rate: row.rate } : null;
+  }
+
+  async getEurRateSeries(
+    quoteCurrencies: string[],
+    from: string,
+    to: string,
+  ): Promise<Map<string, FxRatePoint[]>> {
+    const out = new Map<string, FxRatePoint[]>();
+    if (quoteCurrencies.length === 0) return out;
+
+    // Most recent point strictly before the window, per currency, so the first
+    // in-range sample dates (e.g. a weekend) still resolve to a rate.
+    const anchors = await this.db
+      .selectFrom('market.fx_rates')
+      .distinctOn('quote_currency')
+      .select(['quote_currency', 'effective_date', 'rate'])
+      .where('base_currency', '=', 'EUR')
+      .where('quote_currency', 'in', quoteCurrencies)
+      .where('effective_date', '<', from)
+      .orderBy('quote_currency')
+      .orderBy('effective_date', 'desc')
+      .execute();
+
+    const inRange = await this.db
+      .selectFrom('market.fx_rates')
+      .select(['quote_currency', 'effective_date', 'rate'])
+      .where('base_currency', '=', 'EUR')
+      .where('quote_currency', 'in', quoteCurrencies)
+      .where('effective_date', '>=', from)
+      .where('effective_date', '<=', to)
+      .orderBy('quote_currency')
+      .orderBy('effective_date', 'asc')
+      .execute();
+
+    // Anchors first (date < from), then ascending in-range points → ascending list.
+    for (const row of [...anchors, ...inRange]) {
+      const list = out.get(row.quote_currency) ?? [];
+      list.push({ date: row.effective_date, rate: row.rate });
+      out.set(row.quote_currency, list);
+    }
+    return out;
   }
 
   async upsertRates(records: FxRateRecord[]): Promise<void> {

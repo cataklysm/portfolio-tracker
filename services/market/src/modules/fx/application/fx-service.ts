@@ -25,6 +25,21 @@ export class FxService {
     return this.deps.repo.getEurRateOnOrBefore(quoteCurrency, date);
   }
 
+  /**
+   * Daily EUR-based rate series per quote currency over `[from, to]` (EUR is
+   * implicit and excluded). Each series is prefixed with the most recent point
+   * before `from` so a consumer can forward-fill any date in the range.
+   */
+  async getEurRateSeries(
+    quoteCurrencies: string[],
+    from: string,
+    to: string,
+  ): Promise<Record<string, { date: string; rate: string }[]>> {
+    const filtered = quoteCurrencies.filter((c) => c !== 'EUR');
+    const map = await this.deps.repo.getEurRateSeries(filtered, from, to);
+    return Object.fromEntries(map);
+  }
+
   /** Refreshes the latest published day. Returns the number of rates stored. */
   async refreshDaily(): Promise<number> {
     const daily = await this.deps.provider.fetchDaily();

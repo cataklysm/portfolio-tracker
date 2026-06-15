@@ -1,5 +1,5 @@
 import { CURRENT_API_VERSION, type Logger } from '@portfolio/platform';
-import type { DatedRateRequest, FxReader } from '../../application/ports.js';
+import type { DatedRateRequest, FxReader, RatePoint } from '../../application/ports.js';
 
 /**
  * Reads the latest EUR-based FX rates from the market service over HTTP. On a
@@ -68,6 +68,52 @@ export class MarketFxClient implements FxReader {
       );
     }
     await Promise.all(jobs);
+    return map;
+  }
+
+  async getEurRateSeries(
+    currencies: string[],
+    from: string,
+    to: string,
+    bearerToken: string,
+  ): Promise<Map<string, RatePoint[]>> {
+    const map = new Map<string, RatePoint[]>();
+    const quote = [...new Set(currencies.filter((c) => c !== 'EUR'))];
+    if (quote.length === 0) return map;
+    const url = new URL('/fx/series', this.baseUrl);
+    url.searchParams.set('quote_currencies', quote.join(','));
+    url.searchParams.set('from', from);
+    url.searchParams.set('to', to);
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      const response = await fetch(url, {
+        headers: {
+          authorization: `Bearer ${bearerToken}`,
+          'x-api-version': String(CURRENT_API_VERSION),
+          accept: 'application/json',
+        },
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        this.logger?.warn(
+          { url: url.toString(), status: response.status, error_code: 'market_fx_series_failed' },
+          'Market FX series read returned non-OK; performance series may be partial',
+        );
+        return map;
+      }
+      const body = (await response.json()) as Record<string, RatePoint[]>;
+      for (const [currency, points] of Object.entries(body)) map.set(currency, points);
+    } catch (err) {
+      this.logger?.warn(
+        { err, url: url.toString(), error_code: 'market_fx_series_unreachable' },
+        'Market FX series read failed; performance series may be partial',
+      );
+      return map;
+    } finally {
+      clearTimeout(timer);
+    }
     return map;
   }
 

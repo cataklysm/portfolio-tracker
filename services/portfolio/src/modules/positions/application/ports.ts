@@ -122,15 +122,29 @@ export interface QuotePair {
   freshness: string | null;
 }
 
+/** One day's closing price (last tick of a UTC calendar day). */
+export interface DailyClose {
+  date: string;
+  price: string;
+}
+
 export interface QuoteReader {
   getLatestPair(listingIds: string[], bearerToken: string): Promise<Map<string, QuotePair>>;
   getSeries(listingId: string, limit: number, bearerToken: string): Promise<{ time: Date; price: string }[]>;
+  /** Daily closes over `[from, to]` (anchor-prefixed, ascending) for historical reporting. */
+  getDailyHistory(listingId: string, from: string, to: string, bearerToken: string): Promise<DailyClose[]>;
 }
 
 /** A (currency, value date) pair to resolve a historical EUR-based rate for. */
 export interface DatedRateRequest {
   currency: string;
   date: string;
+}
+
+/** A dated EUR-based rate point (units of currency per 1 EUR) in a series. */
+export interface RatePoint {
+  date: string;
+  rate: string;
 }
 
 export interface FxReader {
@@ -141,6 +155,17 @@ export interface FxReader {
    * (on-or-before the requested date). EUR is implicit (rate 1) and not returned.
    */
   getEurRatesAt(requests: DatedRateRequest[], bearerToken: string): Promise<Map<string, string>>;
+  /**
+   * Daily EUR-based rate series per currency over `[from, to]` (anchor-prefixed,
+   * ascending). EUR is implicit and never requested. One call covers the whole
+   * window instead of one lookup per (currency, day).
+   */
+  getEurRateSeries(
+    currencies: string[],
+    from: string,
+    to: string,
+    bearerToken: string,
+  ): Promise<Map<string, RatePoint[]>>;
 }
 
 export interface UserSettings {

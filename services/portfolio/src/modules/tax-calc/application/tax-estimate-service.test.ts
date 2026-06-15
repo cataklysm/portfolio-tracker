@@ -94,6 +94,7 @@ function buildDeps(over: Partial<{ churchEnabled: boolean }> = {}): TaxEstimateD
     fx: {
       getEurRates: async () => new Map(),
       getEurRatesAt: async () => new Map(), // all amounts are already EUR (== tax currency)
+      getEurRateSeries: async () => new Map(),
     } as FxReader,
     portfolioTax: {
       listForUser: async () => [

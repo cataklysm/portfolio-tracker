@@ -2,13 +2,28 @@ import Decimal from 'decimal.js';
 import { makeDatedConverter } from '../../positions/domain/currency.js';
 import type { PositionView } from '../../positions/application/build-position-view.js';
 import type { PositionService } from '../../positions/application/position-service.js';
-import type { DatedRateRequest, FxReader, SettingsReader } from '../../positions/application/ports.js';
+import type {
+  DailyClose,
+  DatedRateRequest,
+  FxReader,
+  QuoteReader,
+  RatePoint,
+  SettingsReader,
+} from '../../positions/application/ports.js';
 import type { CashFlowRecord, CashFlowRepository } from '../../cash-flows/application/ports.js';
 import type { TaxEventRecord, TaxEventRepository } from '../../tax-events/application/ports.js';
 import { computeSummary, type PortfolioSummary } from '../domain/summary.js';
 import { computeHoldings, type HoldingGroup } from '../domain/holdings.js';
 import { computeAllocation, type AllocationReport } from '../domain/allocation.js';
 import { computeTaxReport, type ConvertedTaxEvent, type TaxReport } from '../domain/tax-report.js';
+import {
+  computePerformanceSeries,
+  buildSampleDates,
+  type PerformancePeriod,
+  type PerformancePoint,
+  type SeriesCashFlow,
+  type SeriesPosition,
+} from '../domain/performance-series.js';
 
 export interface PortfolioNameReader {
   list(userId: string, includeArchived: boolean): Promise<{ id: string; name: string; preferred_headline_metric: string }[]>;
@@ -20,7 +35,16 @@ export interface ReportingServiceDeps {
   taxEvents: TaxEventRepository;
   portfolios: PortfolioNameReader;
   fx: FxReader;
+  quotes: QuoteReader;
   settings: SettingsReader;
+}
+
+export interface PerformanceReport {
+  period: PerformancePeriod;
+  reporting_currency: string;
+  from: string;
+  to: string;
+  points: PerformancePoint[];
 }
 
 // "Dividend income" for the summary/holdings = received dividends and cash-in-lieu.
@@ -94,6 +118,75 @@ export class ReportingService {
     }));
 
     return computeTaxReport(new Decimal(summary.realized_pnl), converted, summary.reporting_currency);
+  }
+
+  /**
+   * Historical performance series for a portfolio (or the combined active set)
+   * over a period: portfolio value, contributed capital, and cumulative P&L per
+   * sample date, reconstructed from the ledger, cash flows, daily closes, and
+   * daily FX. The last point reconciles with `getSummary`. Conversions follow
+   * the same conventions as the live snapshot (see `computePerformanceSeries`).
+   */
+  async getPerformance(
+    userId: string,
+    bearerToken: string,
+    period: PerformancePeriod,
+    portfolioId?: string,
+  ): Promise<PerformanceReport> {
+    const [{ reportingCurrency, method, ledgers }, flows] = await Promise.all([
+      this.deps.positions.listPositionLedgers(userId, bearerToken, portfolioId),
+      this.deps.cashFlows.listForUser(userId, portfolioId),
+    ]);
+
+    const today = new Date().toISOString().slice(0, 10);
+    const firstActivity = earliestActivity(ledgers, flows);
+    const sampleDates = buildSampleDates(period, firstActivity, today);
+    const from = sampleDates[0] ?? today;
+    const to = sampleDates[sampleDates.length - 1] ?? today;
+
+    // Daily closes per unique listing → a forward-fill price lookup.
+    const listingIds = [...new Set(ledgers.map((l) => l.listingId))];
+    const priceByListing = new Map<string, (date: string) => Decimal | null>();
+    await Promise.all(
+      listingIds.map(async (id) => {
+        const points = await this.deps.quotes.getDailyHistory(id, from, to, bearerToken);
+        priceByListing.set(id, lastOnOrBefore(points, (p: DailyClose) => p.price));
+      }),
+    );
+
+    // Daily FX series for every currency in play → a forward-fill rate lookup.
+    const currencies = new Set<string>([reportingCurrency]);
+    for (const l of ledgers) currencies.add(l.listingCurrency);
+    for (const f of flows) currencies.add(f.currency);
+    const fxSeries = await this.deps.fx.getEurRateSeries([...currencies], from, to, bearerToken);
+    const rateByCurrency = new Map<string, (date: string) => Decimal | null>();
+    for (const [currency, points] of fxSeries) {
+      rateByCurrency.set(currency, lastOnOrBefore(points, (p: RatePoint) => p.rate));
+    }
+    const rateOnOrBefore = (currency: string, date: string): Decimal | null =>
+      rateByCurrency.get(currency)?.(date) ?? null;
+
+    const positions: SeriesPosition[] = ledgers.map((l) => ({
+      transactions: l.transactions,
+      method,
+      listingCurrency: l.listingCurrency,
+      priceOnOrBefore: priceByListing.get(l.listingId) ?? (() => null),
+    }));
+    const cashFlows: SeriesCashFlow[] = flows.map((f) => ({
+      type: f.type,
+      amount: new Decimal(f.net_amount),
+      currency: f.currency,
+      valueDate: f.tax_relevant_value_date,
+    }));
+
+    const points = computePerformanceSeries({
+      sampleDates,
+      reportingCurrency,
+      positions,
+      cashFlows,
+      rateOnOrBefore,
+    });
+    return { period, reporting_currency: reportingCurrency, from, to, points };
   }
 
   /** Total received dividends/cash-in-lieu in the reporting currency, at value-date FX. */
@@ -171,4 +264,45 @@ export class ReportingService {
     const rates = await this.deps.fx.getEurRatesAt(pairs, bearerToken);
     return makeDatedConverter(rates, reportingCurrency);
   }
+}
+
+/** Earliest value date across all ledger transactions and cash flows, or null. */
+function earliestActivity(
+  ledgers: { transactions: { tax_relevant_value_date?: string }[] }[],
+  flows: CashFlowRecord[],
+): string | null {
+  let earliest: string | null = null;
+  const consider = (date: string | undefined) => {
+    if (date && (earliest === null || date < earliest)) earliest = date;
+  };
+  for (const ledger of ledgers) for (const tx of ledger.transactions) consider(tx.tax_relevant_value_date);
+  for (const flow of flows) consider(flow.tax_relevant_value_date);
+  return earliest;
+}
+
+/**
+ * Builds a forward-fill lookup over an ascending, anchor-prefixed series: the
+ * value of the most recent point on or before a date, or null if none precedes
+ * it. Binary search keeps the per-date cost logarithmic across many samples.
+ */
+function lastOnOrBefore<T extends { date: string }>(
+  points: T[],
+  pick: (point: T) => string,
+): (date: string) => Decimal | null {
+  return (date: string) => {
+    let lo = 0;
+    let hi = points.length - 1;
+    let found: string | null = null;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      const point = points[mid];
+      if (point && point.date <= date) {
+        found = pick(point);
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return found === null ? null : new Decimal(found);
+  };
 }

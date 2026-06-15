@@ -6,6 +6,10 @@ import type { AnalystService } from '../../analyst/index.js';
 
 const QuotesQuery = Type.Object({ listing_ids: Type.String({ minLength: 1 }) });
 const SeriesQuery = Type.Object({ limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 365 })) });
+const HistoryQuery = Type.Object({
+  from: Type.String({ format: 'date' }),
+  to: Type.String({ format: 'date' }),
+});
 const RefreshBody = Type.Object({
   listing_ids: Type.Array(Type.String({ format: 'uuid' }), { minItems: 1 }),
   // Optional start date for the daily-history backfill (e.g. a position's first
@@ -38,6 +42,13 @@ export function registerQuoteRoutes(app: FastifyInstance, deps: QuoteRouteDeps):
     const { listingId } = request.params as { listingId: string };
     const series = await deps.service.getSeries(listingId, request.query.limit ?? 90);
     return series.map((point) => ({ time: point.time.toISOString(), price: point.price }));
+  });
+
+  // Daily closing prices over a date range, for historical reporting (the
+  // portfolio performance series). Serves stored data only.
+  r.get('/quotes/:listingId/history', { preHandler: read, schema: { querystring: HistoryQuery } }, async (request) => {
+    const { listingId } = request.params as { listingId: string };
+    return deps.service.getDailyHistory(listingId, request.query.from, request.query.to);
   });
 
   // User-facing on-demand refresh: pull fresh quotes for specific listings now

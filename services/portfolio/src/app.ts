@@ -125,6 +125,7 @@ export async function buildApp(config: PortfolioConfig): Promise<BuiltService> {
     taxEvents: taxEventRepo,
     portfolios: portfolioRepo,
     fx: fxClient,
+    quotes: quoteClient,
     settings: settingsClient,
   });
 

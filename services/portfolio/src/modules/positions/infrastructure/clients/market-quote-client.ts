@@ -1,5 +1,5 @@
 import { CURRENT_API_VERSION, type Logger } from '@portfolio/platform';
-import type { QuotePair, QuoteReader } from '../../application/ports.js';
+import type { DailyClose, QuotePair, QuoteReader } from '../../application/ports.js';
 
 interface QuoteResponseItem {
   listing_id: string;
@@ -51,6 +51,14 @@ export class MarketQuoteClient implements QuoteReader {
     const items = await this.getJson<SeriesResponseItem[]>(url, bearerToken);
     if (!items) return [];
     return items.map((item) => ({ time: new Date(item.time), price: item.price }));
+  }
+
+  async getDailyHistory(listingId: string, from: string, to: string, bearerToken: string): Promise<DailyClose[]> {
+    const url = new URL(`/quotes/${listingId}/history`, this.baseUrl);
+    url.searchParams.set('from', from);
+    url.searchParams.set('to', to);
+    const items = await this.getJson<DailyClose[]>(url, bearerToken);
+    return items ?? [];
   }
 
   private async getJson<T>(url: URL, bearerToken: string): Promise<T | null> {

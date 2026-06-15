@@ -9,6 +9,11 @@ const RateForDateQuery = Type.Object({
   quote: Type.String({ minLength: 3, maxLength: 3 }),
   date: Type.String({ format: 'date' }),
 });
+const RateSeriesQuery = Type.Object({
+  quote_currencies: Type.String({ minLength: 1 }),
+  from: Type.String({ format: 'date' }),
+  to: Type.String({ format: 'date' }),
+});
 const RefreshBody = Type.Object({ history: Type.Optional(Type.Boolean()) });
 
 export interface FxRouteDeps {
@@ -37,6 +42,17 @@ export function registerFxRoutes(app: FastifyInstance, deps: FxRouteDeps): void 
     const result = await deps.service.getEurRateForDate(request.query.quote.toUpperCase(), request.query.date);
     if (!result) throw AppError.notFound('fx_rate_unavailable', 'No FX rate available on or before that date');
     return { quote_currency: request.query.quote.toUpperCase(), ...result };
+  });
+
+  // Daily EUR-based rate series per currency over a date range, for historical
+  // reporting (e.g. the portfolio performance series). One request covers the
+  // whole window instead of one lookup per (currency, day).
+  r.get('/fx/series', { preHandler: read, schema: { querystring: RateSeriesQuery } }, async (request) => {
+    const currencies = request.query.quote_currencies
+      .split(',')
+      .map((c) => c.trim().toUpperCase())
+      .filter((c) => c.length === 3);
+    return deps.service.getEurRateSeries(currencies, request.query.from, request.query.to);
   });
 
   // User-facing on-demand FX refresh (e.g. alongside a quote refresh) so

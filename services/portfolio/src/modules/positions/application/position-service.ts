@@ -36,6 +36,20 @@ export interface CreatePositionInput {
   transaction: NewTransaction;
 }
 
+/** One position's authoritative ledger plus its listing's native currency. */
+export interface PositionLedger {
+  listingId: string;
+  listingCurrency: string;
+  transactions: StoredTransaction[];
+}
+
+/** Every position ledger for a scope, with the reporting currency and method. */
+export interface PositionLedgers {
+  reportingCurrency: string;
+  method: AccountingMethod;
+  ledgers: PositionLedger[];
+}
+
 export interface PositionDetail extends PositionView {
   transactions: {
     id: string;
@@ -167,6 +181,35 @@ export class PositionService {
       });
     }
     return out;
+  }
+
+  /**
+   * Raw position ledgers for a user (optionally one portfolio), with each
+   * listing's native currency and the user's accounting method — the inputs the
+   * historical performance series replays. No quotes/FX are read here; the
+   * reporting service fetches the date-ranged price and FX history it needs.
+   */
+  async listPositionLedgers(
+    userId: string,
+    bearerToken: string,
+    portfolioId?: string,
+  ): Promise<PositionLedgers> {
+    const { reportingCurrency, accountingMethod } = await this.deps.settings.getUserSettings(bearerToken);
+    const positions = await this.deps.repo.listPositionsForUser(userId, portfolioId);
+    if (positions.length === 0) {
+      return { reportingCurrency, method: accountingMethod, ledgers: [] };
+    }
+    const listingIds = [...new Set(positions.map((p) => p.listing_id))];
+    const [listings, txnsByPosition] = await Promise.all([
+      this.deps.listings.getListings(listingIds, bearerToken),
+      this.deps.repo.listTransactionsForPositions(positions.map((p) => p.id)),
+    ]);
+    const ledgers = positions.map((position) => ({
+      listingId: position.listing_id,
+      listingCurrency: listings.get(position.listing_id)?.currency ?? 'EUR',
+      transactions: txnsByPosition.get(position.id) ?? [],
+    }));
+    return { reportingCurrency, method: accountingMethod, ledgers };
   }
 
   async createPosition(

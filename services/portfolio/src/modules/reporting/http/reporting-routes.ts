@@ -5,6 +5,18 @@ import { AppError } from '@portfolio/platform';
 import type { ReportingService } from '../application/reporting-service.js';
 
 const ScopeQuery = Type.Object({ portfolio_id: Type.Optional(Type.String({ format: 'uuid' })) });
+const PerformanceQuery = Type.Object({
+  portfolio_id: Type.Optional(Type.String({ format: 'uuid' })),
+  period: Type.Optional(
+    Type.Union([
+      Type.Literal('1W'),
+      Type.Literal('1M'),
+      Type.Literal('YTD'),
+      Type.Literal('1Y'),
+      Type.Literal('ALL'),
+    ]),
+  ),
+});
 
 export interface ReportingRouteDeps {
   service: ReportingService;
@@ -34,6 +46,15 @@ export function registerReportingRoutes(app: FastifyInstance, deps: ReportingRou
 
   r.get('/reporting/tax', { preHandler: read, schema: { querystring: ScopeQuery } }, async (request) =>
     deps.service.getTaxReport(uid(request.user?.sub), bearer(request.headers.authorization), request.query.portfolio_id),
+  );
+
+  r.get('/reporting/performance', { preHandler: read, schema: { querystring: PerformanceQuery } }, async (request) =>
+    deps.service.getPerformance(
+      uid(request.user?.sub),
+      bearer(request.headers.authorization),
+      request.query.period ?? '1Y',
+      request.query.portfolio_id,
+    ),
   );
 }
 

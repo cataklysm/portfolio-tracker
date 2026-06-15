@@ -14,9 +14,21 @@ export interface NormalizedQuote {
   providerTimestamp: Date | null;
 }
 
+/** One day's closing price (the last tick of a UTC calendar day). */
+export interface DailyClose {
+  date: string;
+  price: string;
+}
+
 export interface QuoteRepository {
   getLatestPairs(listingIds: string[]): Promise<Map<string, StoredQuotePair>>;
   getSeries(listingId: string, limit: number): Promise<{ time: Date; price: string }[]>;
+  /**
+   * Daily closing prices over `[from, to]` (one per UTC calendar day), prefixed
+   * with the most recent close strictly before `from` so a consumer can
+   * forward-fill any date in the range. Ascending by date.
+   */
+  getDailyCloseSeries(listingId: string, from: string, to: string): Promise<DailyClose[]>;
   upsertQuote(quote: NormalizedQuote): Promise<void>;
 }
 

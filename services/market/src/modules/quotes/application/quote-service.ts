@@ -1,5 +1,6 @@
 import { deriveFreshness, type FreshnessStatus } from '../domain/freshness.js';
 import type {
+  DailyClose,
   ListingResolver,
   ProviderQuote,
   QuoteProvider,
@@ -50,6 +51,11 @@ export class QuoteService {
 
   getSeries(listingId: string, limit: number): Promise<{ time: Date; price: string }[]> {
     return this.deps.repo.getSeries(listingId, limit);
+  }
+
+  /** Daily closing prices over `[from, to]` for historical reporting. */
+  getDailyHistory(listingId: string, from: string, to: string): Promise<DailyClose[]> {
+    return this.deps.repo.getDailyCloseSeries(listingId, from, to);
   }
 
   /**

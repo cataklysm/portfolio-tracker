@@ -1,6 +1,6 @@
 import { sql, type Kysely } from 'kysely';
 import type { MarketDatabase } from '../../../platform/database/schema.js';
-import type { NormalizedQuote, QuoteRepository, StoredQuotePair } from '../application/ports.js';
+import type { DailyClose, NormalizedQuote, QuoteRepository, StoredQuotePair } from '../application/ports.js';
 
 /** Kysely adapter for the `market.price_quotes` cache/history. */
 export class KyselyQuoteRepository implements QuoteRepository {
@@ -68,6 +68,35 @@ export class KyselyQuoteRepository implements QuoteRepository {
       .limit(limit)
       .execute();
     return rows.reverse().map((row) => ({ time: row.time, price: row.price }));
+  }
+
+  async getDailyCloseSeries(listingId: string, from: string, to: string): Promise<DailyClose[]> {
+    // In-range daily closes: the last tick of each UTC calendar day in [from, to].
+    const inRange = await sql<{ date: string; price: string }>`
+      SELECT date::text AS date, price FROM (
+        SELECT (time AT TIME ZONE 'UTC')::date AS date, price,
+               row_number() OVER (
+                 PARTITION BY (time AT TIME ZONE 'UTC')::date ORDER BY time DESC
+               ) AS rn
+        FROM market.price_quotes
+        WHERE listing_id = ${sql.val(listingId)}
+          AND (time AT TIME ZONE 'UTC')::date BETWEEN ${sql.val(from)}::date AND ${sql.val(to)}::date
+      ) t
+      WHERE rn = 1
+      ORDER BY date
+    `.execute(this.db);
+
+    // Anchor: the most recent close strictly before the window (forward-fill seed).
+    const anchor = await sql<{ date: string; price: string }>`
+      SELECT (time AT TIME ZONE 'UTC')::date::text AS date, price
+      FROM market.price_quotes
+      WHERE listing_id = ${sql.val(listingId)}
+        AND (time AT TIME ZONE 'UTC')::date < ${sql.val(from)}::date
+      ORDER BY time DESC
+      LIMIT 1
+    `.execute(this.db);
+
+    return [...anchor.rows, ...inRange.rows];
   }
 
   async upsertQuote(quote: NormalizedQuote): Promise<void> {

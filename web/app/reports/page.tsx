@@ -2,14 +2,11 @@ import Link from "next/link"
 import { apiFetch } from "@/lib/api"
 import { getLocale } from "@/lib/locale"
 import type {
-  AllocationReport,
   Portfolio,
-  PortfolioReportSummary,
   PortfolioTaxSettings,
-  ReportHolding,
+  ReportingSnapshot,
   TaxEstimate,
   TaxEvent,
-  TaxReport,
   TaxResidencyView,
   TaxRule,
 } from "@/lib/types"
@@ -42,15 +39,18 @@ export default async function ReportsPage({ searchParams }: Props) {
   const portfolios = portfoliosResponse.ok ? ((await portfoliosResponse.json()) as Portfolio[]) : []
   const selected = portfolios.find((portfolio) => portfolio.id === selectedRaw)?.id
   const selectedPortfolio = portfolios.find((portfolio) => portfolio.id === selected)
-  const [summary, holdings, allocation, taxReport, taxEvents, taxEstimate, residency] = await Promise.all([
-    report<PortfolioReportSummary>("/reporting/summary", selected),
-    report<ReportHolding[]>("/reporting/holdings", selected),
-    report<AllocationReport>("/reporting/allocation", selected),
-    report<TaxReport>("/reporting/tax", selected),
+  // One consistent snapshot for summary/holdings/allocation/tax (no cross-request
+  // drift); the tax-events/estimate/residency reads are separate concerns.
+  const [snapshot, taxEvents, taxEstimate, residency] = await Promise.all([
+    report<ReportingSnapshot>("/reporting/snapshot", selected),
     report<TaxEvent[]>("/tax-events", selected),
     report<TaxEstimate>("/reporting/tax/estimate", selected),
     report<TaxResidencyView>("/tax-residency"),
   ])
+  const summary = snapshot?.summary ?? null
+  const holdings = snapshot?.holdings ?? null
+  const allocation = snapshot?.allocation ?? null
+  const taxReport = snapshot?.tax ?? null
 
   // Per-portfolio tax configuration is only offered when a single portfolio is
   // selected; it needs the residence's rules and the portfolio's saved settings.

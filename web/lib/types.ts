@@ -290,6 +290,16 @@ export interface TaxReport {
   unlinked_count: number
 }
 
+/** Summary, holdings, allocation, and tax under one consistent snapshot. */
+export interface ReportingSnapshot {
+  snapshot_at: string
+  reporting_currency: string
+  summary: PortfolioReportSummary
+  holdings: ReportHolding[]
+  allocation: AllocationReport
+  tax: TaxReport
+}
+
 export interface TaxResidency {
   id: string
   country_code: string

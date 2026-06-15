@@ -6,6 +6,7 @@ import type { ChangeRecorder } from '../../audit/infrastructure/change-log-repos
 import type {
   LotTransferInput,
   LotTransferResult,
+  WholeTransferRecord,
   NewTransaction,
   PositionRecord,
   PositionRepository,
@@ -185,6 +186,25 @@ export class KyselyPositionRepository implements PositionRepository {
 
       return { transferId: transfer.id, destinationPositionId, createdDestination };
     });
+  }
+
+  async listWholeTransfersForUser(userId: string): Promise<WholeTransferRecord[]> {
+    const rows = await this.db
+      .selectFrom('portfolio.position_transfers as pt')
+      // Scope to the user via the source portfolio (both ends are the user's).
+      .innerJoin('portfolio.portfolios as pf', 'pf.id', 'pt.source_portfolio_id')
+      .select(['pt.position_id', 'pt.source_portfolio_id', 'pt.destination_portfolio_id', 'pt.effective_at'])
+      .where('pf.user_id', '=', userId)
+      .where('pt.kind', '=', 'whole')
+      .orderBy('pt.effective_at', 'asc')
+      .orderBy('pt.creation_sequence', 'asc')
+      .execute();
+    return rows.map((r) => ({
+      positionId: r.position_id,
+      sourcePortfolioId: r.source_portfolio_id,
+      destinationPortfolioId: r.destination_portfolio_id,
+      effectiveAt: r.effective_at instanceof Date ? r.effective_at : new Date(r.effective_at),
+    }));
   }
 
   async listTransfers(positionId: string): Promise<StoredTransfer[]> {

@@ -1,6 +1,7 @@
 import { D } from '../../positions/domain/money.js';
 import type Decimal from 'decimal.js';
 import {
+  isOwnedAt,
   makeRateConverter,
   type PerformancePoint,
   type SeriesCashFlow,
@@ -72,6 +73,7 @@ export function computeReturns(input: ReturnsInput): ReturnsResult {
     for (const tx of pos.transactions) {
       const date = tx.tax_relevant_value_date ?? '';
       if (date <= from || date > to) continue;
+      if (!isOwnedAt(pos.ownershipWindows, date)) continue; // trade belongs to the owning portfolio
       const converted = convert(tradeCashAmount(tx), tx.currency ?? reportingCurrency, date);
       if (converted !== null) flows.push({ date, amount: converted.toNumber() });
     }
@@ -111,6 +113,7 @@ export function buildTwrIntervals(input: ReturnsInput): TwrInterval[] {
       for (const tx of pos.transactions) {
         const date = tx.tax_relevant_value_date ?? '';
         if (date <= prev || date > cur) continue;
+        if (!isOwnedAt(pos.ownershipWindows, date)) continue; // trade belongs to the owning portfolio
         // Capital added to holdings: buy is positive, sell negative.
         const converted = convert(tradeCashAmount(tx).negated(), tx.currency ?? reportingCurrency, date);
         if (converted !== null) netContribution = netContribution.plus(converted);

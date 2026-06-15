@@ -11,6 +11,7 @@ import type {
   ListingReader,
   NewTransaction,
   PersistedRealization,
+  PositionRecord,
   PositionRepository,
   QuoteReader,
   RealizationAllocationView,
@@ -72,6 +73,12 @@ export interface PositionLedger {
   transactions: StoredTransaction[];
   /** Active split adjustments to replay for this position. */
   splits: SplitAdjustment[];
+  /**
+   * Half-open `[from, to)` ownership windows (YYYY-MM-DD, null = unbounded) during
+   * which the queried portfolio owned this position. Undefined = always owned
+   * (no transfers, or the combined view) — the reconstruction then never clips.
+   */
+  ownershipWindows?: { from: string | null; to: string | null }[];
 }
 
 /** Every position ledger for a scope, with the reporting currency and method. */
@@ -245,23 +252,72 @@ export class PositionService {
     portfolioId?: string,
   ): Promise<PositionLedgers> {
     const { reportingCurrency, accountingMethod } = await this.deps.settings.getUserSettings(bearerToken);
-    const positions = await this.deps.repo.listPositionsForUser(userId, portfolioId);
-    if (positions.length === 0) {
+
+    // Resolve the position set + per-portfolio ownership windows. The combined view
+    // (no portfolioId) takes every position with no clipping. A single-portfolio
+    // view additionally pulls in positions that were *transferred out* (for the
+    // pre-transfer period) and clips each position to the windows the portfolio
+    // actually owned it — so history follows the holding across whole transfers.
+    const selected = await this.selectLedgerPositions(userId, portfolioId);
+    if (selected.length === 0) {
       return { reportingCurrency, method: accountingMethod, ledgers: [] };
     }
-    const listingIds = [...new Set(positions.map((p) => p.listing_id))];
+
+    const listingIds = [...new Set(selected.map((s) => s.position.listing_id))];
     const [listings, txnsByPosition, splitsByPosition] = await Promise.all([
       this.deps.listings.getListings(listingIds, bearerToken),
-      this.deps.repo.listTransactionsForPositions(positions.map((p) => p.id)),
-      this.activeSplits(positions.map((p) => p.id)),
+      this.deps.repo.listTransactionsForPositions(selected.map((s) => s.position.id)),
+      this.activeSplits(selected.map((s) => s.position.id)),
     ]);
-    const ledgers = positions.map((position) => ({
+    const ledgers = selected.map(({ position, ownershipWindows }) => ({
       listingId: position.listing_id,
       listingCurrency: listings.get(position.listing_id)?.currency ?? 'EUR',
       transactions: txnsByPosition.get(position.id) ?? [],
       splits: splitsByPosition.get(position.id) ?? [],
+      ownershipWindows,
     }));
     return { reportingCurrency, method: accountingMethod, ledgers };
+  }
+
+  /**
+   * The positions contributing to a scope's series, each with the ownership
+   * windows relative to the queried portfolio. Combined view: all positions,
+   * windows undefined. Single portfolio: positions it owns now or owned before a
+   * whole transfer out, with windows derived from each position's transfer chain.
+   */
+  private async selectLedgerPositions(
+    userId: string,
+    portfolioId?: string,
+  ): Promise<{ position: PositionRecord; ownershipWindows?: { from: string | null; to: string | null }[] }[]> {
+    if (!portfolioId) {
+      const all = await this.deps.repo.listPositionsForUser(userId);
+      return all.map((position) => ({ position }));
+    }
+
+    const [allPositions, wholeTransfers] = await Promise.all([
+      this.deps.repo.listPositionsForUser(userId),
+      this.deps.repo.listWholeTransfersForUser(userId),
+    ]);
+    const byPosition = new Map<string, typeof wholeTransfers>();
+    for (const t of wholeTransfers) {
+      const list = byPosition.get(t.positionId) ?? [];
+      list.push(t);
+      byPosition.set(t.positionId, list);
+    }
+
+    const out: { position: PositionRecord; ownershipWindows?: { from: string | null; to: string | null }[] }[] = [];
+    for (const position of allPositions) {
+      const transfers = byPosition.get(position.id);
+      if (!transfers || transfers.length === 0) {
+        // No transfers: owned by its current portfolio throughout — include only
+        // when that is the queried portfolio, with no clipping.
+        if (position.portfolio_id === portfolioId) out.push({ position });
+        continue;
+      }
+      const windows = ownershipWindowsFor(transfers, portfolioId);
+      if (windows.length > 0) out.push({ position, ownershipWindows: windows });
+    }
+    return out;
   }
 
   async createPosition(
@@ -597,6 +653,30 @@ export class PositionService {
 /** Today's date as YYYY-MM-DD (UTC) — the `asOf` for live re-derivation. */
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Half-open `[from, to)` date windows (YYYY-MM-DD) during which `portfolioId`
+ * owned a position, derived from its ascending whole-transfer chain. The owner
+ * starts at the first transfer's source, then becomes each transfer's destination
+ * at that transfer's effective date; segments owned by the queried portfolio
+ * become windows (`null` = unbounded). Re-entry (A→B→A) yields multiple windows.
+ */
+function ownershipWindowsFor(
+  transfers: { sourcePortfolioId: string; destinationPortfolioId: string; effectiveAt: Date }[],
+  portfolioId: string,
+): { from: string | null; to: string | null }[] {
+  const windows: { from: string | null; to: string | null }[] = [];
+  let segStart: string | null = null;
+  let owner = transfers[0]!.sourcePortfolioId;
+  for (const t of transfers) {
+    const date = t.effectiveAt.toISOString().slice(0, 10);
+    if (owner === portfolioId) windows.push({ from: segStart, to: date });
+    segStart = date;
+    owner = t.destinationPortfolioId;
+  }
+  if (owner === portfolioId) windows.push({ from: segStart, to: null });
+  return windows;
 }
 
 function collectCurrencies(

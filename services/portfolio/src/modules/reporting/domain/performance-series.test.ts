@@ -4,6 +4,7 @@ import Decimal from 'decimal.js';
 import {
   computePerformanceSeries,
   buildSampleDates,
+  isOwnedAt,
   type PerformancePoint,
   type SeriesPosition,
   type SeriesCashFlow,
@@ -112,6 +113,77 @@ describe('computePerformanceSeries — realized P&L after a sell', () => {
     assert.equal(p.invested_capital, '600.00');
     assert.equal(p.unrealized_pnl, '300.00');
     assert.equal(p.total_pnl, '500.00'); // 200 realized + 300 unrealized
+  });
+});
+
+describe('isOwnedAt — ownership windows', () => {
+  test('undefined windows = always owned', () => {
+    assert.equal(isOwnedAt(undefined, '2026-01-01'), true);
+  });
+  test('half-open [from, to): from inclusive, to exclusive', () => {
+    const w = [{ from: null, to: '2026-01-15' }];
+    assert.equal(isOwnedAt(w, '2026-01-14'), true);
+    assert.equal(isOwnedAt(w, '2026-01-15'), false); // transfer-out day no longer owned
+  });
+  test('open-ended window from a transfer-in date', () => {
+    const w = [{ from: '2026-01-15', to: null }];
+    assert.equal(isOwnedAt(w, '2026-01-14'), false);
+    assert.equal(isOwnedAt(w, '2026-01-15'), true);
+  });
+  test('re-entry (A→B→A) leaves a gap', () => {
+    const w = [{ from: null, to: '2026-01-10' }, { from: '2026-01-20', to: null }];
+    assert.equal(isOwnedAt(w, '2026-01-09'), true);
+    assert.equal(isOwnedAt(w, '2026-01-15'), false); // belonged to B in between
+    assert.equal(isOwnedAt(w, '2026-01-21'), true);
+  });
+});
+
+describe('computePerformanceSeries — transfer attribution (cost-basis)', () => {
+  // Bought 10 @ 100 on the 10th; whole-transferred between portfolios on the 15th.
+  const txns = [tx('buy', '10', '100', '2026-01-10')];
+  const prices = pricer({ '2026-01-10': '100', '2026-01-15': '120', '2026-01-20': '90' });
+  const sampleDates = ['2026-01-12', '2026-01-15', '2026-01-20'];
+
+  const source = computePerformanceSeries({
+    sampleDates,
+    reportingCurrency: 'EUR',
+    positions: [position({ transactions: txns, priceOnOrBefore: prices, ownershipWindows: [{ from: null, to: '2026-01-15' }] })],
+    cashFlows: [],
+    rateOnOrBefore: noFx,
+  });
+
+  const destination = computePerformanceSeries({
+    sampleDates,
+    reportingCurrency: 'EUR',
+    positions: [position({ transactions: txns, priceOnOrBefore: prices, ownershipWindows: [{ from: '2026-01-15', to: null }] })],
+    cashFlows: [],
+    rateOnOrBefore: noFx,
+  });
+
+  test('source counts the holding only before the transfer', () => {
+    assert.equal(at(source, 0).value, '1000.00'); // 01-12: owned
+    assert.equal(at(source, 1).value, '0.00'); // 01-15: transferred out
+    assert.equal(at(source, 2).value, '0.00');
+  });
+
+  test('destination counts the holding only from the transfer', () => {
+    assert.equal(at(destination, 0).value, '0.00'); // 01-12: not yet owned
+    assert.equal(at(destination, 1).value, '1200.00'); // 01-15: owned, 10 × 120
+    assert.equal(at(destination, 2).value, '900.00'); // 10 × 90
+  });
+
+  test('the two sides reconstruct the undivided holding (combined is unaffected)', () => {
+    const combined = computePerformanceSeries({
+      sampleDates,
+      reportingCurrency: 'EUR',
+      positions: [position({ transactions: txns, priceOnOrBefore: prices })], // no windows
+      cashFlows: [],
+      rateOnOrBefore: noFx,
+    });
+    for (let i = 0; i < sampleDates.length; i += 1) {
+      const sum = Number(at(source, i).value) + Number(at(destination, i).value);
+      assert.equal(sum, Number(at(combined, i).value));
+    }
   });
 });
 

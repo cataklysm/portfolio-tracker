@@ -138,6 +138,23 @@ tab.
    item. *Caveat:* move/merge + lot-transfer SQL verified by typecheck + unit
    tests, not yet run against a live DB. *Further follow-up:* splitting a single
    lot (move part of one open buy's shares).
+   - ✅ **Per-portfolio historical attribution across transfers (cost-basis,
+     2026-06-15), per spec §2.1.** The `position_transfers` row is the linked
+     transfer_out/transfer_in record; the **combined** view was already unaffected
+     (a transfer adds/removes no transactions). The gap was per-portfolio *history*:
+     the performance series scoped by *current* `portfolio_id`. Now
+     `listPositionLedgers` derives, from each position's **whole-transfer chain**,
+     the `[from,to)` **ownership windows** for the queried portfolio (pulling in
+     positions transferred *out* for their pre-transfer period), and the
+     reconstruction (`computePerformanceSeries` value/cost/realized + `returns`
+     trade flows) clips each position to those windows via `isOwnedAt`. No-transfer
+     positions get no windows (zero behaviour change); combined never clips;
+     dividends already follow their snapshotted portfolio. **Scope:** whole
+     transfers only. *Follow-ups:* **partial-transfer** lot-level attribution (the
+     moved lots' destination position still counts them from their original buy date
+     — needs lot-level ownership), and **market-value-exact** TWR/XIRR across the
+     transfer-boundary interval (the cost-basis model leaves that one sub-period
+     approximate). 7 domain tests (181 total).
 2. **Corporate-action apply/reverse.** ✅ **Done 2026-06-15.**
    `POST /positions/:id/corporate-actions` applies a share-ratio action (split /
    reverse split): validates the ratio, snapshots the objective action with a
@@ -224,6 +241,40 @@ tab.
    volatility, max drawdown, Sharpe, Sortino, best/worst period, and closed-position
    win rate, over the TWR per-period return series (`risk.ts`, 6 tests). Web: a risk
    panel on the reports page. *Follow-up:* benchmark-relative risk (beta is in E-1).
+
+---
+
+## Portfolio Intelligence Follow-up
+
+1. **Explainable portfolio pulse.**
+   Add `GET /reporting/intelligence?portfolio_id=&period=` to calculate a
+   versioned portfolio-health score in the portfolio service. The score must be
+   derived from authoritative reporting data and remain independent of frontend
+   presentation logic.
+
+   Initial components:
+   - **Structure:** instrument-level concentration across the selected portfolio
+     scope, including top-1, top-3, and Herfindahl-Hirschman Index (HHI). Multiple
+     positions or listings of the same instrument must be aggregated before
+     calculating weights.
+   - **Risk:** existing period-scoped volatility, downside volatility, and maximum
+     drawdown metrics.
+   - **Data quality:** value-weighted price coverage, quote freshness, and ledger
+     validity. Missing risk samples must reduce confidence or reweight the
+     available components rather than silently score as healthy.
+
+   The response should expose the total score, status, calculation version,
+   component scores, completeness/confidence, and the primary score driver so the
+   result is explainable. Formula weights, thresholds, score caps, and status
+   labels belong in a pure, unit-tested domain function such as
+   `computePortfolioPulse`; the frontend only renders the result.
+
+   Product decisions required before implementation:
+   - Final component weights, thresholds, caps, and status labels.
+   - Whether combined-view concentration aggregates identical instruments across
+     all included portfolios.
+   - How incomplete or stale valuations affect the score and confidence.
+   - Whether future user risk profiles adjust risk thresholds.
 
 ---
 

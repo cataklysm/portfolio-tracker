@@ -127,8 +127,18 @@ export interface LotTransferResult {
   createdDestination: boolean;
 }
 
+/** A whole-position move, for reconstructing a position's portfolio-ownership timeline. */
+export interface WholeTransferRecord {
+  positionId: string;
+  sourcePortfolioId: string;
+  destinationPortfolioId: string;
+  effectiveAt: Date;
+}
+
 export interface PositionRepository {
   listPositionsForUser(userId: string, portfolioId?: string): Promise<PositionRecord[]>;
+  /** Whole-position transfers for the user, ascending — for per-portfolio attribution windows. */
+  listWholeTransfersForUser(userId: string): Promise<WholeTransferRecord[]>;
   getOwnedPosition(positionId: string, userId: string): Promise<PositionRecord | null>;
   assertPortfolioOwned(portfolioId: string, userId: string): Promise<boolean>;
   /** The position for (portfolio, listing), if one exists. */

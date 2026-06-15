@@ -14,6 +14,24 @@ export const PERFORMANCE_PERIODS: PerformancePeriod[] = ['1W', '1M', 'YTD', '1Y'
 /** Caps the number of points so a long `ALL` range degrades to coarser sampling. */
 const MAX_POINTS = 366;
 
+/**
+ * A half-open ownership interval `[from, to)` (YYYY-MM-DD) during which a position
+ * was attributed to the queried portfolio. `null` bounds are unbounded. Used for
+ * per-portfolio historical attribution across transfers (cost-basis model): a
+ * portfolio counts a holding only while it owned it. Absent windows = always owned
+ * (the common no-transfer case, and the combined all-portfolios view).
+ */
+export interface OwnershipWindow {
+  from: string | null;
+  to: string | null;
+}
+
+/** True when `date` falls in one of the ownership windows (or windows is undefined). */
+export function isOwnedAt(windows: OwnershipWindow[] | undefined, date: string): boolean {
+  if (windows === undefined) return true;
+  return windows.some((w) => (w.from === null || w.from <= date) && (w.to === null || date < w.to));
+}
+
 /** One position's ledger plus how to price it, for the historical reconstruction. */
 export interface SeriesPosition {
   /** Authoritative ledger in creation (ledger) order. */
@@ -24,6 +42,11 @@ export interface SeriesPosition {
   priceOnOrBefore: (date: string) => Decimal | null;
   /** Applied split adjustments; only those effective on/before each sample date apply. */
   splits?: SplitAdjustment[];
+  /**
+   * Ownership windows relative to the queried portfolio (per-portfolio attribution
+   * across transfers). Undefined = always owned (no transfer, or combined view).
+   */
+  ownershipWindows?: OwnershipWindow[];
 }
 
 /** An external/​income cash flow contributing to contributed capital and dividends. */
@@ -131,8 +154,10 @@ export function computePerformanceSeries(input: PerformanceSeriesInput): Perform
         continue;
       }
 
-      // Cumulative realized P&L from the sells that had settled by this date.
+      // Cumulative realized P&L from the sells that had settled by this date,
+      // attributed to the portfolio that owned the position at each sell's date.
       for (const ev of r.realizedByDate) {
+        if (!isOwnedAt(pos.ownershipWindows, ev.valueDate)) continue;
         const converted = convertDated(ev.amount, ev.currency, ev.valueDate, date);
         if (converted === null) {
           complete = false;
@@ -142,6 +167,7 @@ export function computePerformanceSeries(input: PerformanceSeriesInput): Perform
       }
 
       if (r.openQuantity.lte(0)) continue; // fully closed by this date: no value/cost
+      if (!isOwnedAt(pos.ownershipWindows, date)) continue; // not in this portfolio on this date
 
       const price = pos.priceOnOrBefore(date);
       if (price === null) {

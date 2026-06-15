@@ -41,6 +41,7 @@ import {
   KyselyTaxEventRepository,
   registerTaxEventRoutes,
 } from './modules/tax-events/index.js';
+import { KyselyChangeLogRepository, registerChangeLogRoutes } from './modules/audit/index.js';
 import { ReportingService, registerReportingRoutes } from './modules/reporting/index.js';
 
 export interface BuiltService {
@@ -72,8 +73,10 @@ export async function buildApp(config: PortfolioConfig): Promise<BuiltService> {
   const settingsClient = new AuthSettingsClient(config.authBaseUrl);
 
   const portfolioRepo = new KyselyPortfolioRepository(db);
+  const positionRepo = new KyselyPositionRepository(db);
   const cashFlowRepo = new KyselyCashFlowRepository(db);
   const taxEventRepo = new KyselyTaxEventRepository(db);
+  const changeLog = new KyselyChangeLogRepository(db);
   const portfolioService = new PortfolioService(portfolioRepo);
   const watchlistService = new WatchlistService({
     repo: new KyselyWatchlistRepository(db),
@@ -81,15 +84,16 @@ export async function buildApp(config: PortfolioConfig): Promise<BuiltService> {
     quotes: quoteClient,
   });
   const positionService = new PositionService({
-    repo: new KyselyPositionRepository(db),
+    repo: positionRepo,
     listings: listingClient,
     quotes: quoteClient,
     fx: fxClient,
     settings: settingsClient,
     taxEvents: taxEventRepo,
+    changeLog,
   });
-  const cashFlowService = new CashFlowService(cashFlowRepo);
-  const taxEventService = new TaxEventService(taxEventRepo);
+  const cashFlowService = new CashFlowService(cashFlowRepo, changeLog);
+  const taxEventService = new TaxEventService(taxEventRepo, changeLog);
   const reportingService = new ReportingService({
     positions: positionService,
     cashFlows: cashFlowRepo,
@@ -120,6 +124,7 @@ export async function buildApp(config: PortfolioConfig): Promise<BuiltService> {
   registerWatchlistRoutes(app, { service: watchlistService, ...authDeps });
   registerCashFlowRoutes(app, { service: cashFlowService, ...authDeps });
   registerTaxEventRoutes(app, { service: taxEventService, ...authDeps });
+  registerChangeLogRoutes(app, { reader: changeLog, ...authDeps });
   registerReportingRoutes(app, { service: reportingService, ...authDeps });
 
   // Redis is a required dependency for the event bus: connect last so wiring

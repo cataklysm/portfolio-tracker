@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import type { AlertRule, CorporateAction, EarningsRow, FairValueEstimate, Fundamentals, ListingDetail, NewsItem, NotificationInbox, NotificationItem, PositionDetail, PriceTarget, SparklinePoint } from "@/lib/types"
+import type { AlertRule, CorporateAction, EarningsRow, FairValueEstimate, Fundamentals, ListingDetail, NewsItem, NotificationInbox, NotificationItem, PositionDetail, PriceTarget, RealizationAllocationView, SparklinePoint, TaxEvent, TransactionTaxEvent } from "@/lib/types"
 import { apiFetch } from "@/lib/api"
 import { getLocale } from "@/lib/locale"
 import { getTranslations } from "@/lib/i18n"
@@ -54,6 +54,62 @@ async function fetchEventsData(instrumentId: string | null): Promise<EventsData>
 interface NotificationData {
   rules: AlertRule[]
   notifications: NotificationItem[]
+}
+
+interface PositionTaxSummary {
+  net: number
+  afterTaxRealized: number | null
+  eventCount: number
+  complete: boolean
+}
+
+type TaxAmount = Pick<TransactionTaxEvent, "id" | "direction" | "amount" | "currency" | "booking_date">
+
+async function fetchPositionTaxSummary(pos: PositionDetail, reportingCurrency: string, realized: number | null): Promise<PositionTaxSummary> {
+  let positionEvents: TaxEvent[] = []
+  let complete = true
+  try {
+    const response = await apiFetch(`/tax-events?position_id=${pos.id}`, { cache: "no-store" })
+    if (response.ok) positionEvents = (await response.json()) as TaxEvent[]
+    else complete = false
+  } catch {
+    complete = false
+  }
+  const events = new Map<string, TaxAmount>()
+  for (const event of positionEvents) events.set(event.id, event)
+  for (const transaction of pos.transactions) {
+    for (const event of transaction.tax_events) events.set(event.id, event)
+  }
+
+  const rateRequests = new Map<string, Promise<number | null>>()
+  function rate(currency: string, date: string) {
+    const key = `${currency}@${date}`
+    const existing = rateRequests.get(key)
+    if (existing) return existing
+    const request = currency === "EUR"
+      ? Promise.resolve(1)
+      : apiFetch(`/fx/rate?quote=${currency}&date=${date}`, { cache: "no-store" })
+          .then(async (result) => result.ok ? num(((await result.json()) as { rate: string }).rate) : null)
+          .catch(() => null)
+    rateRequests.set(key, request)
+    return request
+  }
+
+  let net = 0
+  for (const event of events.values()) {
+    const [fromRate, toRate] = await Promise.all([
+      rate(event.currency, event.booking_date),
+      rate(reportingCurrency, event.booking_date),
+    ])
+    const amount = num(event.amount)
+    if (amount === null || fromRate === null || toRate === null || fromRate <= 0) {
+      complete = false
+      continue
+    }
+    const converted = amount / fromRate * toRate
+    net += event.direction === "withheld" ? converted : -converted
+  }
+  return { net, afterTaxRealized: realized === null ? null : realized - net, eventCount: events.size, complete }
 }
 
 /** Configured rules and recent fired notifications scoped to an instrument. */
@@ -117,9 +173,10 @@ export default async function PositionDetailPage({ params }: Props) {
 
   const pos = (await resp.json()) as PositionDetail
   const instrumentId = pos.listing?.instrument_id ?? null
-  const [listingResp, seriesResp, fairValues, priceTargets, fundamentals, events, notificationData] = await Promise.all([
+  const [listingResp, seriesResp, allocationResp, fairValues, priceTargets, fundamentals, events, notificationData] = await Promise.all([
     apiFetch(`/listings/${pos.listing_id}`, { cache: "no-store" }),
     apiFetch(`/quotes/${pos.listing_id}/series?limit=365`, { cache: "no-store" }),
+    apiFetch(`/positions/${pos.id}/allocations`, { cache: "no-store" }),
     fetchInsights<FairValueEstimate>(instrumentId, "fair-values"),
     fetchInsights<PriceTarget>(instrumentId, "price-targets"),
     fetchFundamentals(instrumentId),
@@ -128,6 +185,7 @@ export default async function PositionDetailPage({ params }: Props) {
   ])
   const listing = listingResp.ok ? ((await listingResp.json()) as ListingDetail) : null
   const chartSeries = seriesResp.ok ? ((await seriesResp.json()) as SparklinePoint[]) : pos.sparkline
+  const allocations = allocationResp.ok ? ((await allocationResp.json()) as RealizationAllocationView) : null
   const p = pos.performance
   const reporting = p.reporting_currency
   const listingCurrency = pos.listing?.currency ?? reporting
@@ -149,6 +207,7 @@ export default async function PositionDetailPage({ params }: Props) {
   const isUnrealUp = unrealized !== null && unrealized >= 0
   const isClosed = pos.state === "closed"
   const averageCost = cost !== null && qty > 0 ? cost / qty : null
+  const tax = await fetchPositionTaxSummary(pos, reporting, realized)
 
   return (
     <div className="mx-auto max-w-[1500px] space-y-3 px-4 py-5 lg:px-6">
@@ -180,6 +239,12 @@ export default async function PositionDetailPage({ params }: Props) {
           <Metric label={t("position.currentValue")} value={value !== null ? fmtCurrency(locale, value, reporting) : "—"} tone={!isClosed && unrealized !== null ? (isUnrealUp ? "positive" : "negative") : "default"} />
           <Metric label={t("position.unrealizedPnl")} value={isClosed ? fmtCurrency(locale, 0, reporting) : unrealized !== null ? `${unrealized >= 0 ? "+" : ""}${fmtCurrency(locale, unrealized, reporting)}` : "—"} tone={isClosed || unrealized === null ? "default" : isUnrealUp ? "positive" : "negative"} sub={unrealizedReturn !== null && !isClosed ? fmtPct(unrealizedReturn) : undefined} />
           <Metric label={t("position.realizedPnl")} value={realized !== null ? `${realized >= 0 ? "+" : ""}${fmtCurrency(locale, realized, reporting)}` : "—"} tone={realized === null || realized === 0 ? "default" : realized > 0 ? "positive" : "negative"} sub={realizedReturn !== null ? fmtPct(realizedReturn) : undefined} />
+          <Metric
+            label="Recorded net tax"
+            value={`${tax.net > 0 ? "+" : ""}${fmtCurrency(locale, tax.net, reporting)}`}
+            tone={tax.net > 0 ? "negative" : tax.net < 0 ? "positive" : "default"}
+            sub={tax.eventCount === 0 ? "No tax events recorded" : `${tax.eventCount} event${tax.eventCount === 1 ? "" : "s"}${tax.complete ? "" : " · partial FX conversion"}`}
+          />
           <Metric label="Total return" value={totalReturn !== null ? fmtPct(totalReturn) : "—"} tone={totalReturn === null ? "default" : totalReturn >= 0 ? "positive" : "negative"} />
         </aside>
       </div>
@@ -187,7 +252,7 @@ export default async function PositionDetailPage({ params }: Props) {
       <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="min-w-0 space-y-3">
           <Section title={t("positionDetail.transactions")} action={<AddTransactionModal positionId={pos.id} currency={listingCurrency} />}>
-            <TransactionsTable transactions={pos.transactions} locale={locale} positionId={pos.id} currency={listingCurrency} reportingCurrency={reporting} />
+            <TransactionsTable transactions={pos.transactions} locale={locale} positionId={pos.id} portfolioId={pos.portfolio_id} currency={listingCurrency} reportingCurrency={reporting} allocations={allocations} />
           </Section>
 
           {instrumentId ? (
@@ -209,6 +274,11 @@ export default async function PositionDetailPage({ params }: Props) {
             <FactRow label={t("position.costBasis")} value={cost !== null ? fmtCurrency(locale, cost, reporting) : "—"} />
             <FactRow label="Average cost" value={averageCost !== null ? fmtCurrency(locale, averageCost, reporting) : "—"} />
             <FactRow label="Total fees" value={fees !== null ? fmtCurrency(locale, fees, reporting) : "—"} />
+            <FactRow
+              label="After-tax realized P&L"
+              value={tax.afterTaxRealized !== null ? `${tax.afterTaxRealized >= 0 ? "+" : ""}${fmtCurrency(locale, tax.afterTaxRealized, reporting)}` : "—"}
+              tone={tax.afterTaxRealized === null || tax.afterTaxRealized === 0 ? undefined : tax.afterTaxRealized > 0 ? "positive" : "negative"}
+            />
             <FactRow label="Transactions" value={String(pos.transactions.length)} />
             <FactRow label="Quote status" value={pos.freshness_status ?? "unknown"} tone={pos.freshness_status === "fresh" ? "positive" : "warning"} />
             <FactRow label="Quote as of" value={pos.quote_as_of ? new Date(pos.quote_as_of).toLocaleDateString(locale) : "—"} />

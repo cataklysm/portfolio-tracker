@@ -122,6 +122,15 @@ export class KyselyPositionRepository implements PositionRepository {
     return { id: row.id, aggregateVersion: String(row.creation_sequence) };
   }
 
+  async getTransaction(txId: string): Promise<StoredTransaction | null> {
+    const row = await this.db
+      .selectFrom('portfolio.transactions')
+      .selectAll()
+      .where('id', '=', txId)
+      .executeTakeFirst();
+    return row ? mapTransaction(row) : null;
+  }
+
   async transactionBelongsToPosition(txId: string, positionId: string): Promise<boolean> {
     const row = await this.db
       .selectFrom('portfolio.transactions')

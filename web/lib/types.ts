@@ -99,6 +99,24 @@ export interface TransactionView {
   tax_events: TransactionTaxEvent[]
 }
 
+export type BookingSource = "manual" | "import" | "broker_api" | "provider" | "corporate_action"
+
+export interface RealizationAllocationView {
+  position_id: string
+  accounting_method: "fifo" | "lifo" | "average_cost" | null
+  calculation_version: string | null
+  lot_allocations: {
+    sell_transaction_id: string
+    buy_transaction_id: string
+    quantity: string
+  }[]
+  average_cost_realizations: {
+    sell_transaction_id: string
+    average_cost_basis: string
+    quantity: string
+  }[]
+}
+
 export interface SparklinePoint {
   time: string
   price: string
@@ -198,6 +216,39 @@ export interface TaxEvent {
   updated_at: string
 }
 
+export type CashFlowType = "dividend" | "deposit" | "withdrawal" | "cash_in_lieu"
+
+export interface CashFlow {
+  id: string
+  portfolio_id: string
+  position_id: string | null
+  type: CashFlowType
+  gross_amount: string
+  withholding_tax: string
+  fee: string
+  net_amount: string
+  currency: string
+  payment_date: string
+  tax_relevant_value_date: string
+  note: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface BookingChange {
+  id: string
+  entity_type: "transaction" | "cash_flow" | "tax_event"
+  entity_id: string
+  action: "created" | "updated" | "deleted"
+  source: BookingSource
+  reason: string | null
+  before: unknown | null
+  after: unknown | null
+  portfolio_id: string | null
+  position_id: string | null
+  changed_at: string
+}
+
 export interface TaxReport {
   reporting_currency: string
   status: "unavailable" | "actual_partial" | "actual_complete"
@@ -223,6 +274,141 @@ export interface TaxResidency {
 export interface TaxResidencyView {
   current: TaxResidency | null
   history: TaxResidency[]
+}
+
+// ---- Country-aware tax settings (schemas, rules, settings, estimate) --------
+
+export type TaxSettingsFieldType = "checkbox" | "select" | "date" | "number" | "money" | "currency" | "array"
+
+export interface TaxSettingsSelectOption {
+  value: string
+  label: string
+}
+
+export interface TaxSettingsCondition {
+  field: string
+  equals: string | number | boolean
+}
+
+export interface TaxSettingsField {
+  key: string
+  label: string
+  type: TaxSettingsFieldType
+  description?: string
+  helpText?: string
+  required?: boolean
+  default?: unknown
+  order: number
+  visibleWhen?: TaxSettingsCondition[]
+  options?: TaxSettingsSelectOption[]
+  min?: number
+  max?: number
+  step?: number
+  currencyField?: string
+  currency?: string
+  itemFields?: TaxSettingsField[]
+}
+
+export interface TaxSettingsSchema {
+  schemaKey: string
+  version: number
+  fields: TaxSettingsField[]
+}
+
+export interface TaxRule {
+  id: string
+  country_code: string
+  rule_key: string
+  rule_version: number
+  asset_classes: string[]
+  valid_from: string
+  valid_to: string | null
+  user_settings_schema: TaxSettingsSchema
+  portfolio_settings_schema: TaxSettingsSchema
+  parameters: Record<string, unknown>
+  calculation_engine_key: string
+  supported: boolean
+}
+
+export interface UserTaxSettings {
+  country_code: string
+  settings: Record<string, unknown>
+  updated_at: string
+}
+
+export interface PortfolioTaxSettings {
+  portfolio_id: string
+  tax_rule_key: string | null
+  tax_settings: Record<string, unknown>
+}
+
+export type TaxWithholdingStatus = "withheld" | "estimated_not_withheld" | "loss" | "fully_offset"
+
+export interface SecuritiesPerSale {
+  sellTransactionId: string
+  date: string
+  assetClass: string
+  economicGainLoss: string
+  taxRelevantGainLoss: string
+  usedLossPotAmount: string
+  addedLossPotAmount: string
+  usedExemptionAmount: string
+  calculatedTax: string
+  withheldTax: string
+  expectedTaxCorrection: string
+  remainingTaxableGain: string
+  taxWithholdingStatus: TaxWithholdingStatus
+}
+
+export interface SecuritiesYearSummary {
+  year: number
+  realizedGains: string
+  realizedLosses: string
+  taxableGain: string
+  usedExemption: string
+  calculatedTax: string
+  withheldTax: string
+}
+
+export interface SecuritiesTaxResult {
+  taxCurrency: string
+  appliedTaxRuleKey: string
+  appliedTaxRuleVersion: number
+  perSale: SecuritiesPerSale[]
+  byYear: SecuritiesYearSummary[]
+  stockLossPot: string
+  generalCapitalLossPot: string
+  totalCalculatedTax: string
+  totalWithheldTax: string
+  expectedTaxCorrection: string
+  bookedTaxCorrection: string
+  outstandingTaxCorrection: string
+}
+
+export interface CryptoYearSummary {
+  year: number
+  taxableGain: string
+  realizedLosses: string
+  netTaxRelevant: string
+  taxFreeGains: string
+  annualFreeLimit: string
+  belowAnnualFreeLimit: boolean
+}
+
+export interface CryptoTaxResult {
+  taxCurrency: string
+  appliedTaxRuleKey: string
+  appliedTaxRuleVersion: number
+  byYear: CryptoYearSummary[]
+  note: string
+}
+
+export interface TaxEstimate {
+  tax_currency: string
+  fx_complete: boolean
+  securities: { portfolio_id: string; portfolio_name: string; rule_key: string; result: SecuritiesTaxResult }[]
+  crypto: { portfolio_id: string; portfolio_name: string; rule_key: string; result: CryptoTaxResult }[]
+  unsupported: { portfolio_id: string; portfolio_name: string; reason: string }[]
 }
 
 // ---- Instruments (instruments service) --------------------------------------

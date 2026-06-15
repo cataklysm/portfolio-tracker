@@ -2,6 +2,8 @@ import { AppError } from '@portfolio/platform';
 import { computeRealization, type AccountingMethod, type RealizationResult } from '../domain/realization.js';
 import type { TransactionPerformanceMetrics } from '../domain/transaction-performance.js';
 import { deriveState } from '../domain/position-state.js';
+import { safeRecord } from '../../audit/application/record.js';
+import type { ChangeLogWriter } from '../../audit/application/ports.js';
 import { buildPositionView, buildTransactionPerformance, type PositionView } from './build-position-view.js';
 import type {
   DatedRateRequest,
@@ -25,6 +27,7 @@ export interface PositionServiceDeps {
   fx: FxReader;
   settings: SettingsReader;
   taxEvents: TaxEventReader;
+  changeLog?: ChangeLogWriter;
 }
 
 export interface CreatePositionInput {
@@ -202,6 +205,15 @@ export class PositionService {
     }
 
     await this.recalculate(positionId, bearerToken);
+    await safeRecord(this.deps.changeLog, {
+      userId,
+      entityType: 'transaction',
+      entityId: transactionId,
+      action: 'created',
+      after: transactionSnapshot(input.transaction),
+      portfolioId: input.portfolioId,
+      positionId,
+    });
     return { position_id: positionId, transaction_id: transactionId };
   }
 
@@ -227,6 +239,15 @@ export class PositionService {
 
     const { id } = await this.deps.repo.insertTransaction(position.id, tx);
     await this.recalculate(position.id, bearerToken);
+    await safeRecord(this.deps.changeLog, {
+      userId,
+      entityType: 'transaction',
+      entityId: id,
+      action: 'created',
+      after: transactionSnapshot(tx),
+      portfolioId: position.portfolio_id,
+      positionId: position.id,
+    });
     return { transaction_id: id };
   }
 
@@ -245,8 +266,19 @@ export class PositionService {
   ): Promise<{ transaction_id: string }> {
     const position = await this.requireOwnedPosition(positionId, userId);
     await this.requireTransactionInPosition(txId, position.id);
+    const before = await this.deps.repo.getTransaction(txId);
     await this.deps.repo.updateTransaction(txId, tx);
     await this.recalculate(position.id, bearerToken);
+    await safeRecord(this.deps.changeLog, {
+      userId,
+      entityType: 'transaction',
+      entityId: txId,
+      action: 'updated',
+      before: before ? storedTransactionSnapshot(before) : null,
+      after: transactionSnapshot(tx),
+      portfolioId: position.portfolio_id,
+      positionId: position.id,
+    });
     return { transaction_id: txId };
   }
 
@@ -259,8 +291,18 @@ export class PositionService {
   ): Promise<void> {
     const position = await this.requireOwnedPosition(positionId, userId);
     await this.requireTransactionInPosition(txId, position.id);
+    const before = await this.deps.repo.getTransaction(txId);
     await this.deps.repo.deleteTransaction(txId);
     await this.recalculate(position.id, bearerToken);
+    await safeRecord(this.deps.changeLog, {
+      userId,
+      entityType: 'transaction',
+      entityId: txId,
+      action: 'deleted',
+      before: before ? storedTransactionSnapshot(before) : null,
+      portfolioId: position.portfolio_id,
+      positionId: position.id,
+    });
   }
 
   /** Permanently deletes the position and all its transactions (cascade). */
@@ -406,6 +448,36 @@ function toPersistedRealization(r: RealizationResult, method: AccountingMethod):
               quantity: b.consumedQuantity!.toFixed(8),
             }))
         : [],
+  };
+}
+
+/** Audit snapshot of a submitted transaction (the "after" of a create/update). */
+function transactionSnapshot(tx: NewTransaction) {
+  return {
+    side: tx.side,
+    quantity: tx.quantity,
+    price: tx.price,
+    fee: tx.fee,
+    currency: tx.currency,
+    effective_at: tx.effectiveAt.toISOString(),
+    tax_relevant_value_date: tx.taxRelevantValueDate,
+    savings_plan: tx.savingsPlan,
+    note: tx.note,
+  };
+}
+
+/** Audit snapshot of a stored transaction (the "before" of an update/delete). */
+function storedTransactionSnapshot(tx: StoredTransaction) {
+  return {
+    side: tx.side,
+    quantity: tx.quantity,
+    price: tx.price,
+    fee: tx.fee,
+    currency: tx.currency,
+    effective_at: tx.effective_at.toISOString(),
+    tax_relevant_value_date: tx.tax_relevant_value_date,
+    savings_plan: tx.savings_plan,
+    note: tx.note,
   };
 }
 

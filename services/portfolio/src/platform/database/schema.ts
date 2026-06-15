@@ -12,6 +12,9 @@ type Numeric = ColumnType<string, string | number, string | number>;
 type Timestamp = ColumnType<Date, Date | string | undefined, Date | string>;
 type Json = ColumnType<unknown, string | undefined, string>;
 
+/** How a financial booking entered the system. */
+export type BookingSource = 'manual' | 'import' | 'broker_api' | 'provider' | 'corporate_action';
+
 // ---- Owned: portfolio.* -----------------------------------------------------
 
 export interface PortfoliosTable {
@@ -22,6 +25,10 @@ export interface PortfoliosTable {
   archived_at: Date | null;
   preferred_headline_metric: ColumnType<string, string | undefined, string>;
   preferred_benchmark: ColumnType<unknown, string | null | undefined, string | null>;
+  /** The tax rule governing this portfolio (e.g. `de_securities_tax`), or null. */
+  tax_rule_key: ColumnType<string | null, string | null | undefined, string | null>;
+  /** Saved portfolio tax settings, validated against the rule's schema. */
+  tax_settings: Json;
   created_at: Generated<Date>;
   updated_at: Timestamp;
 }
@@ -52,6 +59,7 @@ export interface TransactionsTable {
   tax_relevant_value_date: ColumnType<string, string, string>;
   savings_plan: ColumnType<boolean, boolean | undefined, boolean>;
   note: string | null;
+  source: ColumnType<BookingSource, BookingSource | undefined, BookingSource>;
   created_at: Generated<Date>;
   updated_at: Timestamp;
 }
@@ -72,6 +80,7 @@ export interface CashFlowsTable {
   payment_date: ColumnType<string, string, string>;
   tax_relevant_value_date: ColumnType<string, string, string>;
   note: string | null;
+  source: ColumnType<BookingSource, BookingSource | undefined, BookingSource>;
   created_at: Generated<Date>;
   updated_at: Timestamp;
 }
@@ -100,6 +109,31 @@ export interface TaxEventsTable {
   updated_at: Timestamp;
 }
 
+export interface UserTaxSettingsTable {
+  user_id: string;
+  country_code: string;
+  settings: Json;
+  created_at: Generated<Date>;
+  updated_at: Timestamp;
+}
+
+export interface TaxRulesTable {
+  id: Generated<string>;
+  country_code: string;
+  rule_key: string;
+  rule_version: number;
+  asset_classes: string[];
+  valid_from: ColumnType<string, string, string>;
+  valid_to: ColumnType<string | null, string | null | undefined, string | null>;
+  user_settings_schema: Json;
+  portfolio_settings_schema: Json;
+  parameters: Json;
+  calculation_engine_key: string;
+  supported: ColumnType<boolean, boolean | undefined, boolean>;
+  created_at: Generated<Date>;
+  updated_at: Timestamp;
+}
+
 export interface RealizationAllocationsTable {
   id: Generated<string>;
   sell_transaction_id: string;
@@ -117,6 +151,21 @@ export interface AverageCostRealizationsTable {
   quantity: Numeric;
   calculation_version: string | number;
   created_at: Generated<Date>;
+}
+
+export interface BookingChangesTable {
+  id: Generated<string>;
+  user_id: string;
+  entity_type: 'transaction' | 'cash_flow' | 'tax_event';
+  entity_id: string;
+  action: 'created' | 'updated' | 'deleted';
+  source: ColumnType<BookingSource, BookingSource | undefined, BookingSource>;
+  reason: string | null;
+  before: Json | null;
+  after: Json | null;
+  portfolio_id: string | null;
+  position_id: string | null;
+  changed_at: Generated<Date>;
 }
 
 export interface WatchlistItemsTable {
@@ -150,8 +199,11 @@ export interface PortfolioDatabase {
   'portfolio.transactions': TransactionsTable;
   'portfolio.cash_flows': CashFlowsTable;
   'portfolio.tax_events': TaxEventsTable;
+  'portfolio.tax_rules': TaxRulesTable;
+  'portfolio.user_tax_settings': UserTaxSettingsTable;
   'portfolio.realization_allocations': RealizationAllocationsTable;
   'portfolio.average_cost_realizations': AverageCostRealizationsTable;
+  'portfolio.booking_changes': BookingChangesTable;
   'portfolio.watchlist_items': WatchlistItemsTable;
   'portfolio.outbox_events': OutboxEventsTable;
 }

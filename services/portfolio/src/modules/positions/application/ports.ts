@@ -78,6 +78,8 @@ export interface PositionRepository {
   upsertPosition(portfolioId: string, listingId: string): Promise<{ id: string; created: boolean }>;
   listTransactions(positionId: string): Promise<StoredTransaction[]>;
   listTransactionsForPositions(positionIds: string[]): Promise<Map<string, StoredTransaction[]>>;
+  /** A single transaction by ID (for audit before-snapshots), or null. */
+  getTransaction(txId: string): Promise<StoredTransaction | null>;
   insertTransaction(positionId: string, tx: NewTransaction): Promise<{ id: string; aggregateVersion: string }>;
   transactionBelongsToPosition(txId: string, positionId: string): Promise<boolean>;
   updateTransaction(txId: string, tx: NewTransaction): Promise<void>;

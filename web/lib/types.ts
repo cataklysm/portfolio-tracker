@@ -325,6 +325,18 @@ export interface ActivityPage {
   next_cursor: string | null
 }
 
+export type MarketStatus = "open" | "closed" | "holiday" | "weekend" | "unknown"
+
+export interface ListingSession {
+  listing_id: string
+  mic: string | null
+  timezone: string | null
+  status: MarketStatus
+  local_date: string | null
+  current_trading_date: string | null
+  previous_trading_date: string | null
+}
+
 export interface TaxResidency {
   id: string
   country_code: string

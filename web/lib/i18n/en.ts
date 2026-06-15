@@ -109,6 +109,10 @@ export const en = {
     dangerZoneDesc: "Permanently delete this position and all its transactions.",
     moveTitle: "Move position",
     moveDesc: "Move this position and its full history to another portfolio. If that portfolio already holds this asset, the lots merge into one position.",
+    marketOpen: "Market open",
+    marketClosed: "Market closed",
+    marketHoliday: "Exchange holiday",
+    marketWeekend: "Weekend",
     comingSoonNote:
       "Fundamentals, fair value, targets, earnings, and news appear here as those services come online.",
   },

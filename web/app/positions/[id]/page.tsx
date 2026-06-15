@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import type { AlertRule, CorporateAction, EarningsRow, FairValueEstimate, Fundamentals, ListingDetail, NewsItem, NotificationInbox, NotificationItem, Portfolio, PositionDetail, PriceTarget, RealizationAllocationView, SparklinePoint, TaxEvent, TransactionTaxEvent } from "@/lib/types"
+import type { AlertRule, CorporateAction, EarningsRow, FairValueEstimate, Fundamentals, ListingDetail, ListingSession, NewsItem, NotificationInbox, NotificationItem, Portfolio, PositionDetail, PriceTarget, RealizationAllocationView, SparklinePoint, TaxEvent, TransactionTaxEvent } from "@/lib/types"
 import { apiFetch } from "@/lib/api"
 import { getLocale } from "@/lib/locale"
 import { getTranslations } from "@/lib/i18n"
@@ -134,6 +134,19 @@ async function fetchNotificationData(instrumentId: string | null): Promise<Notif
   }
 }
 
+const MARKET_BADGE = {
+  open: { key: "positionDetail.marketOpen", className: "bg-[color-mix(in_srgb,var(--app-positive)_16%,transparent)] text-[var(--app-positive)]" },
+  closed: { key: "positionDetail.marketClosed", className: "bg-[var(--app-surface-raised)] text-[var(--app-text-muted)]" },
+  holiday: { key: "positionDetail.marketHoliday", className: "bg-[color-mix(in_srgb,var(--app-warning)_16%,transparent)] text-[var(--app-warning)]" },
+  weekend: { key: "positionDetail.marketWeekend", className: "bg-[var(--app-surface-raised)] text-[var(--app-text-muted)]" },
+} as const
+
+function MarketStatusBadge({ status, t }: { status: import("@/lib/types").MarketStatus; t: ReturnType<typeof getTranslations> }) {
+  if (status === "unknown") return null
+  const config = MARKET_BADGE[status]
+  return <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase ${config.className}`}>{t(config.key)}</span>
+}
+
 function Section({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <section className="app-panel overflow-hidden rounded-xl">
@@ -174,11 +187,12 @@ export default async function PositionDetailPage({ params }: Props) {
 
   const pos = (await resp.json()) as PositionDetail
   const instrumentId = pos.listing?.instrument_id ?? null
-  const [listingResp, seriesResp, allocationResp, portfoliosResp, fairValues, priceTargets, fundamentals, events, notificationData] = await Promise.all([
+  const [listingResp, seriesResp, allocationResp, portfoliosResp, sessionsResp, fairValues, priceTargets, fundamentals, events, notificationData] = await Promise.all([
     apiFetch(`/listings/${pos.listing_id}`, { cache: "no-store" }),
     apiFetch(`/quotes/${pos.listing_id}/series?limit=365`, { cache: "no-store" }),
     apiFetch(`/positions/${pos.id}/allocations`, { cache: "no-store" }),
     apiFetch("/portfolios", { cache: "no-store" }),
+    apiFetch(`/listings/sessions?ids=${pos.listing_id}`, { cache: "no-store" }),
     fetchInsights<FairValueEstimate>(instrumentId, "fair-values"),
     fetchInsights<PriceTarget>(instrumentId, "price-targets"),
     fetchFundamentals(instrumentId),
@@ -188,6 +202,7 @@ export default async function PositionDetailPage({ params }: Props) {
   const listing = listingResp.ok ? ((await listingResp.json()) as ListingDetail) : null
   const portfolios = portfoliosResp.ok ? ((await portfoliosResp.json()) as Portfolio[]) : []
   const otherPortfolios = portfolios.filter((p) => p.id !== pos.portfolio_id).map((p) => ({ id: p.id, name: p.name }))
+  const session = sessionsResp.ok ? ((await sessionsResp.json()) as ListingSession[])[0] ?? null : null
   const chartSeries = seriesResp.ok ? ((await seriesResp.json()) as SparklinePoint[]) : pos.sparkline
   const allocations = allocationResp.ok ? ((await allocationResp.json()) as RealizationAllocationView) : null
   const p = pos.performance
@@ -223,6 +238,7 @@ export default async function PositionDetailPage({ params }: Props) {
               <h1 className="truncate text-xl font-semibold tracking-tight text-[var(--app-text)]">{pos.listing?.name ?? pos.listing_id}</h1>
               <span className="rounded border border-[var(--app-border)] bg-[var(--app-surface-raised)] px-1.5 py-0.5 text-[9px] font-semibold uppercase text-[var(--app-text-muted)]">{pos.listing?.asset_type ?? "?"}</span>
               {pos.state !== "open" ? <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase ${pos.state === "invalid" ? "bg-[color-mix(in_srgb,var(--app-negative)_14%,transparent)] text-[var(--app-negative)]" : "bg-[var(--app-surface-raised)] text-[var(--app-text-muted)]"}`}>{pos.state}</span> : null}
+              <MarketStatusBadge status={session?.status ?? "unknown"} t={t} />
             </div>
             <p className="mt-1 text-xs font-medium text-[var(--app-text-muted)]">{pos.listing?.symbol ?? "—"} · {listingCurrency}{listing?.exchange_mic ? ` · ${listing.exchange_mic}` : ""}</p>
           </div>

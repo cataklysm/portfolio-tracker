@@ -8,6 +8,10 @@ management UI) are out of scope here.
 Each phase lists the **goal**, **owning service(s)**, **tables** (existing vs new),
 **contract**, **dependencies**, and a rough **size**.
 
+> **Before relying on recent work:** outstanding verification items (new SQL not
+> yet run against a live DB, Yahoo benchmark-symbol checks, known approximations)
+> are consolidated in [deployment-caveats.md](deployment-caveats.md).
+
 ## Grounding state (as of 2026-06-14)
 
 - **Done (don't redo):** authoritative reporting (`/reporting/summary|holdings|

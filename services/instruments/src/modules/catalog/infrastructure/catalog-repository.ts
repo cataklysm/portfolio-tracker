@@ -260,7 +260,7 @@ export class KyselyCatalogRepository implements CatalogRepository {
   }
 
   async listAdminSymbols(): Promise<AdminSymbolView[]> {
-    const [rows, identifiers, positions, watchlistItems] = await Promise.all([
+    const [rows, identifiers, selections, positions, watchlistItems] = await Promise.all([
       this.db
         .selectFrom('instruments.listings as l')
         .innerJoin('instruments.instruments as i', 'i.id', 'l.instrument_id')
@@ -288,6 +288,11 @@ export class KyselyCatalogRepository implements CatalogRepository {
         .orderBy('provider')
         .execute(),
       this.db
+        .selectFrom('instruments.provider_selection')
+        .select(['instrument_id', 'capability', 'provider'])
+        .orderBy('capability')
+        .execute(),
+      this.db
         .selectFrom('portfolio.positions')
         .select('listing_id')
         .distinct()
@@ -304,10 +309,17 @@ export class KyselyCatalogRepository implements CatalogRepository {
       list.push({ provider: identifier.provider, provider_identifier: identifier.provider_identifier });
       identifiersByListing.set(identifier.listing_id, list);
     }
+    const selectionsByInstrument = new Map<string, { capability: string; provider: string }[]>();
+    for (const selection of selections) {
+      const list = selectionsByInstrument.get(selection.instrument_id) ?? [];
+      list.push({ capability: selection.capability, provider: selection.provider });
+      selectionsByInstrument.set(selection.instrument_id, list);
+    }
     const used = new Set([...positions, ...watchlistItems].map((reference) => reference.listing_id));
     return rows.map((row) => ({
       ...row,
       provider_identifiers: identifiersByListing.get(row.id) ?? [],
+      provider_selections: selectionsByInstrument.get(row.instrument_id) ?? [],
       in_use: used.has(row.id),
     }));
   }

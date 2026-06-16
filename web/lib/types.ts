@@ -585,6 +585,7 @@ export interface AdminSymbolView extends ListingDetail {
   isin: string | null
   underlying_identifier: string | null
   in_use: boolean
+  provider_selections: { capability: string; provider: string }[]
 }
 
 export type ProviderCapability =

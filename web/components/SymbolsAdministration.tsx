@@ -19,10 +19,10 @@ import type { AdminSymbolView, ExchangeView, ProviderSettingsView } from "@/lib/
  * representative sent to the batch selection endpoint, which expands the group.
  */
 const FEED_GROUPS = [
-  { key: "price", label: "Quotes & chart", capability: "quotes" },
-  { key: "events", label: "Earnings, actions & news", capability: "earnings" },
-  { key: "fundamentals", label: "Fundamentals", capability: "fundamentals" },
-  { key: "analyst", label: "Analyst", capability: "analyst" },
+  { key: "price", label: "Quotes & chart", short: "Price", capability: "quotes" },
+  { key: "events", label: "Earnings, actions & news", short: "Events", capability: "earnings" },
+  { key: "fundamentals", label: "Fundamentals", short: "Fund.", capability: "fundamentals" },
+  { key: "analyst", label: "Analyst", short: "Analyst", capability: "analyst" },
 ] as const
 
 const fieldClass = "w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-raised)] px-3 py-2 text-xs text-[var(--app-text)] outline-none transition focus:border-[var(--app-accent)] focus:ring-2 focus:ring-[var(--app-accent-soft)]"
@@ -96,11 +96,12 @@ export function SymbolsAdministration({
           <span className="text-[10px] text-[var(--app-text-faint)]">{filtered.length} of {symbols.length}</span>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left">
+          <table className="w-full min-w-[880px] text-left">
             <thead className="bg-[var(--app-surface-raised)] text-[10px] uppercase tracking-wider text-[var(--app-text-faint)]">
               <tr>
                 <th className="px-4 py-3">Instrument</th>
                 <th className="px-4 py-3">Listing</th>
+                <th className="px-4 py-3">Providers</th>
                 <th className="px-4 py-3">Usage</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
@@ -116,6 +117,7 @@ export function SymbolsAdministration({
                     <p className="text-xs font-semibold text-[var(--app-text)]">{item.symbol}</p>
                     <p className="mt-0.5 text-[10px] text-[var(--app-text-faint)]">{item.exchange_mic ?? "No exchange"} - {item.currency}</p>
                   </td>
+                  <td className="px-4 py-3"><ProvidersCell selections={item.provider_selections} /></td>
                   <td className="px-4 py-3">
                     <span className={`rounded-full px-2 py-1 text-[9px] font-semibold ${item.in_use ? "bg-[var(--app-accent-soft)] text-[var(--app-accent)]" : "bg-[color-mix(in_srgb,var(--app-positive)_12%,transparent)] text-[var(--app-positive)]"}`}>{item.in_use ? "In use" : "Unused"}</span>
                   </td>
@@ -135,6 +137,32 @@ export function SymbolsAdministration({
 
       {showAdd ? <SymbolDialog title="Add symbol" exchanges={exchanges} providers={symbolProviders} pending={pending} onClose={() => setShowAdd(false)} onSubmit={(formData) => run(() => createAdminSymbolAction(formData), "Symbol added.")} /> : null}
       {editing ? <SymbolDialog title="Edit symbol" exchanges={exchanges} providers={symbolProviders} symbol={editing} pending={pending} onClose={() => setEditing(null)} onSubmit={(formData) => run(() => updateAdminSymbolAction(formData), "Symbol updated.")} /> : null}
+    </div>
+  )
+}
+
+/**
+ * Compact per-feed-group provider readout for the table: one line per group
+ * (Price / Events / Fund. / Analyst) with its selected provider, or a muted "—"
+ * when no provider is set — so it's obvious at a glance which feeds need wiring.
+ */
+function ProvidersCell({ selections }: { selections: { capability: string; provider: string }[] }) {
+  const byCapability = useMemo(() => new Map(selections.map((s) => [s.capability, s.provider])), [selections])
+  return (
+    <div className="space-y-0.5">
+      {FEED_GROUPS.map((group) => {
+        const provider = byCapability.get(group.capability)
+        return (
+          <p key={group.key} className="flex items-center gap-1.5 text-[10px] leading-tight">
+            <span className="w-12 shrink-0 text-[var(--app-text-faint)]">{group.short}</span>
+            {provider ? (
+              <span className="font-mono font-semibold text-[var(--app-text)]">{provider}</span>
+            ) : (
+              <span className="text-[var(--app-text-faint)]">—</span>
+            )}
+          </p>
+        )
+      })}
     </div>
   )
 }

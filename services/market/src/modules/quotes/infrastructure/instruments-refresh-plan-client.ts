@@ -9,6 +9,7 @@ interface PlanResponseEntry {
   provider: string | null;
   provider_identifier: string | null;
   market_status?: MarketStatus;
+  minutes_since_close?: number | null;
 }
 
 /**
@@ -56,6 +57,7 @@ export class InstrumentsRefreshPlanClient implements RefreshPlanResolver {
         provider: e.provider ?? null,
         providerSymbol: e.provider_identifier ?? null,
         marketStatus: e.market_status,
+        minutesSinceClose: e.minutes_since_close ?? null,
       }));
     } catch (err) {
       this.logger.warn({ err, capability, error_code: 'instruments_unavailable' }, 'Refresh-plan error');

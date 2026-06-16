@@ -17,6 +17,8 @@ export interface RefreshServiceDeps {
   logger: Logger;
   /** Fallback cadence for a provider/capability with no configured interval. */
   defaultIntervalMs: number;
+  /** Window after close during which one "catch the close" quote fetch is allowed. */
+  closeCaptureGraceMs: number;
   /** Batch size used when a provider has no configured `max_batch_size`. */
   defaultBatchSize?: number;
   /** Listings per analyst refresh chunk. */
@@ -53,6 +55,12 @@ export class RefreshService {
   private readonly analystChunkSize: number;
   /** Last-run epoch ms per gate key (`fx`, `analyst:<provider>`) for coarse feeds. */
   private readonly lastRun = new Map<string, number>();
+  /**
+   * Listings whose current post-close close has already been captured, so each
+   * close is fetched exactly once. Cleared for a listing as soon as it is no
+   * longer post-close (reopened / pre-open / weekend), arming the next close.
+   */
+  private readonly closeCaptured = new Set<string>();
 
   constructor(private readonly deps: RefreshServiceDeps) {
     this.defaultBatchSize = deps.defaultBatchSize ?? 25;
@@ -84,28 +92,36 @@ export class RefreshService {
     const plan = await this.deps.planResolver.resolve('quotes');
     const batchSizes = await this.loadBatchSizes();
 
-    // Group fetchable listings by their selected provider, skipping any whose
-    // exchange is currently closed — no point re-fetching an unchanging price on a
-    // weekend/holiday/overnight. `open` and `unknown` (crypto / exchange-less / no
-    // configured hours) are always considered. The per-listing freshness gate
-    // (inside refreshLatestBatched) then decides which are actually due.
-    const byProvider = new Map<string, PlanListing[]>();
+    // Two passes, grouped by provider:
+    //  - `open`: regular sweep over open/unknown/absent listings (the per-listing
+    //    freshness gate inside refreshLatestBatched then decides what's due).
+    //  - `closing`: a once-per-close "catch the close" fetch for listings that
+    //    just closed (within the grace window) and haven't been captured yet —
+    //    so the daily close is stored even though the venue is now closed.
+    const open = new Map<string, PlanListing[]>();
+    const closing = new Map<string, PlanListing[]>();
     let skippedClosed = 0;
     for (const entry of plan) {
       if (!entry.provider || !entry.providerSymbol) continue;
-      if (!isMarketRefreshable(entry.marketStatus)) {
-        skippedClosed += 1;
-        continue;
+      // Arm the next close: once a listing is no longer post-close, forget its
+      // prior capture so the following day's close is captured afresh.
+      if (entry.minutesSinceClose === undefined || entry.minutesSinceClose === null) {
+        this.closeCaptured.delete(entry.listingId);
       }
-      const list = byProvider.get(entry.provider) ?? [];
-      list.push(entry);
-      byProvider.set(entry.provider, list);
+      if (isMarketRefreshable(entry.marketStatus)) {
+        (open.get(entry.provider) ?? open.set(entry.provider, []).get(entry.provider)!).push(entry);
+      } else if (this.needsCloseCapture(entry)) {
+        (closing.get(entry.provider) ?? closing.set(entry.provider, []).get(entry.provider)!).push(entry);
+      } else {
+        skippedClosed += 1;
+      }
     }
     if (skippedClosed > 0) {
       this.deps.logger.debug({ skipped_closed: skippedClosed }, 'Skipped listings on closed exchanges');
     }
 
-    for (const [provider, entries] of byProvider) {
+    // Regular open sweep — freshness-gated by each provider's configured interval.
+    for (const [provider, entries] of open) {
       const c = this.cadenceFor(cadence, provider, 'quotes');
       if (!c.enabled) continue;
       const batchSize = batchSizes.get(provider) ?? this.defaultBatchSize;
@@ -128,6 +144,39 @@ export class RefreshService {
         );
       }
     }
+
+    // Catch-the-close — fetch once regardless of the freshness interval (interval
+    // 0), then mark each listing's close instant captured so it isn't re-fetched.
+    for (const [provider, entries] of closing) {
+      const c = this.cadenceFor(cadence, provider, 'quotes');
+      if (!c.enabled) continue;
+      const batchSize = batchSizes.get(provider) ?? this.defaultBatchSize;
+      try {
+        await this.deps.quotes.refreshLatestBatched(provider, entries, batchSize, {
+          refreshIntervalMs: 0,
+          saveResolutionMs: c.saveResolutionMs,
+        });
+        for (const entry of entries) this.closeCaptured.add(entry.listingId);
+        this.deps.logger.debug({ provider, count: entries.length }, 'Captured post-close quotes');
+      } catch (err) {
+        this.deps.logger.warn(
+          { err, provider, error_code: 'quote_close_capture_failed' },
+          'Post-close quote capture failed for provider',
+        );
+      }
+    }
+  }
+
+  /**
+   * Whether a closed listing should get its one post-close "catch the close"
+   * fetch: it closed today (minutesSinceClose set), we're still within the grace
+   * window, and we haven't already captured this close.
+   */
+  private needsCloseCapture(entry: PlanListing): boolean {
+    const since = entry.minutesSinceClose;
+    if (since === undefined || since === null) return false;
+    if (since * 60_000 > this.deps.closeCaptureGraceMs) return false;
+    return !this.closeCaptured.has(entry.listingId);
   }
 
   private async runAnalyst(cadence: Map<string, Cadence>, now: number): Promise<void> {

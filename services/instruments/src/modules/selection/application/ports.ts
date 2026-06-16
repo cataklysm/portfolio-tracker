@@ -43,6 +43,13 @@ export interface RefreshPlanEntry {
    * definitively-closed listings; on-demand refresh ignores this.
    */
   market_status: MarketStatus;
+  /**
+   * Minutes since the listing's exchange closed today (post-close on a trading
+   * day), else null. Lets the scheduled sweep do one "catch the close" fetch
+   * shortly after close to capture the daily close even though the venue is now
+   * closed. null for open/pre-open/weekend/holiday/unknown.
+   */
+  minutes_since_close: number | null;
 }
 
 /** An active listing in the catalog — the base set for a full-catalog refresh sweep. */

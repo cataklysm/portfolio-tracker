@@ -28,6 +28,25 @@ describe('computeMarketSession', () => {
     assert.equal(s.status, 'closed');
   });
 
+  test('minutes_since_close is set only post-close on a trading day', () => {
+    // 17:32 Berlin (16:32Z) — 2 minutes after the 17:30 close on a Thursday.
+    const postClose = computeMarketSession(new Date('2026-01-08T16:32:00Z'), XETRA);
+    assert.equal(postClose.status, 'closed');
+    assert.equal(postClose.minutes_since_close, 2);
+
+    // Pre-open closed → null (don't chase a close that hasn't happened).
+    const preOpen = computeMarketSession(new Date('2026-01-08T06:00:00Z'), XETRA);
+    assert.equal(preOpen.minutes_since_close, null);
+
+    // Open → null.
+    const open = computeMarketSession(new Date('2026-01-08T11:00:00Z'), XETRA);
+    assert.equal(open.minutes_since_close, null);
+
+    // Weekend → null (close was on a prior day).
+    const weekend = computeMarketSession(new Date('2026-01-10T18:00:00Z'), XETRA);
+    assert.equal(weekend.minutes_since_close, null);
+  });
+
   test('weekend status; prior trading date is the Friday', () => {
     // 2026-01-10 is a Saturday.
     const s = computeMarketSession(new Date('2026-01-10T12:00:00Z'), XETRA);

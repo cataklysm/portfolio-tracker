@@ -97,6 +97,12 @@ export interface PlanListing {
    * (and absent) are refreshed. On-demand refresh ignores this.
    */
   marketStatus?: MarketStatus;
+  /**
+   * Minutes since the exchange closed today (post-close on a trading day), else
+   * null/absent. Drives the one-shot "catch the close" fetch: shortly after close
+   * the sweep fetches once more to capture the daily close. On-demand ignores it.
+   */
+  minutesSinceClose?: number | null;
 }
 
 export interface RefreshPlanResolver {

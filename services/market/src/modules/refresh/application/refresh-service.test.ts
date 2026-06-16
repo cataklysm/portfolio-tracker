@@ -11,8 +11,18 @@ function entry(
   provider: string | null,
   symbol: string | null,
   marketStatus?: PlanListing['marketStatus'],
+  minutesSinceClose?: number | null,
 ): PlanListing {
-  return { listingId, instrumentId: `i-${listingId}`, symbol: 'X', currency: 'EUR', provider, providerSymbol: symbol, marketStatus };
+  return {
+    listingId,
+    instrumentId: `i-${listingId}`,
+    symbol: 'X',
+    currency: 'EUR',
+    provider,
+    providerSymbol: symbol,
+    marketStatus,
+    minutesSinceClose,
+  };
 }
 
 interface BatchedCall {
@@ -71,6 +81,7 @@ function buildService(
     },
     logger,
     defaultIntervalMs: 60_000,
+    closeCaptureGraceMs: 30 * 60 * 1000,
   });
 
   return { service, batched, recorded, analystChunks };
@@ -169,6 +180,29 @@ describe('RefreshService.runCycle', () => {
     assert.ok(batched.find((b) => b.provider === 'yahoo'));
     assert.equal(batched.find((b) => b.provider === 'lstc'), undefined);
   });
+
+  test('catches the close once for a just-closed listing, then not again', async () => {
+    // Closed 2 minutes ago on a trading day → eligible for one post-close fetch.
+    const plan = [entry('l1', 'lstc', '41939', 'closed', 2)]
+    const { service, batched } = buildService(plan, [{ provider: 'lstc', maxBatchSize: null }])
+
+    await service.runCycle() // first tick: captures the close
+    await service.runCycle() // second tick: same close already captured → skipped
+
+    const lstcCalls = batched.filter((b) => b.provider === 'lstc')
+    assert.equal(lstcCalls.length, 1)
+    assert.equal(lstcCalls[0]?.count, 1)
+  })
+
+  test('does not catch the close once the grace window has passed', async () => {
+    // Closed 45 minutes ago — beyond the 30-minute grace window.
+    const plan = [entry('l1', 'lstc', '41939', 'closed', 45)]
+    const { service, batched } = buildService(plan, [{ provider: 'lstc', maxBatchSize: null }])
+
+    await service.runCycle()
+
+    assert.equal(batched.find((b) => b.provider === 'lstc'), undefined)
+  })
 
   test('analyst respects its per-provider interval across heartbeats', async () => {
     const plan = [entry('l1', 'yahoo', 'A')];

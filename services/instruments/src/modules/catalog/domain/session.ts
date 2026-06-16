@@ -18,6 +18,14 @@ export interface MarketSession {
   current_trading_date: string | null;
   /** The trading date before `current_trading_date` (the prior session close). */
   previous_trading_date: string | null;
+  /**
+   * Minutes elapsed since *today's* regular close, when the market has closed on a
+   * trading day (now is at/after the close). null otherwise — including pre-open
+   * ("closed" but before the open), weekends, holidays, and 24h/unknown venues.
+   * Lets a scheduler do one post-close "catch the close" fetch so the daily close
+   * is captured even though the venue is now closed.
+   */
+  minutes_since_close: number | null;
 }
 
 const UNKNOWN: MarketSession = {
@@ -25,6 +33,7 @@ const UNKNOWN: MarketSession = {
   local_date: null,
   current_trading_date: null,
   previous_trading_date: null,
+  minutes_since_close: null,
 };
 
 /**
@@ -44,14 +53,17 @@ export function computeMarketSession(now: Date, calendar: ExchangeCalendar | nul
   const holidays = new Set(calendar.holidays);
   const trading = isTradingDay(date, holidays);
 
+  const open = toMinutes(calendar.openLocal);
+  const close = toMinutes(calendar.closeLocal);
   let status: MarketStatus;
   if (isWeekend(date)) status = 'weekend';
   else if (holidays.has(date)) status = 'holiday';
   else {
-    const open = toMinutes(calendar.openLocal);
-    const close = toMinutes(calendar.closeLocal);
     status = open === null || close === null ? 'unknown' : minutes >= open && minutes < close ? 'open' : 'closed';
   }
+
+  // Minutes since today's close — only on a trading day, at/after the close.
+  const minutesSinceClose = trading && close !== null && minutes >= close ? minutes - close : null;
 
   const currentTrading = trading ? date : previousTradingDate(date, holidays);
   const previousTrading = previousTradingDate(currentTrading, holidays);
@@ -60,6 +72,7 @@ export function computeMarketSession(now: Date, calendar: ExchangeCalendar | nul
     local_date: date,
     current_trading_date: currentTrading,
     previous_trading_date: previousTrading,
+    minutes_since_close: minutesSinceClose,
   };
 }
 

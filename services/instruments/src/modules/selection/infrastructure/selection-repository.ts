@@ -86,14 +86,8 @@ export class KyselySelectionRepository implements SelectionRepository {
     if (listingIds) query = query.where('l.id', 'in', listingIds);
     const rows = await query.execute();
     const now = new Date();
-    return rows.map((r) => ({
-      listing_id: r.listing_id,
-      instrument_id: r.instrument_id,
-      symbol: r.symbol,
-      currency: r.currency,
-      provider: r.provider ?? null,
-      provider_identifier: r.provider_identifier ?? null,
-      market_status: computeMarketSession(
+    return rows.map((r) => {
+      const session = computeMarketSession(
         now,
         r.timezone
           ? {
@@ -105,8 +99,18 @@ export class KyselySelectionRepository implements SelectionRepository {
                 : [],
             }
           : null,
-      ).status,
-    }));
+      );
+      return {
+        listing_id: r.listing_id,
+        instrument_id: r.instrument_id,
+        symbol: r.symbol,
+        currency: r.currency,
+        provider: r.provider ?? null,
+        provider_identifier: r.provider_identifier ?? null,
+        market_status: session.status,
+        minutes_since_close: session.minutes_since_close,
+      };
+    });
   }
 
   async usageForProvider(provider: string): Promise<ProviderUsageView[]> {

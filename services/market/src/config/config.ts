@@ -17,6 +17,12 @@ export interface MarketConfig {
     tickMs: number;
     /** Fallback refresh interval for a provider/capability with no configured cadence. */
     defaultIntervalMs: number;
+    /**
+     * Window after an exchange's close during which the sweep does one extra
+     * "catch the close" quote fetch, so the daily close is captured even though
+     * the venue is now closed (and the freshness interval may not have elapsed).
+     */
+    closeCaptureGraceMs: number;
     heldQuoteMaxAgeMs: number;
   };
 }
@@ -42,6 +48,7 @@ export function loadConfig(): MarketConfig {
       // Renamed role: now the fallback cadence when a provider has no configured
       // per-capability interval. Kept the env name for backward compatibility.
       defaultIntervalMs: intEnv('MARKET_REFRESH_INTERVAL_MS', 15 * 60 * 1000),
+      closeCaptureGraceMs: intEnv('MARKET_CLOSE_CAPTURE_GRACE_MS', 30 * 60 * 1000),
       heldQuoteMaxAgeMs: intEnv('MARKET_HELD_QUOTE_MAX_AGE_MS', 15 * 60 * 1000),
     },
   };

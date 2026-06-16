@@ -76,6 +76,7 @@ export async function buildApp(config: MarketConfig): Promise<BuiltService> {
     analyst: analystService,
     logger,
     defaultIntervalMs: config.refresh.defaultIntervalMs,
+    closeCaptureGraceMs: config.refresh.closeCaptureGraceMs,
   });
 
   const app = createService({

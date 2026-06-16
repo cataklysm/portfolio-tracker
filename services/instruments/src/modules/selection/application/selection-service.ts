@@ -48,6 +48,32 @@ export class SelectionService {
     return this.repo.listForInstrument(instrumentId);
   }
 
+  /**
+   * Sets several capability → provider selections at once. Each expands to its
+   * feed group (so passing one member per group is enough); later entries win on
+   * a capability collision. One atomic upsert.
+   */
+  async setInstrumentSelections(
+    instrumentId: string,
+    selections: { capability: string; provider: string }[],
+  ): Promise<ProviderSelectionView[]> {
+    if (!(await this.repo.instrumentExists(instrumentId))) {
+      throw AppError.notFound('instrument_not_found', 'Instrument not found');
+    }
+    const byCapability = new Map<SelectableCapability, string>();
+    for (const sel of selections) {
+      const cap = assertSelectable(sel.capability);
+      const prov = sel.provider.trim();
+      if (prov.length === 0) throw AppError.badRequest('invalid_provider', 'A provider is required');
+      for (const member of SELECTION_GROUPS[cap] ?? [cap]) byCapability.set(member, prov);
+    }
+    await this.repo.upsert(
+      instrumentId,
+      [...byCapability].map(([capability, provider]) => ({ capability, provider })),
+    );
+    return this.repo.listForInstrument(instrumentId);
+  }
+
   getRefreshPlan(capability: string, listingIds?: string[]): Promise<RefreshPlanEntry[]> {
     return this.repo.refreshPlan(assertSelectable(capability), listingIds);
   }

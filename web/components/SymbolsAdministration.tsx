@@ -5,9 +5,25 @@ import { useRouter } from "next/navigation"
 import {
   createAdminSymbolAction,
   deactivateAdminSymbolAction,
+  getInstrumentSelectionsAction,
+  searchProviderSymbolsAction,
   updateAdminSymbolAction,
+  type ProviderSymbolHit,
 } from "@/app/administration/symbols/actions"
-import type { AdminSymbolView, ExchangeView } from "@/lib/types"
+import type { AdminSymbolView, ExchangeView, ProviderSettingsView } from "@/lib/types"
+
+/**
+ * Capability feed-groups that share one provider (mirrors the backend's
+ * SELECTION_GROUPS): quotes+chart move together, earnings+corporate_actions+news
+ * move together, fundamentals and analyst are standalone. `capability` is the
+ * representative sent to the batch selection endpoint, which expands the group.
+ */
+const FEED_GROUPS = [
+  { key: "price", label: "Quotes & chart", capability: "quotes" },
+  { key: "events", label: "Earnings, actions & news", capability: "earnings" },
+  { key: "fundamentals", label: "Fundamentals", capability: "fundamentals" },
+  { key: "analyst", label: "Analyst", capability: "analyst" },
+] as const
 
 const fieldClass = "w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-raised)] px-3 py-2 text-xs text-[var(--app-text)] outline-none transition focus:border-[var(--app-accent)] focus:ring-2 focus:ring-[var(--app-accent-soft)]"
 const labelClass = "mb-1 block text-[10px] font-medium uppercase tracking-wider text-[var(--app-text-faint)]"
@@ -16,10 +32,14 @@ const buttonClass = "rounded-lg border border-[var(--app-border)] px-3 py-2 text
 export function SymbolsAdministration({
   symbols,
   exchanges,
+  providers,
 }: {
   symbols: AdminSymbolView[]
   exchanges: ExchangeView[]
+  providers: ProviderSettingsView[]
 }) {
+  // Only symbol-class providers can serve an instrument's capabilities (ECB etc. are reference/FX).
+  const symbolProviders = useMemo(() => providers.filter((p) => p.providerClass === "symbol"), [providers])
   const router = useRouter()
   const [query, setQuery] = useState("")
   const [onlyUnused, setOnlyUnused] = useState(false)
@@ -113,8 +133,8 @@ export function SymbolsAdministration({
         </div>
       </section>
 
-      {showAdd ? <SymbolDialog title="Add symbol" exchanges={exchanges} pending={pending} onClose={() => setShowAdd(false)} onSubmit={(formData) => run(() => createAdminSymbolAction(formData), "Symbol added.")} /> : null}
-      {editing ? <SymbolDialog title="Edit symbol" exchanges={exchanges} symbol={editing} pending={pending} onClose={() => setEditing(null)} onSubmit={(formData) => run(() => updateAdminSymbolAction(formData), "Symbol updated.")} /> : null}
+      {showAdd ? <SymbolDialog title="Add symbol" exchanges={exchanges} providers={symbolProviders} pending={pending} onClose={() => setShowAdd(false)} onSubmit={(formData) => run(() => createAdminSymbolAction(formData), "Symbol added.")} /> : null}
+      {editing ? <SymbolDialog title="Edit symbol" exchanges={exchanges} providers={symbolProviders} symbol={editing} pending={pending} onClose={() => setEditing(null)} onSubmit={(formData) => run(() => updateAdminSymbolAction(formData), "Symbol updated.")} /> : null}
     </div>
   )
 }
@@ -122,6 +142,7 @@ export function SymbolsAdministration({
 function SymbolDialog({
   title,
   exchanges,
+  providers,
   symbol,
   pending,
   onClose,
@@ -129,6 +150,7 @@ function SymbolDialog({
 }: {
   title: string
   exchanges: ExchangeView[]
+  providers: ProviderSettingsView[]
   symbol?: AdminSymbolView
   pending: boolean
   onClose: () => void
@@ -137,9 +159,9 @@ function SymbolDialog({
   const dialogRef = useRef<HTMLDialogElement>(null)
   useEffect(() => { dialogRef.current?.showModal() }, [])
   return (
-    <dialog ref={dialogRef} onCancel={onClose} className="m-auto w-[min(700px,calc(100%-2rem))] rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-0 text-[var(--app-text)] shadow-2xl backdrop:bg-black/60">
-      <form action={onSubmit}>
-        <div className="flex items-center justify-between border-b border-[var(--app-border)] px-5 py-4"><h2 className="text-sm font-semibold">{title}</h2><button type="button" onClick={onClose} className="text-xs text-[var(--app-text-faint)] hover:text-[var(--app-text)]">Close</button></div>
+    <dialog ref={dialogRef} onCancel={onClose} className="m-auto w-[min(720px,calc(100%-2rem))] rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-0 text-[var(--app-text)] shadow-2xl backdrop:bg-black/60">
+      <form action={onSubmit} className="max-h-[85vh] overflow-y-auto">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--app-border)] bg-[var(--app-surface)] px-5 py-4"><h2 className="text-sm font-semibold">{title}</h2><button type="button" onClick={onClose} className="text-xs text-[var(--app-text-faint)] hover:text-[var(--app-text)]">Close</button></div>
         <div className="grid gap-4 p-5 sm:grid-cols-2">
           {symbol ? <><input type="hidden" name="instrument_id" value={symbol.instrument_id} /><input type="hidden" name="listing_id" value={symbol.id} /></> : null}
           <Field label="Instrument name" name="name" defaultValue={symbol?.instrument_name} required />
@@ -150,9 +172,154 @@ function SymbolDialog({
           <Field label="Currency" name="currency" defaultValue={symbol?.currency ?? "EUR"} maxLength={3} required />
           <div><label className={labelClass}>Exchange</label><select name="exchange_id" defaultValue={symbol?.exchange_id ?? exchanges[0]?.id} className={fieldClass}>{exchanges.map((exchange) => <option key={exchange.id} value={exchange.id}>{exchange.mic} - {exchange.name}</option>)}</select></div>
         </div>
-        <div className="flex justify-end gap-2 border-t border-[var(--app-border)] px-5 py-4"><button type="button" onClick={onClose} className={buttonClass}>Cancel</button><button disabled={pending} className="rounded-lg bg-[var(--app-accent)] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">{pending ? "Saving..." : "Save symbol"}</button></div>
+        {symbol ? <ProviderMatrix symbol={symbol} providers={providers} /> : null}
+        <div className="sticky bottom-0 flex justify-end gap-2 border-t border-[var(--app-border)] bg-[var(--app-surface)] px-5 py-4"><button type="button" onClick={onClose} className={buttonClass}>Cancel</button><button disabled={pending} className="rounded-lg bg-[var(--app-accent)] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">{pending ? "Saving..." : "Save symbol"}</button></div>
       </form>
     </dialog>
+  )
+}
+
+/**
+ * Edits which provider serves each feed group and that provider's symbol for this
+ * listing. Selections are per feed group (4 selectors); symbols are per *distinct
+ * provider* (so quotes+chart on the same provider share one symbol field). State
+ * is serialized into hidden inputs the save action reads.
+ */
+function ProviderMatrix({ symbol, providers }: { symbol: AdminSymbolView; providers: ProviderSettingsView[] }) {
+  // group key -> selected provider name ("" = none)
+  const [groupProvider, setGroupProvider] = useState<Record<string, string>>({})
+  // provider name -> its symbol/identifier for this listing
+  const [symbolByProvider, setSymbolByProvider] = useState<Record<string, string>>(() =>
+    Object.fromEntries(symbol.provider_identifiers.map((p) => [p.provider, p.provider_identifier])),
+  )
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let active = true
+    getInstrumentSelectionsAction(symbol.instrument_id).then((selections) => {
+      if (!active) return
+      const byCapability = new Map(selections.map((s) => [s.capability, s.provider]))
+      setGroupProvider(Object.fromEntries(FEED_GROUPS.map((g) => [g.key, byCapability.get(g.capability) ?? ""])))
+      setLoading(false)
+    })
+    return () => { active = false }
+  }, [symbol.instrument_id])
+
+  const distinctProviders = useMemo(
+    () => [...new Set(Object.values(groupProvider).filter((p) => p.length > 0))],
+    [groupProvider],
+  )
+
+  function setSymbol(provider: string, value: string) {
+    setSymbolByProvider((prev) => ({ ...prev, [provider]: value }))
+  }
+
+  const selectionsPayload = FEED_GROUPS.filter((g) => groupProvider[g.key]).map((g) => ({
+    capability: g.capability,
+    provider: groupProvider[g.key],
+  }))
+  const identifiersPayload = distinctProviders.map((p) => ({ provider: p, provider_identifier: symbolByProvider[p] ?? "" }))
+
+  return (
+    <div className="border-t border-[var(--app-border)] p-5">
+      <h3 className="mb-1 text-xs font-semibold text-[var(--app-text)]">Data providers</h3>
+      <p className="mb-3 text-[10px] text-[var(--app-text-faint)]">
+        Pick a provider per feed, then give each provider its symbol for this listing. Capabilities sharing a provider share one symbol.
+      </p>
+      <input type="hidden" name="provider_selections" value={JSON.stringify(selectionsPayload)} />
+      <input type="hidden" name="provider_identifiers" value={JSON.stringify(identifiersPayload)} />
+
+      {loading ? (
+        <p className="text-[10px] text-[var(--app-text-faint)]">Loading current selections…</p>
+      ) : (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {FEED_GROUPS.map((group) => (
+              <div key={group.key}>
+                <label className={labelClass}>{group.label}</label>
+                <select
+                  value={groupProvider[group.key] ?? ""}
+                  onChange={(event) => setGroupProvider((prev) => ({ ...prev, [group.key]: event.target.value }))}
+                  className={fieldClass}
+                >
+                  <option value="">— none —</option>
+                  {providers.map((p) => <option key={p.provider} value={p.provider}>{p.provider}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
+
+          {distinctProviders.length > 0 ? (
+            <div className="mt-4 space-y-3">
+              <h4 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--app-text-faint)]">Provider symbols</h4>
+              {distinctProviders.map((provider) => (
+                <ProviderSymbolRow
+                  key={provider}
+                  provider={provider}
+                  value={symbolByProvider[provider] ?? ""}
+                  onChange={(value) => setSymbol(provider, value)}
+                />
+              ))}
+            </div>
+          ) : null}
+        </>
+      )}
+    </div>
+  )
+}
+
+/** One provider's symbol field for the listing, with a provider-specific search lookup. */
+function ProviderSymbolRow({ provider, value, onChange }: { provider: string; value: string; onChange: (value: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState("")
+  const [results, setResults] = useState<ProviderSymbolHit[]>([])
+  const [searching, startSearch] = useTransition()
+
+  function search() {
+    if (query.trim().length === 0) return
+    startSearch(async () => setResults(await searchProviderSymbolsAction(provider, query)))
+  }
+
+  return (
+    <div>
+      <label className={labelClass}>{provider} symbol</label>
+      <div className="flex gap-2">
+        <input value={value} onChange={(event) => onChange(event.target.value)} placeholder="ISIN / WKN / id" className={fieldClass} />
+        <button type="button" onClick={() => setOpen((v) => !v)} className={buttonClass}>{open ? "Close" : "Search"}</button>
+      </div>
+      {open ? (
+        <div className="mt-2 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-raised)] p-2">
+          <div className="flex gap-2">
+            <input
+              autoFocus
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); search() } }}
+              placeholder={`Search ${provider} by ISIN, WKN or name`}
+              className={fieldClass}
+            />
+            <button type="button" disabled={searching} onClick={search} className={buttonClass}>{searching ? "…" : "Find"}</button>
+          </div>
+          <div className="mt-2 max-h-40 overflow-y-auto">
+            {results.length === 0 ? (
+              <p className="px-1 py-2 text-[10px] text-[var(--app-text-faint)]">{searching ? "Searching…" : "No results yet."}</p>
+            ) : (
+              results.map((hit) => (
+                <button
+                  key={hit.symbol}
+                  type="button"
+                  onClick={() => { onChange(hit.symbol); setOpen(false) }}
+                  className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left text-xs hover:bg-[var(--app-surface-hover)]"
+                >
+                  <span className="min-w-0 truncate text-[var(--app-text)]">{hit.name}</span>
+                  <span className="shrink-0 font-mono text-[10px] text-[var(--app-text-faint)]">{hit.symbol}{hit.currency ? ` · ${hit.currency}` : ""}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
   )
 }
 

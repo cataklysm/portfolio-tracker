@@ -42,6 +42,11 @@ const SearchQuery = Type.Object({
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 25 })),
 });
 
+const AdminSearchQuery = Type.Object({
+  q: Type.String({ minLength: 1, maxLength: 120 }),
+  limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 25 })),
+});
+
 const QuotesBody = Type.Object({
   symbols: Type.Array(Type.String({ minLength: 1, maxLength: 40 }), { minItems: 1, maxItems: 200 }),
   /** Optional explicit provider; defaults to the first enabled provider for the capability. */
@@ -69,6 +74,19 @@ export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRoute
 
   // Admin (gateway-exposed, system:admin): read + edit provider settings.
   r.get('/admin/providers', { preHandler: admin }, async () => ({ providers: await settings.listAll() }));
+
+  // Admin: search a specific provider's symbols (for the symbols-admin per-provider
+  // identifier lookup). Gateway-exposed under `/admin/providers`, system:admin.
+  r.get('/admin/providers/:provider/search', { preHandler: admin, schema: { querystring: AdminSearchQuery } }, async (request) => {
+    const { provider: name } = request.params as { provider: string };
+    const provider = registry.byName(name);
+    if (!provider) throw AppError.notFound('provider_not_found', `No enabled provider named "${name}"`);
+    if (!provider.capabilities.has('symbol_search') || typeof provider.searchSymbols !== 'function') {
+      throw AppError.badRequest('provider_capability_unsupported', `Provider "${name}" does not support symbol search`);
+    }
+    const results = await provider.searchSymbols(request.query.q, request.query.limit ?? 10);
+    return { provider: name, results };
+  });
 
   r.patch('/admin/providers/:provider', { preHandler: admin, schema: { body: UpdateProviderBody } }, async (request) => {
     const { provider } = request.params as { provider: string };

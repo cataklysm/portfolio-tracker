@@ -14,6 +14,10 @@ const SetSelectionBody = Type.Object({
   provider: Type.String({ minLength: 1, maxLength: 64 }),
 });
 
+const SetSelectionsBody = Type.Object({
+  selections: Type.Array(SetSelectionBody, { minItems: 1, maxItems: 16 }),
+});
+
 const ProviderUsageQuery = Type.Object({
   provider: Type.String({ minLength: 1, maxLength: 64 }),
 });
@@ -48,6 +52,13 @@ export function registerSelectionRoutes(app: FastifyInstance, deps: SelectionRou
   r.put('/instruments/:id/providers', { preHandler: write, schema: { body: SetSelectionBody } }, async (request) => {
     const { id } = request.params as { id: string };
     return deps.service.setInstrumentSelection(id, request.body.capability, request.body.provider);
+  });
+
+  // Set several capability → provider selections in one call (one Save in the
+  // symbols admin). Each selection still expands to its feed group server-side.
+  r.put('/instruments/:id/provider-selections', { preHandler: write, schema: { body: SetSelectionsBody } }, async (request) => {
+    const { id } = request.params as { id: string };
+    return deps.service.setInstrumentSelections(id, request.body.selections);
   });
 
   // Internal: the resolved refresh plan for a capability — each active listing

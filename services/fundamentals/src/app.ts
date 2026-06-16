@@ -63,6 +63,7 @@ export async function buildApp(config: FundamentalsConfig): Promise<BuiltService
   const refreshService = new RefreshService({
     listings,
     fundamentals: fundamentalsService,
+    providers,
     logger,
   });
 
@@ -97,7 +98,7 @@ export async function buildApp(config: FundamentalsConfig): Promise<BuiltService
 
   // Drive the periodic refresh. Each cycle pulls the active-listing set from the
   // instruments service (whole catalog).
-  const scheduler = new RefreshScheduler(refreshService, config.refresh.intervalMs, logger);
+  const scheduler = new RefreshScheduler(refreshService, config.refresh.tickMs, logger);
   if (config.refresh.enabled) {
     scheduler.start();
   }

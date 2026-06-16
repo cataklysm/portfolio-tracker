@@ -75,7 +75,7 @@ export async function buildApp(config: MarketConfig): Promise<BuiltService> {
     fx: fxService,
     analyst: analystService,
     logger,
-    intervalMs: config.refresh.intervalMs,
+    defaultIntervalMs: config.refresh.defaultIntervalMs,
   });
 
   const app = createService({
@@ -111,7 +111,7 @@ export async function buildApp(config: MarketConfig): Promise<BuiltService> {
 
   // Drive the periodic refresh. Each cycle sweeps the whole active catalog via the
   // instruments refresh plan (no local watch set), grouped/paced per provider.
-  const scheduler = new RefreshScheduler(refreshService, config.refresh.intervalMs, logger);
+  const scheduler = new RefreshScheduler(refreshService, config.refresh.tickMs, logger);
   if (config.refresh.enabled) {
     scheduler.start();
   }

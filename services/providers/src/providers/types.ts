@@ -63,13 +63,42 @@ export interface ProviderSettingsUpdate {
   maxConcurrency?: number;
 }
 
-/** A latest tick for one symbol (no series). */
+/**
+ * Per-(provider × capability) refresh cadence, persisted in
+ * `providers.provider_capability_refresh`. `refreshIntervalMs` is a freshness
+ * threshold: a listing/instrument is only re-fetched once its newest stored datum
+ * is at least this old. `saveResolutionMs` applies to `quotes` only — the intraday
+ * series is downsampled to at most one stored point per this span.
+ */
+export interface CapabilityRefresh {
+  provider: string;
+  capability: string;
+  refreshIntervalMs: number;
+  saveResolutionMs: number | null;
+  enabled: boolean;
+}
+
+/** Admin-editable fields of a capability-refresh row (upserted). */
+export interface CapabilityRefreshUpdate {
+  refreshIntervalMs?: number;
+  saveResolutionMs?: number | null;
+  enabled?: boolean;
+}
+
+/** A latest tick for one symbol, optionally with the provider's intraday series. */
 export interface QuoteDto {
   symbol: string;
   price: string;
   previousClose: string | null;
   currency: string | null;
   timestampMs: number | null;
+  /**
+   * Intraday points the provider returned alongside the latest tick, oldest
+   * first. Providers with a real intraday feed (e.g. lstc) populate this so the
+   * caller can downsample and store finer-grained history than the poll cadence;
+   * latest-only providers (e.g. yahoo's batch endpoint) omit it.
+   */
+  series?: { timeMs: number; close: string }[];
 }
 
 /** Latest price plus a daily-close series for one symbol. */

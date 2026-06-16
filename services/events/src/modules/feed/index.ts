@@ -1,4 +1,4 @@
-export { EventsService, type EventsServiceDeps } from './application/events-service.js';
+export { EventsService, type EventsServiceDeps, type RefreshGate } from './application/events-service.js';
 export type {
   EventsProvider,
   PlanResolver,

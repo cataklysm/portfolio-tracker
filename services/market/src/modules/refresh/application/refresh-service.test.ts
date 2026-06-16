@@ -21,22 +21,35 @@ interface BatchedCall {
   batchSize: number;
 }
 
-function buildService(plan: PlanListing[], settings: { provider: string; maxBatchSize: number | null }[]) {
+function buildService(
+  plan: PlanListing[],
+  settings: { provider: string; maxBatchSize: number | null }[],
+  cadence: { provider: string; capability: string; refreshIntervalMs: number; saveResolutionMs?: number | null; enabled?: boolean }[] = [],
+) {
   const batched: BatchedCall[] = [];
   const recorded: { provider: string; listingIds: string[] }[] = [];
   const analystChunks: string[][] = [];
 
   const service = new RefreshService({
     planResolver: { resolve: () => Promise.resolve(plan) },
-    providers: { fetchProviderSettings: () => Promise.resolve(settings.map((s) => ({
-      provider: s.provider,
-      enabled: true,
-      providerClass: 'symbol' as const,
-      dataQuality: 'medium' as const,
-      maxBatchSize: s.maxBatchSize,
-      rateLimitPerMin: null,
-      maxConcurrency: 4,
-    })) ) },
+    providers: {
+      fetchProviderSettings: () => Promise.resolve(settings.map((s) => ({
+        provider: s.provider,
+        enabled: true,
+        providerClass: 'symbol' as const,
+        dataQuality: 'medium' as const,
+        maxBatchSize: s.maxBatchSize,
+        rateLimitPerMin: null,
+        maxConcurrency: 4,
+      }))),
+      fetchCapabilityRefresh: () => Promise.resolve(cadence.map((c) => ({
+        provider: c.provider,
+        capability: c.capability,
+        refreshIntervalMs: c.refreshIntervalMs,
+        saveResolutionMs: c.saveResolutionMs ?? null,
+        enabled: c.enabled ?? true,
+      }))),
+    },
     refreshState: {
       recordRefresh: (listingIds, provider) => {
         recorded.push({ provider, listingIds });
@@ -57,7 +70,7 @@ function buildService(plan: PlanListing[], settings: { provider: string; maxBatc
       },
     },
     logger,
-    intervalMs: 60_000,
+    defaultIntervalMs: 60_000,
   });
 
   return { service, batched, recorded, analystChunks };
@@ -138,5 +151,36 @@ describe('RefreshService.runCycle', () => {
     await service.runCycle();
 
     assert.deepEqual(analystChunks.flat().sort(), ['l1', 'l2']);
+  });
+
+  test('skips a provider whose quotes cadence is disabled', async () => {
+    const plan = [entry('l1', 'yahoo', 'AAPL'), entry('l2', 'lstc', '41939')];
+    const { service, batched } = buildService(
+      plan,
+      [{ provider: 'yahoo', maxBatchSize: 50 }, { provider: 'lstc', maxBatchSize: null }],
+      [
+        { provider: 'yahoo', capability: 'quotes', refreshIntervalMs: 300_000 },
+        { provider: 'lstc', capability: 'quotes', refreshIntervalMs: 300_000, enabled: false },
+      ],
+    );
+
+    await service.runCycle();
+
+    assert.ok(batched.find((b) => b.provider === 'yahoo'));
+    assert.equal(batched.find((b) => b.provider === 'lstc'), undefined);
+  });
+
+  test('analyst respects its per-provider interval across heartbeats', async () => {
+    const plan = [entry('l1', 'yahoo', 'A')];
+    const { service, analystChunks } = buildService(
+      plan,
+      [{ provider: 'yahoo', maxBatchSize: 50 }],
+      [{ provider: 'yahoo', capability: 'analyst', refreshIntervalMs: 3_600_000 }],
+    );
+
+    await service.runCycle(); // first tick: due → runs
+    await service.runCycle(); // immediate second tick: still within interval → skipped
+
+    assert.equal(analystChunks.length, 1);
   });
 });

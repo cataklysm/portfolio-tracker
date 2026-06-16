@@ -93,6 +93,34 @@ export async function updateAdminProviderAction(input: {
   return null
 }
 
+export async function updateCapabilityRefreshAction(input: {
+  provider: string
+  capability: string
+  refreshIntervalMs?: number
+  saveResolutionMs?: number | null
+  enabled?: boolean
+}): Promise<string | null> {
+  try {
+    const resp = await apiFetch(
+      `/admin/providers/${encodeURIComponent(input.provider)}/capability-refresh/${encodeURIComponent(input.capability)}`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          refresh_interval_ms: input.refreshIntervalMs,
+          save_resolution_ms: input.saveResolutionMs,
+          enabled: input.enabled,
+        }),
+      },
+    )
+    if (!resp.ok) return problemDetail(resp, "Failed to update refresh cadence.")
+  } catch {
+    return "Cannot reach the gateway."
+  }
+  revalidatePath("/administration/providers")
+  return null
+}
+
 export async function providerUsageAction(provider: string): Promise<{ usage: ProviderUsageView[]; error: string | null }> {
   try {
     const resp = await apiFetch(`/instruments/provider-usage?provider=${encodeURIComponent(provider)}`, { cache: "no-store" })

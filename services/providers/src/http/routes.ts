@@ -4,6 +4,7 @@ import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import { AppError } from '@portfolio/platform';
 import type { ProviderRegistry } from '../providers/registry.js';
 import type { ProviderSettingsRepository } from '../providers/settings-repository.js';
+import type { CapabilityRefreshRepository } from '../providers/capability-refresh-repository.js';
 import type { Capability, QuoteDto } from '../providers/types.js';
 
 const UpdateProviderBody = Type.Object({
@@ -19,6 +20,7 @@ const UpdateProviderBody = Type.Object({
 export interface ProviderRouteDeps {
   registry: ProviderRegistry;
   settings: ProviderSettingsRepository;
+  capabilityRefresh: CapabilityRefreshRepository;
   authenticate: preHandlerHookHandler;
   requireScope: (scope: string) => preHandlerHookHandler;
 }
@@ -47,6 +49,14 @@ const AdminSearchQuery = Type.Object({
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 25 })),
 });
 
+// Cadence is admin-bounded to keep it sane: at most every second, and no slower
+// than ~30 days. `save_resolution_ms` is nullable (quotes-only; null clears it).
+const UpdateCapabilityRefreshBody = Type.Object({
+  refresh_interval_ms: Type.Optional(Type.Integer({ minimum: 1000, maximum: 2_592_000_000 })),
+  save_resolution_ms: Type.Optional(Type.Union([Type.Integer({ minimum: 1000, maximum: 2_592_000_000 }), Type.Null()])),
+  enabled: Type.Optional(Type.Boolean()),
+});
+
 const QuotesBody = Type.Object({
   symbols: Type.Array(Type.String({ minLength: 1, maxLength: 40 }), { minItems: 1, maxItems: 200 }),
   /** Optional explicit provider; defaults to the first enabled provider for the capability. */
@@ -61,7 +71,7 @@ const QuotesBody = Type.Object({
  */
 export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRouteDeps): void {
   const r = app.withTypeProvider<TypeBoxTypeProvider>();
-  const { registry, settings } = deps;
+  const { registry, settings, capabilityRefresh } = deps;
   const admin = [deps.authenticate, deps.requireScope('system:admin')];
 
   // What the platform can currently source, and from which provider.
@@ -72,8 +82,39 @@ export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRoute
   // Consumed by the market refresh scheduler.
   r.get('/internal/providers', async () => ({ providers: await settings.listAll() }));
 
+  // Per-(provider × capability) refresh cadence. Read live each heartbeat by the
+  // market/fundamentals/events refreshers so edits apply without a restart.
+  r.get('/internal/capability-refresh', async () => ({ settings: await capabilityRefresh.listAll() }));
+
   // Admin (gateway-exposed, system:admin): read + edit provider settings.
   r.get('/admin/providers', { preHandler: admin }, async () => ({ providers: await settings.listAll() }));
+
+  // Admin: read the refresh cadence (static route — declared before the
+  // `/:provider` param routes so it isn't captured as a provider name).
+  r.get('/admin/providers/capability-refresh', { preHandler: admin }, async () => ({
+    settings: await capabilityRefresh.listAll(),
+  }));
+
+  // Admin: upsert one (provider, capability) cadence row.
+  r.put(
+    '/admin/providers/:provider/capability-refresh/:capability',
+    { preHandler: admin, schema: { body: UpdateCapabilityRefreshBody } },
+    async (request) => {
+      const { provider, capability } = request.params as { provider: string; capability: string };
+      const updated = await capabilityRefresh.upsert(provider, capability, {
+        refreshIntervalMs: request.body.refresh_interval_ms,
+        saveResolutionMs: request.body.save_resolution_ms,
+        enabled: request.body.enabled,
+      });
+      if (!updated) {
+        throw AppError.badRequest(
+          'refresh_interval_required',
+          'refresh_interval_ms is required when first configuring a provider capability',
+        );
+      }
+      return updated;
+    },
+  );
 
   // Admin: search a specific provider's symbols (for the symbols-admin per-provider
   // identifier lookup). Gateway-exposed under `/admin/providers`, system:admin.

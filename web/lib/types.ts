@@ -604,6 +604,14 @@ export interface ProviderSelectionView {
   provider: string
 }
 
+export interface CapabilityRefreshView {
+  provider: string
+  capability: string
+  refreshIntervalMs: number
+  saveResolutionMs: number | null
+  enabled: boolean
+}
+
 export interface ProviderSettingsView {
   provider: string
   enabled: boolean

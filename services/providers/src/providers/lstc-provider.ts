@@ -47,9 +47,11 @@ export class LstcProvider implements MarketDataProvider {
   }
 
   /**
-   * Latest tick per symbol. Uses the intraday series (freshest), falling back to
-   * the daily history's last point when intraday is empty (outside trading
-   * hours). One request per symbol — L&S has no batch endpoint.
+   * Latest tick per symbol, with the full intraday series attached so the caller
+   * can downsample and store finer-grained history than the poll cadence. Uses
+   * the intraday series (freshest), falling back to the daily history's last
+   * point when intraday is empty (outside trading hours). One request per
+   * symbol — L&S has no batch endpoint.
    */
   async fetchQuotes(symbols: string[]): Promise<Map<string, QuoteDto>> {
     const out = new Map<string, QuoteDto>();
@@ -57,7 +59,11 @@ export class LstcProvider implements MarketDataProvider {
       const instrumentId = parseId(symbol);
       if (instrumentId === null) continue;
       let series = await this.client.getIntraday(instrumentId);
-      if (!series || series.points.length === 0) series = await this.client.getHistory(instrumentId);
+      let intraday = true;
+      if (!series || series.points.length === 0) {
+        series = await this.client.getHistory(instrumentId);
+        intraday = false;
+      }
       const last = series?.points.at(-1);
       if (!last) continue;
       out.set(symbol, {
@@ -66,6 +72,9 @@ export class LstcProvider implements MarketDataProvider {
         previousClose: series!.previousClose === null ? null : String(series!.previousClose),
         currency: LSTC_CURRENCY,
         timestampMs: last.timeMs,
+        // Only the intraday feed is fine-grained enough to downsample; the daily
+        // history fallback is a single recent close, so don't pass it as a series.
+        series: intraday ? series!.points.map((p) => ({ timeMs: p.timeMs, close: String(p.price) })) : undefined,
       });
     }
     return out;

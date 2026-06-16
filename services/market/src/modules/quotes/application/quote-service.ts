@@ -1,4 +1,5 @@
 import { deriveFreshness, type FreshnessStatus } from '../domain/freshness.js';
+import { selectPointsToStore } from '../domain/downsample.js';
 import type {
   DailyClose,
   PlanListing,
@@ -7,6 +8,14 @@ import type {
   QuoteRepository,
   RefreshPlanResolver,
 } from './ports.js';
+
+/** Per-provider cadence for the scheduled quote sweep, from capability-refresh config. */
+export interface QuoteRefreshOptions {
+  /** Skip a listing whose newest stored quote is younger than this. */
+  refreshIntervalMs?: number;
+  /** Downsample the intraday series to one stored point per this span (quotes only). */
+  saveResolutionMs?: number | null;
+}
 
 export interface QuoteView {
   listing_id: string;
@@ -83,23 +92,54 @@ export class QuoteService {
   }
 
   /**
-   * Refreshes the latest tick (no series) for a group of listings that all use
-   * the same provider, in batched provider requests of at most `batchSize`
-   * (a single-symbol provider passes batchSize 1, so each symbol is its own
-   * request). Used by the scheduler. Returns the count actually stored.
+   * Refreshes the latest tick for a group of listings that all use the same
+   * provider, in batched provider requests of at most `batchSize` (a single-symbol
+   * provider passes batchSize 1, so each symbol is its own request). Used by the
+   * scheduler. With `opts.refreshIntervalMs`, listings whose newest stored quote is
+   * still younger than the interval are skipped (a per-listing freshness gate that
+   * absorbs poll jitter). With `opts.saveResolutionMs`, a provider's intraday series
+   * is downsampled to one stored point per that span, continuing from the last
+   * saved point. Returns the count actually fetched + stored.
    */
-  async refreshLatestBatched(provider: string, entries: PlanListing[], batchSize: number): Promise<number> {
+  async refreshLatestBatched(
+    provider: string,
+    entries: PlanListing[],
+    batchSize: number,
+    opts: QuoteRefreshOptions = {},
+  ): Promise<number> {
     const fetchable = entries.filter((e) => e.providerSymbol);
     if (fetchable.length === 0) return 0;
+
+    // The newest stored time per listing serves two purposes: the freshness gate
+    // (is it due?) and the downsample baseline (spacing continues from it).
+    const needPairs = (opts.refreshIntervalMs ?? 0) > 0 || (opts.saveResolutionMs ?? 0) > 0;
+    const lastSavedByListing = new Map<string, number | null>();
+    let due = fetchable;
+    if (needPairs) {
+      const pairs = await this.deps.repo.getLatestPairs(fetchable.map((e) => e.listingId));
+      const now = Date.now();
+      const interval = opts.refreshIntervalMs ?? 0;
+      due = [];
+      for (const entry of fetchable) {
+        const at = pairs.get(entry.listingId)?.latestAt ?? null;
+        lastSavedByListing.set(entry.listingId, at ? at.getTime() : null);
+        if (interval <= 0 || at === null || now - at.getTime() >= interval) due.push(entry);
+      }
+    }
+    if (due.length === 0) return 0;
+
     const size = batchSize > 0 ? batchSize : 1;
     let stored = 0;
-    for (const chunk of chunked(fetchable, size)) {
+    for (const chunk of chunked(due, size)) {
       const symbols = [...new Set(chunk.map((e) => e.providerSymbol as string))];
       const quotes = await this.deps.provider.fetchQuotes(provider, symbols);
       for (const entry of chunk) {
         const quote = quotes.get(entry.providerSymbol as string);
         if (!quote) continue;
-        await this.store(entry.listingId, entry.currency, provider, quote);
+        await this.store(entry.listingId, entry.currency, provider, quote, {
+          saveResolutionMs: opts.saveResolutionMs ?? null,
+          lastSavedMs: lastSavedByListing.get(entry.listingId) ?? null,
+        });
         stored += 1;
       }
     }
@@ -119,18 +159,33 @@ export class QuoteService {
     return { purged, rebuilt };
   }
 
+  /**
+   * Persists a fetched quote. `sampling` is set only on the scheduled sweep: when
+   * the provider returned an intraday series it is downsampled to the configured
+   * resolution (continuing from the last saved point) and the separate latest-tick
+   * write is skipped — the series already carries the freshest point, and writing
+   * the raw latest on top would reintroduce a sub-resolution tick. On-demand
+   * refresh / backfill (no `sampling`) keeps the old behavior: store every series
+   * point plus the latest tick.
+   */
   private async store(
     listingId: string,
     listingCurrency: string,
     provider: string,
     quote: ProviderQuote,
+    sampling?: { saveResolutionMs: number | null; lastSavedMs: number | null },
   ): Promise<void> {
     const currency = quote.currency ?? listingCurrency;
     const providerTimestamp = quote.timestampMs ? new Date(quote.timestampMs) : null;
     const now = new Date();
+    const hasSeries = quote.series.length > 0;
 
     // Store the historical series points (idempotent on listing_id+time+provider).
-    for (const point of quote.series) {
+    const points =
+      sampling && hasSeries
+        ? selectPointsToStore(quote.series, sampling.lastSavedMs, sampling.saveResolutionMs)
+        : quote.series;
+    for (const point of points) {
       await this.deps.repo.upsertQuote({
         listingId,
         time: new Date(point.timeMs),
@@ -140,15 +195,18 @@ export class QuoteService {
         providerTimestamp,
       });
     }
-    // Store the latest tick at the provider timestamp (or now).
-    await this.deps.repo.upsertQuote({
-      listingId,
-      time: providerTimestamp ?? now,
-      provider,
-      price: quote.price,
-      currency,
-      providerTimestamp,
-    });
+    // Store the latest tick at the provider timestamp (or now) — except on the
+    // scheduled sweep when a downsampled series already provided the tail point.
+    if (!(sampling && hasSeries)) {
+      await this.deps.repo.upsertQuote({
+        listingId,
+        time: providerTimestamp ?? now,
+        provider,
+        price: quote.price,
+        currency,
+        providerTimestamp,
+      });
+    }
   }
 }
 

@@ -16,8 +16,9 @@ export interface FundamentalsConfig {
   auth: { jwksUri: string; issuer: string; audience: string };
   refresh: {
     enabled: boolean;
-    intervalMs: number;
-    /** Skip an instrument whose newest snapshot is younger than this. */
+    /** Heartbeat: how often the sweep wakes to evaluate per-provider due-ness. */
+    tickMs: number;
+    /** Fallback freshness threshold for a provider with no configured cadence. */
     minAgeMs: number;
   };
 }
@@ -39,7 +40,7 @@ export function loadConfig(): FundamentalsConfig {
     },
     refresh: {
       enabled: boolEnv('FUNDAMENTALS_REFRESH_ENABLED', true),
-      intervalMs: intEnv('FUNDAMENTALS_REFRESH_INTERVAL_MS', 60 * 60 * 1000),
+      tickMs: intEnv('FUNDAMENTALS_REFRESH_TICK_MS', 5 * 60 * 1000),
       minAgeMs: intEnv('FUNDAMENTALS_MIN_AGE_MS', 20 * 60 * 60 * 1000),
     },
   };

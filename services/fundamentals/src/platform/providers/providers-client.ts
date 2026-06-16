@@ -37,12 +37,48 @@ export interface ProvidersFundamentalsDto {
   revenueGrowth: number | null;
 }
 
+/** One (provider × capability) refresh-cadence row, as served by /internal/capability-refresh. */
+export interface ProvidersCapabilityRefreshDto {
+  provider: string;
+  capability: string;
+  refreshIntervalMs: number;
+  saveResolutionMs: number | null;
+  enabled: boolean;
+}
+
 export class ProvidersClient {
   constructor(
     private readonly baseUrl: string,
     private readonly logger: Logger,
     private readonly timeoutMs = 8000,
   ) {}
+
+  /** Per-(provider × capability) refresh cadence — the per-provider freshness threshold. */
+  async fetchCapabilityRefresh(): Promise<ProvidersCapabilityRefreshDto[]> {
+    const url = new URL('/internal/capability-refresh', this.baseUrl);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      const response = await fetch(url, {
+        headers: { accept: 'application/json', 'x-api-version': String(CURRENT_API_VERSION) },
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        this.logger.warn(
+          { status: response.status, error_code: 'providers_request_failed' },
+          'Providers capability-refresh request failed',
+        );
+        return [];
+      }
+      const body = (await response.json()) as { settings: ProvidersCapabilityRefreshDto[] };
+      return body.settings ?? [];
+    } catch (err) {
+      this.logger.warn({ err, error_code: 'providers_unavailable' }, 'Providers service unavailable');
+      return [];
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 
   async fetchFundamentals(symbol: string, provider?: string): Promise<ProvidersFundamentalsDto | null> {
     const url = new URL('/internal/fundamentals', this.baseUrl);

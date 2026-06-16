@@ -32,7 +32,9 @@ export class ProvidersQuoteProvider implements QuoteProvider {
         previousClose: q.previousClose,
         currency: q.currency,
         timestampMs: q.timestampMs,
-        series: [], // batch quote carries no historical series
+        // Providers with an intraday feed (lstc) attach it; latest-only providers
+        // (yahoo's batch endpoint) omit it, so the series is empty for them.
+        series: q.series ?? [],
       });
     }
     return out;

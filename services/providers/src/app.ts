@@ -5,6 +5,7 @@ import type { ProvidersConfig } from './config/config.js';
 import type { ProvidersDatabase } from './platform/database/schema.js';
 import { buildRegistry } from './providers/registry.js';
 import { ProviderSettingsRepository } from './providers/settings-repository.js';
+import { CapabilityRefreshRepository } from './providers/capability-refresh-repository.js';
 import { registerProviderRoutes } from './http/routes.js';
 
 export interface BuiltService {
@@ -29,6 +30,7 @@ export async function buildApp(config: ProvidersConfig): Promise<BuiltService> {
 
   const { db, pool } = createDatabase<ProvidersDatabase>({ connectionString: config.databaseUrl, logger });
   const settingsRepo = new ProviderSettingsRepository(db);
+  const capabilityRefreshRepo = new CapabilityRefreshRepository(db);
   const verifier = new UserTokenVerifier(config.auth);
 
   const registry = await buildRegistry(config, settingsRepo, logger);
@@ -46,6 +48,7 @@ export async function buildApp(config: ProvidersConfig): Promise<BuiltService> {
   registerProviderRoutes(app, {
     registry,
     settings: settingsRepo,
+    capabilityRefresh: capabilityRefreshRepo,
     authenticate: verifier.authenticate,
     requireScope: (scope) => verifier.requireScope(scope),
   });

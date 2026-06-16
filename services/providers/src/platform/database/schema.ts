@@ -26,6 +26,17 @@ export interface ProviderSettingsTable {
   updated_at: Timestamp;
 }
 
+/** Per-(provider × capability) refresh cadence; see migration 022. */
+export interface ProviderCapabilityRefreshTable {
+  provider: string;
+  capability: string;
+  refresh_interval_ms: number;
+  save_resolution_ms: number | null;
+  enabled: ColumnType<boolean, boolean | undefined, boolean>;
+  updated_at: Timestamp;
+}
+
 export interface ProvidersDatabase {
   'providers.provider_settings': ProviderSettingsTable;
+  'providers.provider_capability_refresh': ProviderCapabilityRefreshTable;
 }

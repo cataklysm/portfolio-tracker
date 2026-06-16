@@ -7,6 +7,14 @@ import type {
   PlanResolver,
 } from './ports.js';
 
+/** Admin-configured per-provider refresh cadence for the `fundamentals` capability. */
+export interface RefreshGate {
+  /** provider → freshness threshold (ms); absent providers fall back to `minAgeMs`. */
+  intervalByProvider: Map<string, number>;
+  /** providers whose fundamentals cadence is disabled — skipped entirely. */
+  disabledProviders: Set<string>;
+}
+
 export interface FundamentalsServiceDeps {
   repo: FundamentalsRepository;
   provider: FundamentalsProvider;
@@ -40,16 +48,23 @@ export class FundamentalsService {
    * skip the still-fresh ones, fetch + store the rest, emit an event each.
    * Returns the count of instruments stored. Provider/instruments failures are
    * swallowed (logged); stored data stays usable.
+   *
+   * `gate` carries the admin-configured per-provider cadence: `intervalByProvider`
+   * overrides the freshness threshold (a provider absent falls back to `minAgeMs`),
+   * and `disabledProviders` are skipped entirely. `force` ignores freshness (but
+   * still honors disabled providers).
    */
-  async refreshListings(listingIds: string[], force = false): Promise<number> {
+  async refreshListings(listingIds: string[], force = false, gate?: RefreshGate): Promise<number> {
     if (listingIds.length === 0) return 0;
     const plan = await this.deps.planResolver.resolve('fundamentals', listingIds);
 
     // Dedupe to one (provider, providerSymbol, currency) per instrument; skip
-    // listings with no selected fundamentals provider or no mapped symbol.
+    // listings with no selected fundamentals provider, no mapped symbol, or a
+    // provider whose fundamentals cadence is disabled.
     const byInstrument = new Map<string, { provider: string; providerSymbol: string; currency: string }>();
     for (const entry of plan) {
       if (!entry.provider || !entry.providerSymbol) continue;
+      if (gate?.disabledProviders.has(entry.provider)) continue;
       if (!byInstrument.has(entry.instrumentId)) {
         byInstrument.set(entry.instrumentId, {
           provider: entry.provider,
@@ -62,8 +77,22 @@ export class FundamentalsService {
 
     let instrumentIds = [...byInstrument.keys()];
     if (!force) {
-      const before = new Date(Date.now() - this.deps.minAgeMs);
-      instrumentIds = await this.deps.repo.selectStaleInstruments(instrumentIds, before);
+      // Apply the freshness gate per provider, since each provider has its own
+      // configured cadence. Group this provider's instruments and select the ones
+      // whose newest snapshot is older than that provider's threshold.
+      const byProvider = new Map<string, string[]>();
+      for (const id of instrumentIds) {
+        const provider = byInstrument.get(id)!.provider;
+        (byProvider.get(provider) ?? byProvider.set(provider, []).get(provider)!).push(id);
+      }
+      const now = Date.now();
+      const stale: string[] = [];
+      for (const [provider, ids] of byProvider) {
+        const interval = gate?.intervalByProvider.get(provider) ?? this.deps.minAgeMs;
+        const fresh = await this.deps.repo.selectStaleInstruments(ids, new Date(now - interval));
+        stale.push(...fresh);
+      }
+      instrumentIds = stale;
     }
 
     let stored = 0;

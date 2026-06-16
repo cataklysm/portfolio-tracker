@@ -11,13 +11,24 @@ import { CURRENT_API_VERSION, type Logger } from '@portfolio/platform';
  * provider outage never throws into the refresh cycle.
  */
 
-/** Latest tick for one symbol (no series). */
+/** Latest tick for one symbol, optionally with the provider's intraday series. */
 export interface ProvidersQuoteDto {
   symbol: string;
   price: string;
   previousClose: string | null;
   currency: string | null;
   timestampMs: number | null;
+  /** Intraday points (oldest first) for providers with a real intraday feed. */
+  series?: { timeMs: number; close: string }[];
+}
+
+/** One (provider × capability) refresh-cadence row, as served by /internal/capability-refresh. */
+export interface ProvidersCapabilityRefreshDto {
+  provider: string;
+  capability: string;
+  refreshIntervalMs: number;
+  saveResolutionMs: number | null;
+  enabled: boolean;
 }
 
 /** Latest price plus a daily-close series. */
@@ -96,6 +107,12 @@ export class ProvidersClient {
   async fetchProviderSettings(): Promise<ProvidersProviderSettingsDto[]> {
     const body = await this.request<{ providers: ProvidersProviderSettingsDto[] }>('/internal/providers');
     return body?.providers ?? [];
+  }
+
+  /** Per-(provider × capability) refresh cadence — drives due-ness and quote save resolution. */
+  async fetchCapabilityRefresh(): Promise<ProvidersCapabilityRefreshDto[]> {
+    const body = await this.request<{ settings: ProvidersCapabilityRefreshDto[] }>('/internal/capability-refresh');
+    return body?.settings ?? [];
   }
 
   async search(query: string, limit: number): Promise<ProvidersSearchResultDto[]> {

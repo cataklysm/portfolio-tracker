@@ -13,7 +13,10 @@ export interface MarketConfig {
   auth: { jwksUri: string; issuer: string; audience: string };
   refresh: {
     enabled: boolean;
-    intervalMs: number;
+    /** Heartbeat: how often the sweep wakes to evaluate per-provider due-ness. */
+    tickMs: number;
+    /** Fallback refresh interval for a provider/capability with no configured cadence. */
+    defaultIntervalMs: number;
     heldQuoteMaxAgeMs: number;
   };
 }
@@ -35,7 +38,10 @@ export function loadConfig(): MarketConfig {
     },
     refresh: {
       enabled: boolEnv('MARKET_REFRESH_ENABLED', true),
-      intervalMs: intEnv('MARKET_REFRESH_INTERVAL_MS', 15 * 60 * 1000),
+      tickMs: intEnv('MARKET_REFRESH_TICK_MS', 60 * 1000),
+      // Renamed role: now the fallback cadence when a provider has no configured
+      // per-capability interval. Kept the env name for backward compatibility.
+      defaultIntervalMs: intEnv('MARKET_REFRESH_INTERVAL_MS', 15 * 60 * 1000),
       heldQuoteMaxAgeMs: intEnv('MARKET_HELD_QUOTE_MAX_AGE_MS', 15 * 60 * 1000),
     },
   };

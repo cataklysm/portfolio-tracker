@@ -2,6 +2,7 @@ export {
   FundamentalsService,
   type FundamentalsServiceDeps,
   type FundamentalsView,
+  type RefreshGate,
 } from './application/fundamentals-service.js';
 export type {
   FundamentalsProvider,

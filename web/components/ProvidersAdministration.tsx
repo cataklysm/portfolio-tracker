@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation"
 import {
   providerUsageAction,
   updateAdminProviderAction,
+  updateCapabilityRefreshAction,
 } from "@/app/administration/providers/actions"
-import type { DataQuality, ProviderSettingsView } from "@/lib/types"
+import type { CapabilityRefreshView, DataQuality, ProviderSettingsView } from "@/lib/types"
 
 const fieldClass = "w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-raised)] px-3 py-2 text-xs text-[var(--app-text)] outline-none transition focus:border-[var(--app-accent)] focus:ring-2 focus:ring-[var(--app-accent-soft)]"
 const labelClass = "mb-1 block text-[10px] font-medium uppercase tracking-wider text-[var(--app-text-faint)]"
@@ -19,8 +20,23 @@ const providerTabs = [
 
 type ProviderTab = (typeof providerTabs)[number]["key"]
 
-export function ProvidersAdministration({ providers }: { providers: ProviderSettingsView[] }) {
+export function ProvidersAdministration({
+  providers,
+  capabilityRefresh,
+}: {
+  providers: ProviderSettingsView[]
+  capabilityRefresh: CapabilityRefreshView[]
+}) {
   const router = useRouter()
+  const cadenceByProvider = useMemo(() => {
+    const map = new Map<string, CapabilityRefreshView[]>()
+    for (const row of capabilityRefresh) {
+      const list = map.get(row.provider) ?? []
+      list.push(row)
+      map.set(row.provider, list)
+    }
+    return map
+  }, [capabilityRefresh])
   const [query, setQuery] = useState("")
   const [activeTab, setActiveTab] = useState<ProviderTab>("reference")
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() => Object.fromEntries(providers.map((provider) => [provider.provider, true])))
@@ -125,6 +141,7 @@ export function ProvidersAdministration({ providers }: { providers: ProviderSett
             <ProviderSettingsCard
               key={provider.provider}
               provider={provider}
+              cadence={cadenceByProvider.get(provider.provider) ?? []}
               expanded={expanded[provider.provider] ?? true}
               pending={pending}
               onToggle={(nextExpanded) => setProviderExpanded(provider.provider, nextExpanded)}
@@ -146,12 +163,14 @@ function providerTabFor(provider: ProviderSettingsView): ProviderTab {
 
 function ProviderSettingsCard({
   provider,
+  cadence,
   expanded,
   pending,
   onToggle,
   onRun,
 }: {
   provider: ProviderSettingsView
+  cadence: CapabilityRefreshView[]
   expanded: boolean
   pending: boolean
   onToggle: (expanded: boolean) => void
@@ -243,6 +262,7 @@ function ProviderSettingsCard({
       </div>
 
       {isExpanded ? (
+        <>
         <form action={(formData) => onRun(() => submit(formData), `${provider.provider} settings saved.`)} className="border-t border-[var(--app-border)] p-4">
           <fieldset disabled={!enabled} className="contents">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -262,9 +282,156 @@ function ProviderSettingsCard({
             </div>
           </fieldset>
         </form>
+        <CadenceSection provider={provider.provider} cadence={cadence} pending={pending} onRun={onRun} />
+        </>
       ) : null}
     </article>
   )
+}
+
+/** Human labels for the schedulable capabilities (feed-group representatives). */
+const CAPABILITY_LABELS: Record<string, string> = {
+  quotes: "Quotes & chart",
+  earnings: "Events (earnings, actions, news)",
+  fundamentals: "Fundamentals",
+  analyst: "Analyst",
+  fx: "FX rates",
+}
+
+/**
+ * Per-capability refresh cadence for one provider: how often each feed is polled
+ * (a freshness threshold — a listing is only re-fetched once its data is older
+ * than this), plus the quotes save resolution (intraday points are downsampled to
+ * at most one per this span). Each row saves independently.
+ */
+function CadenceSection({
+  provider,
+  cadence,
+  pending,
+  onRun,
+}: {
+  provider: string
+  cadence: CapabilityRefreshView[]
+  pending: boolean
+  onRun: (action: () => Promise<string | null>, success: string) => void
+}) {
+  if (cadence.length === 0) return null
+  const rows = [...cadence].sort((a, b) => a.capability.localeCompare(b.capability))
+  return (
+    <div className="border-t border-[var(--app-border)] p-4">
+      <h3 className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--app-text-faint)]">Refresh cadence</h3>
+      <p className="mb-3 text-[10px] text-[var(--app-text-faint)]">
+        How often each feed is refreshed. Quotes also has a save resolution — the intraday series is downsampled to one stored point per that span. Chart is excluded (manual / backfill only).
+      </p>
+      <div className="space-y-2">
+        {rows.map((row) => (
+          <CadenceRow key={row.capability} provider={provider} row={row} pending={pending} onRun={onRun} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function CadenceRow({
+  provider,
+  row,
+  pending,
+  onRun,
+}: {
+  provider: string
+  row: CapabilityRefreshView
+  pending: boolean
+  onRun: (action: () => Promise<string | null>, success: string) => void
+}) {
+  const initialInterval = splitDuration(row.refreshIntervalMs)
+  const initialResolution = row.saveResolutionMs === null ? null : splitDuration(row.saveResolutionMs)
+  const [intervalValue, setIntervalValue] = useState(initialInterval.value)
+  const [intervalUnit, setIntervalUnit] = useState(initialInterval.unit)
+  const [resolutionValue, setResolutionValue] = useState(initialResolution?.value ?? 1)
+  const [resolutionUnit, setResolutionUnit] = useState(initialResolution?.unit ?? "min")
+  const [enabled, setEnabled] = useState(row.enabled)
+  const isQuotes = row.capability === "quotes"
+
+  function save() {
+    const refreshIntervalMs = toMs(intervalValue, intervalUnit)
+    const saveResolutionMs = isQuotes ? toMs(resolutionValue, resolutionUnit) : undefined
+    onRun(
+      () => updateCapabilityRefreshAction({ provider, capability: row.capability, refreshIntervalMs, saveResolutionMs, enabled }),
+      `${provider} ${row.capability} cadence saved.`,
+    )
+  }
+
+  return (
+    <div className="flex flex-wrap items-end gap-3 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2">
+      <div className="min-w-[150px] flex-1">
+        <span className="text-xs font-semibold text-[var(--app-text)]">{CAPABILITY_LABELS[row.capability] ?? row.capability}</span>
+        <span className="ml-2 text-[10px] text-[var(--app-text-faint)]">{enabled ? "active" : "disabled"}</span>
+      </div>
+      <DurationField label="Every" value={intervalValue} unit={intervalUnit} onValue={setIntervalValue} onUnit={setIntervalUnit} />
+      {isQuotes ? (
+        <DurationField label="Save every" value={resolutionValue} unit={resolutionUnit} onValue={setResolutionValue} onUnit={setResolutionUnit} />
+      ) : null}
+      <label className="flex items-center gap-1.5 text-[10px] text-[var(--app-text-muted)]">
+        <input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} className="accent-[var(--app-accent)]" />
+        Enabled
+      </label>
+      <button type="button" disabled={pending} onClick={save} className="rounded-lg border border-[var(--app-border)] px-3 py-2 text-xs font-semibold text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text)] disabled:opacity-50">Save</button>
+    </div>
+  )
+}
+
+const DURATION_UNITS = [
+  { key: "sec", ms: 1000, label: "sec" },
+  { key: "min", ms: 60_000, label: "min" },
+  { key: "hour", ms: 3_600_000, label: "hour" },
+  { key: "day", ms: 86_400_000, label: "day" },
+] as const
+
+type DurationUnit = (typeof DURATION_UNITS)[number]["key"]
+
+function DurationField({
+  label,
+  value,
+  unit,
+  onValue,
+  onUnit,
+}: {
+  label: string
+  value: number
+  unit: DurationUnit
+  onValue: (value: number) => void
+  onUnit: (unit: DurationUnit) => void
+}) {
+  return (
+    <div>
+      <label className={labelClass}>{label}</label>
+      <div className="flex gap-1">
+        <input
+          type="number"
+          min={1}
+          value={value}
+          onChange={(event) => onValue(Math.max(1, Number.parseInt(event.target.value, 10) || 1))}
+          className={`${fieldClass} w-20`}
+        />
+        <select value={unit} onChange={(event) => onUnit(event.target.value as DurationUnit)} className={`${fieldClass} w-20`}>
+          {DURATION_UNITS.map((u) => <option key={u.key} value={u.key}>{u.label}</option>)}
+        </select>
+      </div>
+    </div>
+  )
+}
+
+/** Largest whole unit that divides `ms` evenly (so 3600000 → 1 hour, 90000 → 90 sec). */
+function splitDuration(ms: number): { value: number; unit: DurationUnit } {
+  for (const u of [...DURATION_UNITS].reverse()) {
+    if (ms >= u.ms && ms % u.ms === 0) return { value: ms / u.ms, unit: u.key }
+  }
+  return { value: Math.max(1, Math.round(ms / 1000)), unit: "sec" }
+}
+
+function toMs(value: number, unit: DurationUnit): number {
+  const found = DURATION_UNITS.find((u) => u.key === unit) ?? DURATION_UNITS[0]
+  return Math.max(1, value) * found.ms
 }
 
 function ChevronIcon({ expanded }: { expanded: boolean }) {

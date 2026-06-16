@@ -17,8 +17,9 @@ export interface EventsConfig {
   auth: { jwksUri: string; issuer: string; audience: string };
   refresh: {
     enabled: boolean;
-    intervalMs: number;
-    /** Skip an instrument refreshed more recently than this. */
+    /** Heartbeat: how often the sweep wakes to evaluate per-provider due-ness. */
+    tickMs: number;
+    /** Fallback freshness threshold for a provider with no configured cadence. */
     minAgeMs: number;
   };
 }
@@ -40,7 +41,7 @@ export function loadConfig(): EventsConfig {
     },
     refresh: {
       enabled: boolEnv('EVENTS_REFRESH_ENABLED', true),
-      intervalMs: intEnv('EVENTS_REFRESH_INTERVAL_MS', 60 * 60 * 1000),
+      tickMs: intEnv('EVENTS_REFRESH_TICK_MS', 5 * 60 * 1000),
       minAgeMs: intEnv('EVENTS_MIN_AGE_MS', 6 * 60 * 60 * 1000),
     },
   };

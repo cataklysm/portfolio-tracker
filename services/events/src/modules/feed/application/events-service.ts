@@ -14,6 +14,14 @@ import type {
   UpcomingEarnings,
 } from './ports.js';
 
+/** Admin-configured per-provider refresh cadence for the `earnings` events feed. */
+export interface RefreshGate {
+  /** provider → freshness threshold (ms); absent providers fall back to `minAgeMs`. */
+  intervalByProvider: Map<string, number>;
+  /** providers whose events cadence is disabled — skipped entirely. */
+  disabledProviders: Set<string>;
+}
+
 export interface EventsServiceDeps {
   earnings: EarningsRepository;
   corporateActions: CorporateActionsRepository;
@@ -64,13 +72,14 @@ export class EventsService {
    * processed. Provider/instruments failures are swallowed (logged); stored data
    * stays usable.
    */
-  async refreshListings(listingIds: string[], force = false): Promise<number> {
+  async refreshListings(listingIds: string[], force = false, gate?: RefreshGate): Promise<number> {
     if (listingIds.length === 0) return 0;
     const plan = await this.deps.planResolver.resolve('earnings', listingIds);
 
     const byInstrument = new Map<string, { provider: string; providerSymbol: string; currency: string }>();
     for (const entry of plan) {
       if (!entry.provider || !entry.providerSymbol) continue;
+      if (gate?.disabledProviders.has(entry.provider)) continue;
       if (!byInstrument.has(entry.instrumentId)) {
         byInstrument.set(entry.instrumentId, {
           provider: entry.provider,
@@ -83,8 +92,19 @@ export class EventsService {
 
     let instrumentIds = [...byInstrument.keys()];
     if (!force) {
-      const before = new Date(Date.now() - this.deps.minAgeMs);
-      instrumentIds = await this.deps.refreshState.selectStaleInstruments(instrumentIds, before);
+      // Apply the freshness gate per provider (each has its own configured cadence).
+      const byProvider = new Map<string, string[]>();
+      for (const id of instrumentIds) {
+        const provider = byInstrument.get(id)!.provider;
+        (byProvider.get(provider) ?? byProvider.set(provider, []).get(provider)!).push(id);
+      }
+      const now = Date.now();
+      const stale: string[] = [];
+      for (const [provider, ids] of byProvider) {
+        const interval = gate?.intervalByProvider.get(provider) ?? this.deps.minAgeMs;
+        stale.push(...(await this.deps.refreshState.selectStaleInstruments(ids, new Date(now - interval))));
+      }
+      instrumentIds = stale;
     }
 
     const processed: string[] = [];

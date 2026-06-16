@@ -45,24 +45,25 @@ export class ProvidersClient {
     private readonly timeoutMs = 8000,
   ) {}
 
-  async fetchEarnings(symbol: string): Promise<ProvidersEarningsDto | null> {
-    const body = await this.get<{ earnings: ProvidersEarningsDto | null }>('/internal/earnings', symbol);
+  async fetchEarnings(symbol: string, provider?: string): Promise<ProvidersEarningsDto | null> {
+    const body = await this.get<{ earnings: ProvidersEarningsDto | null }>('/internal/earnings', symbol, provider);
     return body?.earnings ?? null;
   }
 
-  async fetchCorporateActions(symbol: string): Promise<ProvidersCorporateActionDto[]> {
-    const body = await this.get<{ actions: ProvidersCorporateActionDto[] }>('/internal/corporate-actions', symbol);
+  async fetchCorporateActions(symbol: string, provider?: string): Promise<ProvidersCorporateActionDto[]> {
+    const body = await this.get<{ actions: ProvidersCorporateActionDto[] }>('/internal/corporate-actions', symbol, provider);
     return body?.actions ?? [];
   }
 
-  async fetchNews(symbol: string): Promise<ProvidersNewsItemDto[]> {
-    const body = await this.get<{ news: ProvidersNewsItemDto[] }>('/internal/news', symbol);
+  async fetchNews(symbol: string, provider?: string): Promise<ProvidersNewsItemDto[]> {
+    const body = await this.get<{ news: ProvidersNewsItemDto[] }>('/internal/news', symbol, provider);
     return body?.news ?? [];
   }
 
-  private async get<T>(path: string, symbol: string): Promise<T | null> {
+  private async get<T>(path: string, symbol: string, provider?: string): Promise<T | null> {
     const url = new URL(path, this.baseUrl);
     url.searchParams.set('symbol', symbol);
+    if (provider) url.searchParams.set('provider', provider);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {

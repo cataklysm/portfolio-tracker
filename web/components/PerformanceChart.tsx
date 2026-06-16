@@ -1,25 +1,35 @@
+"use client"
+
 import Link from "next/link"
-import { fmtCurrency, fmtPct, num } from "@/lib/format"
-import { getTranslations } from "@/lib/i18n"
-import type { PerformancePeriod, PerformanceReport } from "@/lib/types"
+import { useEffect, useState } from "react"
+import { fmtPct, num } from "@/lib/format"
+import { useTranslations } from "@/lib/i18n"
+import type { BenchmarkReport, PerformancePeriod, PerformanceReport } from "@/lib/types"
+import { useDashboardPrivacy } from "./DashboardPrivacy"
 
 interface Props {
   report: PerformanceReport | null
+  benchmark?: BenchmarkReport | null
   period: PerformancePeriod
   portfolioId?: string
-  portfolioName: string
   latestQuote?: string
   currency: string
   locale: string
 }
 
+type ChartMode = "portfolio" | "benchmark"
+
 const PERIODS: PerformancePeriod[] = ["1W", "1M", "YTD", "1Y", "ALL"]
+const CHART_MODE_STORAGE_KEY = "performance-chart-mode"
 const W = 760
 const H = 200
 
-export function PerformanceChart({ report, period, portfolioId, portfolioName, latestQuote, currency, locale }: Props) {
-  const t = getTranslations()
+export function PerformanceChart({ report, benchmark, period, portfolioId, latestQuote, currency, locale }: Props) {
+  const [chartMode, setChartMode] = useState<ChartMode>("portfolio")
+  const { hidden, currency: privateCurrency } = useDashboardPrivacy()
+  const t = useTranslations()
   const points = report?.points ?? []
+  const hasBenchmark = !!benchmark && benchmark.series.length >= 2
 
   const last = points[points.length - 1]
   const totalPnl = last ? (num(last.total_pnl) ?? 0) : 0
@@ -32,32 +42,29 @@ export function PerformanceChart({ report, period, portfolioId, portfolioName, l
   const xirr = num(report?.returns?.money_weighted ?? null)
   const twr = num(report?.returns?.time_weighted ?? null)
 
+  useEffect(() => {
+    const saved = localStorage.getItem(CHART_MODE_STORAGE_KEY)
+    if (saved === "portfolio" || saved === "benchmark") setChartMode(saved)
+  }, [])
+
+  function selectChartMode(mode: ChartMode) {
+    setChartMode(mode)
+    localStorage.setItem(CHART_MODE_STORAGE_KEY, mode)
+  }
+
   return (
     <section className="app-panel overflow-hidden rounded-xl">
-      <div className="flex flex-wrap items-start justify-between gap-3 px-4 pt-3">
+      <div className="flex min-h-[52px] flex-wrap items-center justify-between gap-2 border-b border-[var(--app-border-strong)] bg-[color-mix(in_srgb,var(--app-accent-soft)_30%,var(--app-surface))] px-4 py-2 shadow-[inset_0_1px_0_color-mix(in_srgb,var(--app-text)_5%,transparent),0_4px_14px_color-mix(in_srgb,var(--app-sidebar)_18%,transparent)]">
         <div>
-          <p className="mb-1 text-xs font-semibold text-[var(--app-text)]">{portfolioName}</p>
-          <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--app-text-faint)]">
-            {t("dashboard.performance")}
-          </p>
-          <p className="mt-0.5 text-xl font-semibold tabular-nums text-[var(--app-text)]">
-            {fmtCurrency(locale, value, currency)}
-          </p>
-          <p className="text-xs tabular-nums" style={{ color }}>
-            {up ? "+" : ""}
-            {fmtCurrency(locale, totalPnl, currency)}
-            {returnPct !== null && <span className="ml-1">({fmtPct(returnPct)})</span>}
-          </p>
+          {hasBenchmark ? (
+            <div className="flex rounded-md border border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-sidebar)_45%,var(--app-surface))] p-0.5 shadow-inner">
+              <ChartModeButton active={chartMode === "portfolio"} onClick={() => selectChartMode("portfolio")}>Portfolio value</ChartModeButton>
+              <ChartModeButton active={chartMode === "benchmark"} onClick={() => selectChartMode("benchmark")}>Benchmark comparison</ChartModeButton>
+            </div>
+          ) : null}
         </div>
-        <div className="flex flex-col items-end gap-2">
-          <div className="flex gap-3">
-            {xirr !== null && (
-              <Metric label={t("dashboard.xirr")} hint={t("dashboard.xirrHint")} value={xirr} />
-            )}
-            {twr !== null && (
-              <Metric label={t("dashboard.twr")} hint={t("dashboard.twrHint")} value={twr} />
-            )}
-          </div>
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          {latestQuote ? <span className="text-[9px] text-[var(--app-text-faint)]">{t("dashboard.quotesAsOf", { time: new Date(latestQuote).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" }) })}</span> : null}
           <div className="flex gap-1">
             {PERIODS.map((p) => (
               <Link
@@ -73,7 +80,30 @@ export function PerformanceChart({ report, period, portfolioId, portfolioName, l
               </Link>
             ))}
           </div>
-          {latestQuote ? <span className="text-[9px] text-[var(--app-text-faint)]">{t("dashboard.quotesAsOf", { time: new Date(latestQuote).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" }) })}</span> : null}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-start justify-between gap-3 px-4 pb-1 pt-3">
+        <div>
+          <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--app-text-faint)]">
+            {t("dashboard.performance")}
+          </p>
+          <p className="mt-0.5 text-xl font-semibold tabular-nums text-[var(--app-text)]">
+            {privateCurrency(locale, value, currency)}
+          </p>
+          <p className="text-xs tabular-nums" style={{ color }}>
+            {!hidden && up ? "+" : ""}
+            {privateCurrency(locale, totalPnl, currency)}
+            {returnPct !== null && <span className="ml-1">({fmtPct(returnPct)})</span>}
+          </p>
+        </div>
+        <div className="flex gap-4">
+          {xirr !== null && (
+            <Metric label={t("dashboard.xirr")} hint={t("dashboard.xirrHint")} value={xirr} />
+          )}
+          {twr !== null && (
+            <Metric label={t("dashboard.twr")} hint={t("dashboard.twrHint")} value={twr} />
+          )}
         </div>
       </div>
 
@@ -82,7 +112,7 @@ export function PerformanceChart({ report, period, portfolioId, portfolioName, l
           {t("dashboard.performanceEmpty")}
         </p>
       ) : (
-        <Chart points={points} color={color} currency={currency} locale={locale} />
+        <Chart points={points} benchmark={chartMode === "benchmark" ? benchmark : null} color={color} currency={currency} locale={locale} />
       )}
 
       {anyPartial && points.length >= 2 && (
@@ -94,6 +124,105 @@ export function PerformanceChart({ report, period, portfolioId, portfolioName, l
 
 function Chart({
   points,
+  benchmark,
+  color,
+  currency,
+  locale,
+}: {
+  points: NonNullable<PerformanceReport["points"]>
+  benchmark?: BenchmarkReport | null
+  color: string
+  currency: string
+  locale: string
+}) {
+  if (benchmark && benchmark.series.length >= 2) {
+    return <RelativeChart benchmark={benchmark} locale={locale} />
+  }
+  return <AbsoluteChart points={points} color={color} currency={currency} locale={locale} />
+}
+
+function RelativeChart({
+  benchmark,
+  locale,
+}: {
+  benchmark: BenchmarkReport
+  locale: string
+}) {
+  const [hovered, setHovered] = useState<number | null>(null)
+  const portfolio = benchmark.series.map((point) => {
+    const value = num(point.portfolio)
+    return value === null ? null : value - 100
+  })
+  const comparison = benchmark.series.map((point) => {
+    const value = num(point.benchmark)
+    return value === null ? null : value - 100
+  })
+  const all = [...portfolio, ...comparison].filter((value): value is number => value !== null)
+  const min = Math.min(0, ...all)
+  const max = Math.max(0, ...all)
+  const range = max - min || 1
+  const x = (index: number) => (index / (benchmark.series.length - 1)) * W
+  const y = (value: number) => H - ((value - min) / range) * (H - 16) - 8
+  const path = (series: (number | null)[]) => {
+    let result = ""
+    let drawing = false
+    series.forEach((value, index) => {
+      if (value === null) {
+        drawing = false
+        return
+      }
+      result += `${drawing ? " L" : " M"} ${x(index).toFixed(1)},${y(value).toFixed(1)}`
+      drawing = true
+    })
+    return result
+  }
+  const zero = y(0)
+  const gridYs = [0.25, 0.5, 0.75].map((fraction) => 8 + (H - 16) * fraction)
+  const portfolioReturn = num(benchmark.portfolio_return_pct)
+  const benchmarkReturn = num(benchmark.benchmark_return_pct)
+  const active = hovered === null ? null : benchmark.series[hovered]
+  const activePortfolio = hovered === null ? null : portfolio[hovered]
+  const activeBenchmark = hovered === null ? null : comparison[hovered]
+
+  return (
+    <div className="mt-2">
+      <div className="relative px-4" onMouseLeave={() => setHovered(null)}>
+        <span className="absolute right-5 top-0 text-[10px] tabular-nums text-[var(--app-text-faint)]">{fmtPct(max)}</span>
+        <span className="absolute bottom-0 right-5 text-[10px] tabular-nums text-[var(--app-text-faint)]">{fmtPct(min)}</span>
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-label="Relative portfolio and benchmark performance" className="h-48 w-full" onPointerMove={(event) => setHovered(nearestIndex(event, benchmark.series.length))}>
+          {gridYs.map((gridY) => <line key={gridY} x1="0" y1={gridY} x2={W} y2={gridY} stroke="var(--app-border)" strokeWidth="1" strokeDasharray="4 6" />)}
+          <line x1="0" y1={zero} x2={W} y2={zero} stroke="var(--app-border-strong)" strokeWidth="1" />
+          <path d={path(comparison)} fill="none" stroke="var(--app-accent)" strokeWidth="1.75" strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />
+          <path d={path(portfolio)} fill="none" stroke="var(--app-positive)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+          {hovered !== null ? (
+            <>
+              <line x1={x(hovered)} y1="0" x2={x(hovered)} y2={H} stroke="var(--app-text-muted)" strokeWidth="1" strokeDasharray="3 4" vectorEffect="non-scaling-stroke" />
+              {activePortfolio !== null ? <circle cx={x(hovered)} cy={y(activePortfolio)} r="3" fill="var(--app-positive)" vectorEffect="non-scaling-stroke" /> : null}
+              {activeBenchmark !== null ? <circle cx={x(hovered)} cy={y(activeBenchmark)} r="3" fill="var(--app-accent)" vectorEffect="non-scaling-stroke" /> : null}
+            </>
+          ) : null}
+        </svg>
+        {active ? (
+          <ChartTooltip position={tooltipPosition(hovered!, benchmark.series.length)} title={new Date(`${active.date}T00:00:00Z`).toLocaleDateString(locale, { dateStyle: "medium" })}>
+            <TooltipRow label="Portfolio TWR" value={activePortfolio === null ? "—" : fmtPct(activePortfolio)} color="var(--app-positive)" />
+            <TooltipRow label="Benchmark" value={activeBenchmark === null ? "—" : fmtPct(activeBenchmark)} color="var(--app-accent)" />
+          </ChartTooltip>
+        ) : null}
+      </div>
+      <div className="mt-1.5 flex items-center justify-between px-4 pb-3 text-[10px] text-[var(--app-text-faint)]">
+        <span>{fmtDate(locale, benchmark.series[0]!.date)}</span>
+        <span className="flex items-center gap-3">
+          <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-3 rounded bg-[var(--app-positive)]" /> Portfolio TWR {portfolioReturn === null ? "" : `(${fmtPct(portfolioReturn)})`}</span>
+          <span className="flex items-center gap-1"><span className="inline-block h-0 w-3 border-t border-dashed border-[var(--app-accent)]" /> Benchmark {benchmarkReturn === null ? "" : `(${fmtPct(benchmarkReturn)})`}</span>
+        </span>
+        <span>{fmtDate(locale, benchmark.series[benchmark.series.length - 1]!.date)}</span>
+      </div>
+    </div>
+  )
+}
+
+function AbsoluteChart({
+  points,
   color,
   currency,
   locale,
@@ -103,7 +232,9 @@ function Chart({
   currency: string
   locale: string
 }) {
-  const t = getTranslations()
+  const [hovered, setHovered] = useState<number | null>(null)
+  const { currency: privateCurrency } = useDashboardPrivacy()
+  const t = useTranslations()
   const values = points.map((p) => num(p.value) ?? 0)
   const invested = points.map((p) => num(p.invested_capital) ?? 0)
   const all = [...values, ...invested]
@@ -114,22 +245,22 @@ function Chart({
   const x = (i: number) => (i / (points.length - 1)) * W
   const y = (v: number) => H - ((v - min) / range) * (H - 16) - 8
   const line = (series: number[]) => series.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ")
-
   const valuePoints = line(values)
   const investedPoints = line(invested)
   const areaPath = `M ${valuePoints.split(" ")[0]} L ${valuePoints.split(" ").slice(1).join(" L ")} L ${W},${H} L 0,${H} Z`
   const gridYs = [0.25, 0.5, 0.75].map((f) => 8 + (H - 16) * f)
+  const active = hovered === null ? null : points[hovered]
 
   return (
     <div className="mt-2">
-      <div className="relative px-4">
+      <div className="relative px-4" onMouseLeave={() => setHovered(null)}>
         <span className="absolute right-5 top-0 text-[10px] tabular-nums text-[var(--app-text-faint)]">
-          {fmtCurrency(locale, max, currency)}
+          {privateCurrency(locale, max, currency)}
         </span>
         <span className="absolute bottom-0 right-5 text-[10px] tabular-nums text-[var(--app-text-faint)]">
-          {fmtCurrency(locale, min, currency)}
+          {privateCurrency(locale, min, currency)}
         </span>
-        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true" className="h-48 w-full">
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-label="Portfolio value and invested capital" className="h-48 w-full" onPointerMove={(event) => setHovered(nearestIndex(event, points.length))}>
           <defs>
             <linearGradient id="perf-chart-fill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={color} stopOpacity="0.22" />
@@ -159,7 +290,21 @@ function Chart({
             strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
           />
+          {hovered !== null ? (
+            <>
+              <line x1={x(hovered)} y1="0" x2={x(hovered)} y2={H} stroke="var(--app-text-muted)" strokeWidth="1" strokeDasharray="3 4" vectorEffect="non-scaling-stroke" />
+              <circle cx={x(hovered)} cy={y(values[hovered]!)} r="3" fill={color} vectorEffect="non-scaling-stroke" />
+              <circle cx={x(hovered)} cy={y(invested[hovered]!)} r="3" fill="var(--app-text-faint)" vectorEffect="non-scaling-stroke" />
+            </>
+          ) : null}
         </svg>
+        {active ? (
+          <ChartTooltip position={tooltipPosition(hovered!, points.length)} title={new Date(`${active.date}T00:00:00Z`).toLocaleDateString(locale, { dateStyle: "medium" })}>
+            <TooltipRow label={t("dashboard.currentValue")} value={privateCurrency(locale, values[hovered!]!, currency)} color={color} />
+            <TooltipRow label={t("dashboard.investedCapital")} value={privateCurrency(locale, invested[hovered!]!, currency)} color="var(--app-text-muted)" />
+            <TooltipRow label="Total P&L" value={privateCurrency(locale, num(active.total_pnl) ?? 0, currency)} color={(num(active.total_pnl) ?? 0) >= 0 ? "var(--app-positive)" : "var(--app-negative)"} />
+          </ChartTooltip>
+        ) : null}
       </div>
       <div className="mt-1.5 flex items-center justify-between px-4 pb-3 text-[10px] text-[var(--app-text-faint)]">
         <span>{fmtDate(locale, points[0]!.date)}</span>
@@ -175,6 +320,47 @@ function Chart({
         <span>{fmtDate(locale, points[points.length - 1]!.date)}</span>
       </div>
     </div>
+  )
+}
+
+function nearestIndex(event: React.PointerEvent<SVGSVGElement>, count: number): number {
+  const rect = event.currentTarget.getBoundingClientRect()
+  const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width))
+  return Math.round(ratio * (count - 1))
+}
+
+function tooltipPosition(index: number, count: number): { left: string; transform: string } {
+  const ratio = count <= 1 ? 0.5 : index / (count - 1)
+  const translate = ratio <= 0.15 ? 0 : ratio >= 0.85 ? -100 : -50
+  return { left: `${ratio * 100}%`, transform: `translateX(${translate}%)` }
+}
+
+function ChartTooltip({ position, title, children }: { position: { left: string; transform: string }; title: string; children: React.ReactNode }) {
+  return (
+    <div className="pointer-events-none absolute top-2 z-10 min-w-40 rounded-lg border border-[var(--app-border-strong)] bg-[color-mix(in_srgb,var(--app-surface)_96%,transparent)] px-3 py-2 shadow-xl backdrop-blur" style={position}>
+      <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--app-text-faint)]">{title}</p>
+      <div className="space-y-1">{children}</div>
+    </div>
+  )
+}
+
+function TooltipRow({ label, value, color }: { label: string; value: string; color: string }) {
+  return <div className="flex items-center justify-between gap-4 text-[10px]"><span className="text-[var(--app-text-muted)]">{label}</span><span className="font-semibold tabular-nums" style={{ color }}>{value}</span></div>
+}
+
+function ChartModeButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded px-2 py-1 text-[10px] font-medium transition ${
+        active
+          ? "bg-[var(--app-accent-soft)] text-[var(--app-accent)]"
+          : "text-[var(--app-text-faint)] hover:text-[var(--app-text)]"
+      }`}
+    >
+      {children}
+    </button>
   )
 }
 

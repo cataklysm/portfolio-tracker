@@ -25,6 +25,9 @@
     "web:dev": "pnpm --filter @portfolio/web dev",
     "build": "pnpm --filter @portfolio/web build",
     "typecheck": "tsc --noEmit && pnpm --filter @portfolio/web typecheck",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui",
+    "e2e:debug": "playwright test --debug",
     "test": "node --import tsx --test \"services/**/*.test.ts\" \"packages/**/*.test.ts\"",
     "test:watch": "node --import tsx --test --watch \"services/**/*.test.ts\" \"packages/**/*.test.ts\""
   },
@@ -32,6 +35,7 @@
     "pg": "^8.21.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@types/node": "^22.10.0",
     "@types/pg": "^8.20.0",
     "concurrently": "^9.1.0",

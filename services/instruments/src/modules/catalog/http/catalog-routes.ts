@@ -46,6 +46,7 @@ const UpdateInstrumentBody = Type.Object({
 const UpdateListingBody = Type.Object({
   symbol: Type.Optional(Type.String({ minLength: 1, maxLength: 32 })),
   currency: Type.Optional(Type.String({ minLength: 3, maxLength: 3 })),
+  exchange_id: Type.Optional(Type.String({ format: 'uuid' })),
   provider_identifiers: Type.Optional(Type.Array(ProviderIdentifier)),
 })
 
@@ -55,6 +56,14 @@ const CreateExchangeBody = Type.Object({
   timezone: Type.String({ minLength: 1, maxLength: 64 }),
   regular_open_local: Type.Optional(Type.String({ maxLength: 8 })),
   regular_close_local: Type.Optional(Type.String({ maxLength: 8 })),
+});
+
+const UpdateExchangeBody = Type.Object({
+  name: Type.Optional(Type.String({ minLength: 1, maxLength: 120 })),
+  timezone: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+  regular_open_local: Type.Optional(Type.Union([Type.String({ maxLength: 8 }), Type.Null()])),
+  regular_close_local: Type.Optional(Type.Union([Type.String({ maxLength: 8 }), Type.Null()])),
+  holidays: Type.Optional(Type.Array(Type.String({ minLength: 10, maxLength: 10 }))),
 });
 
 export interface CatalogRouteDeps {
@@ -89,6 +98,17 @@ export function registerCatalogRoutes(app: FastifyInstance, deps: CatalogRouteDe
     });
     reply.code(201);
     return result;
+  });
+
+  r.patch('/exchanges/:id', { preHandler: write, schema: { body: UpdateExchangeBody } }, async (request) => {
+    const { id } = request.params as { id: string };
+    return deps.service.updateExchange(id, {
+      name: request.body.name,
+      timezone: request.body.timezone,
+      regularOpenLocal: request.body.regular_open_local,
+      regularCloseLocal: request.body.regular_close_local,
+      holidays: request.body.holidays,
+    });
   });
 
   r.get('/instruments/search', { preHandler: read, schema: { querystring: SearchQuery } }, async (request) =>
@@ -144,6 +164,7 @@ export function registerCatalogRoutes(app: FastifyInstance, deps: CatalogRouteDe
     return deps.service.updateListing(id, {
       symbol: request.body.symbol,
       currency: request.body.currency,
+      exchangeId: request.body.exchange_id,
       providerIdentifiers: request.body.provider_identifiers?.map((pi) => ({
         provider: pi.provider,
         providerIdentifier: pi.provider_identifier,

@@ -1,4 +1,4 @@
-import { boolEnv, intEnv, optionalEnv, requireEnv } from '@portfolio/platform';
+import { intEnv, optionalEnv, requireEnv } from '@portfolio/platform';
 
 /** Instruments service configuration. */
 export interface InstrumentsConfig {
@@ -7,10 +7,6 @@ export interface InstrumentsConfig {
   serviceVersion: string;
   databaseUrl: string;
   redisUrl: string;
-  /** Provider namespace whose symbol the watch set carries (e.g. 'yahoo'). */
-  watchProvider: string;
-  /** Consume the portfolio stream into the watch-set projection. */
-  consumeInterestStream: boolean;
   auth: {
     jwksUri: string;
     issuer: string;
@@ -26,8 +22,6 @@ export function loadConfig(): InstrumentsConfig {
     serviceVersion: optionalEnv('SERVICE_VERSION') ?? '0.1.0',
     databaseUrl: optionalEnv('INSTRUMENTS_DATABASE_URL') ?? requireEnv('DATABASE_URL'),
     redisUrl: optionalEnv('VALKEY_URL') ?? optionalEnv('REDIS_URL') ?? requireEnv('VALKEY_URL'),
-    watchProvider: optionalEnv('INSTRUMENTS_WATCH_PROVIDER') ?? 'yahoo',
-    consumeInterestStream: boolEnv('INSTRUMENTS_CONSUME_INTEREST_STREAM', true),
     auth: {
       jwksUri: optionalEnv('AUTH_JWKS_URI') ?? `${issuer}/.well-known/jwks.json`,
       issuer,

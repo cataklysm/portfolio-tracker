@@ -8,23 +8,21 @@ import type {
 
 /**
  * Events provider backed by the providers service. The providers DTOs are
- * already normalized, so this is a thin pass-through. `name` is the upstream
- * symbol namespace ('yahoo'), used by the instruments resolver.
+ * already normalized, so this is a thin pass-through. The `provider` argument
+ * names the upstream source selected for the instrument's events feed.
  */
 export class ProvidersEventsProvider implements EventsProvider {
-  readonly name = 'yahoo';
-
   constructor(private readonly client: ProvidersClient) {}
 
-  fetchEarnings(symbol: string): Promise<EarningsSnapshot | null> {
-    return this.client.fetchEarnings(symbol);
+  fetchEarnings(provider: string, symbol: string): Promise<EarningsSnapshot | null> {
+    return this.client.fetchEarnings(symbol, provider);
   }
 
-  fetchCorporateActions(symbol: string): Promise<CorporateActionInput[]> {
-    return this.client.fetchCorporateActions(symbol);
+  fetchCorporateActions(provider: string, symbol: string): Promise<CorporateActionInput[]> {
+    return this.client.fetchCorporateActions(symbol, provider);
   }
 
-  fetchNews(symbol: string): Promise<NewsItem[]> {
-    return this.client.fetchNews(symbol);
+  fetchNews(provider: string, symbol: string): Promise<NewsItem[]> {
+    return this.client.fetchNews(symbol, provider);
   }
 }

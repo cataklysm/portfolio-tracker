@@ -15,6 +15,7 @@ import type {
   ProviderListing,
   RegisterListingInput,
   RegisterListingResult,
+  UpdateExchangeInput,
 } from '../application/ports.js';
 
 /** Kysely adapter for the `instruments.*` master-data tables. */
@@ -28,6 +29,15 @@ export class KyselyCatalogRepository implements CatalogRepository {
       .where('active', '=', true)
       .orderBy('mic')
       .execute();
+  }
+
+  async getExchange(id: string): Promise<ExchangeView | null> {
+    const row = await this.db
+      .selectFrom('instruments.exchanges')
+      .select(['id', 'mic', 'name', 'timezone', 'regular_open_local', 'regular_close_local'])
+      .where('id', '=', id)
+      .executeTakeFirst();
+    return row ?? null;
   }
 
   async findExchangeId(idOrMic: { id?: string; mic?: string }): Promise<string | null> {
@@ -63,6 +73,23 @@ export class KyselyCatalogRepository implements CatalogRepository {
       .returning('id')
       .executeTakeFirstOrThrow();
     return { id: row.id };
+  }
+
+  async updateExchange(id: string, patch: UpdateExchangeInput): Promise<void> {
+    const values: {
+      name?: string;
+      timezone?: string;
+      regular_open_local?: string | null;
+      regular_close_local?: string | null;
+      holiday_calendar?: string;
+      updated_at: Date;
+    } = { updated_at: new Date() };
+    if (patch.name !== undefined) values.name = patch.name;
+    if (patch.timezone !== undefined) values.timezone = patch.timezone;
+    if (patch.regularOpenLocal !== undefined) values.regular_open_local = patch.regularOpenLocal;
+    if (patch.regularCloseLocal !== undefined) values.regular_close_local = patch.regularCloseLocal;
+    if (patch.holidays !== undefined) values.holiday_calendar = JSON.stringify(patch.holidays);
+    await this.db.updateTable('instruments.exchanges').set(values).where('id', '=', id).execute();
   }
 
   async currencyExists(code: string): Promise<boolean> {
@@ -336,10 +363,16 @@ export class KyselyCatalogRepository implements CatalogRepository {
     return row !== undefined;
   }
 
-  async updateListing(id: string, patch: { symbol?: string; currency?: string }): Promise<void> {
-    const values: { symbol?: string; currency?: string; updated_at: Date } = { updated_at: new Date() };
+  async updateListing(
+    id: string,
+    patch: { symbol?: string; currency?: string; exchangeId?: string },
+  ): Promise<void> {
+    const values: { symbol?: string; currency?: string; exchange_id?: string; updated_at: Date } = {
+      updated_at: new Date(),
+    };
     if (patch.symbol !== undefined) values.symbol = patch.symbol;
     if (patch.currency !== undefined) values.currency = patch.currency;
+    if (patch.exchangeId !== undefined) values.exchange_id = patch.exchangeId;
     await this.db.updateTable('instruments.listings').set(values).where('id', '=', id).execute();
   }
 

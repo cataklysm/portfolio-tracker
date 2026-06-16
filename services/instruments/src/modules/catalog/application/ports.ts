@@ -40,6 +40,8 @@ export interface AdminSymbolView extends ListingDetail {
 export interface UpdateListingInput {
   symbol?: string;
   currency?: string;
+  /** Move the listing to a different exchange (by id). */
+  exchangeId?: string;
   providerIdentifiers?: { provider: string; providerIdentifier: string }[];
 }
 
@@ -103,6 +105,15 @@ export interface CreateExchangeInput {
   regularCloseLocal: string | null;
 }
 
+export interface UpdateExchangeInput {
+  name?: string;
+  timezone?: string;
+  regularOpenLocal?: string | null;
+  regularCloseLocal?: string | null;
+  /** Full-closure dates (YYYY-MM-DD) in the exchange's local calendar. */
+  holidays?: string[];
+}
+
 export interface RegisterListingInput {
   instrument: {
     name: string;
@@ -126,8 +137,10 @@ export interface RegisterListingResult {
 
 export interface CatalogRepository {
   listExchanges(): Promise<ExchangeView[]>;
+  getExchange(id: string): Promise<ExchangeView | null>;
   findExchangeId(idOrMic: { id?: string; mic?: string }): Promise<string | null>;
   createExchange(input: CreateExchangeInput): Promise<{ id: string }>;
+  updateExchange(id: string, patch: UpdateExchangeInput): Promise<void>;
   currencyExists(code: string): Promise<boolean>;
   searchInstruments(query: string, limit: number): Promise<InstrumentWithListings[]>;
   getInstrument(id: string): Promise<InstrumentWithListings | null>;
@@ -144,7 +157,7 @@ export interface CatalogRepository {
   deactivateListing(id: string): Promise<void>;
   /** True if another listing already uses (symbol, exchange) — for edit conflicts. */
   symbolTaken(exchangeId: string | null, symbol: string, excludeListingId: string): Promise<boolean>;
-  updateListing(id: string, patch: { symbol?: string; currency?: string }): Promise<void>;
+  updateListing(id: string, patch: { symbol?: string; currency?: string; exchangeId?: string }): Promise<void>;
   upsertProviderIdentifiers(
     listingId: string,
     identifiers: { provider: string; providerIdentifier: string }[],

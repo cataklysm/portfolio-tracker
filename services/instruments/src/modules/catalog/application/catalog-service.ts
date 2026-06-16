@@ -18,6 +18,7 @@ import type {
   ListingSummary,
   ProviderListing,
   RegisterListingResult,
+  UpdateExchangeInput,
   UpdateListingInput,
 } from './ports.js';
 
@@ -69,6 +70,29 @@ export class CatalogService {
     const existing = await this.repo.findExchangeId({ mic });
     if (existing) throw AppError.conflict('exchange_exists', `Exchange ${mic} already exists`);
     return this.repo.createExchange({ ...input, mic });
+  }
+
+  /** Edits an exchange's name, timezone, regular session, and/or holiday calendar. */
+  async updateExchange(id: string, input: UpdateExchangeInput): Promise<ExchangeView> {
+    if (!(await this.repo.getExchange(id))) {
+      throw AppError.notFound('exchange_not_found', 'Exchange not found');
+    }
+    const name = input.name !== undefined ? input.name.trim() : undefined;
+    if (name !== undefined && name.length === 0) throw AppError.badRequest('invalid_name', 'A name is required');
+    const timezone = input.timezone !== undefined ? input.timezone.trim() : undefined;
+    if (timezone !== undefined && timezone.length === 0) {
+      throw AppError.badRequest('invalid_timezone', 'A timezone is required');
+    }
+    await this.repo.updateExchange(id, {
+      name,
+      timezone,
+      regularOpenLocal: input.regularOpenLocal,
+      regularCloseLocal: input.regularCloseLocal,
+      holidays: input.holidays,
+    });
+    const updated = await this.repo.getExchange(id);
+    if (!updated) throw AppError.notFound('exchange_not_found', 'Exchange not found');
+    return updated;
   }
 
   async searchInstruments(query: string, limit?: number): Promise<InstrumentWithListings[]> {
@@ -178,14 +202,30 @@ export class CatalogService {
     if (currency !== undefined && !(await this.repo.currencyExists(currency))) {
       throw AppError.badRequest('unknown_currency', `Unsupported currency "${currency}"`);
     }
-    if (symbol !== undefined && symbol !== existing.symbol) {
-      if (await this.repo.symbolTaken(existing.exchange_id, symbol, id)) {
+
+    // Optionally move the listing to a different exchange.
+    let exchangeId: string | undefined;
+    if (input.exchangeId !== undefined && input.exchangeId !== existing.exchange_id) {
+      if (!(await this.repo.getExchange(input.exchangeId))) {
+        throw AppError.badRequest('exchange_not_found', `No exchange with id "${input.exchangeId}"`);
+      }
+      exchangeId = input.exchangeId;
+    }
+
+    // The (symbol, exchange) pair must stay unique, so re-check whenever either
+    // the symbol or the exchange changes — against the *resulting* pair.
+    const effectiveSymbol = symbol ?? existing.symbol;
+    const effectiveExchange = exchangeId ?? existing.exchange_id;
+    const symbolChanged = symbol !== undefined && symbol !== existing.symbol;
+    const exchangeChanged = exchangeId !== undefined;
+    if (symbolChanged || exchangeChanged) {
+      if (await this.repo.symbolTaken(effectiveExchange, effectiveSymbol, id)) {
         throw AppError.conflict('listing_symbol_taken', 'Another listing already uses that symbol on this exchange');
       }
     }
 
-    if (symbol !== undefined || currency !== undefined) {
-      await this.repo.updateListing(id, { symbol, currency });
+    if (symbol !== undefined || currency !== undefined || exchangeId !== undefined) {
+      await this.repo.updateListing(id, { symbol, currency, exchangeId });
     }
     if (input.providerIdentifiers && input.providerIdentifiers.length > 0) {
       await this.repo.upsertProviderIdentifiers(

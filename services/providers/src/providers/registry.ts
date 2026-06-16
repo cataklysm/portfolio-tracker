@@ -3,14 +3,26 @@ import type { ProvidersConfig } from '../config/config.js';
 import type { Capability, MarketDataProvider } from './types.js';
 import { EcbClient } from './clients/ecb-client.js';
 import { YahooClient } from './clients/yahoo-client.js';
+import { LstcClient } from './clients/lstc-client.js';
 import { YahooProvider } from './yahoo-provider.js';
 import { EcbProvider } from './ecb-provider.js';
+import { LstcProvider } from './lstc-provider.js';
+import type { ProviderSettingsRepository } from './settings-repository.js';
 
 /**
- * Holds the configured providers and routes a capability to the first provider
- * (in registration/priority order) that supports it. "Feature not supported" is
- * expressed here, not by the providers: if no registered provider offers a
- * capability, `require` raises a 501 so callers get a clean problem response.
+ * Holds the enabled providers and routes a capability to the first provider, in
+ * registration/priority order, that supports it. "Feature not supported" is
+ * expressed here, not by the providers: if no enabled provider offers a
+ * capability, `require` raises a 501.
+ *
+ * The enabled set is resolved once at startup from `provider_settings`. Live
+ * settings (pacing, quality, runtime enable/disable for the admin UI and the
+ * market scheduler) are read straight from the repository, not from here — so a
+ * routing-level enable/disable change takes effect on restart, while pacing and
+ * quality edits are reflected immediately via `/internal/providers`.
+ *
+ * Routing is first-match per capability; per-(instrument × capability) selection
+ * is owned by the instruments service and passed in explicitly.
  */
 export class ProviderRegistry {
   private readonly providers: MarketDataProvider[];
@@ -19,7 +31,7 @@ export class ProviderRegistry {
     this.providers = providers;
   }
 
-  /** All registered providers, in priority order. */
+  /** All enabled providers, in priority order. */
   all(): readonly MarketDataProvider[] {
     return this.providers;
   }
@@ -28,12 +40,12 @@ export class ProviderRegistry {
     return this.providers.find((p) => p.name === name);
   }
 
-  /** Providers that support a capability, in priority order. */
+  /** Enabled providers that support a capability, in priority order. */
   forCapability(capability: Capability): MarketDataProvider[] {
     return this.providers.filter((p) => p.capabilities.has(capability));
   }
 
-  /** First provider supporting a capability, or a 501 if none does. */
+  /** First enabled provider supporting a capability, or a 501 if none does. */
   require(capability: Capability): MarketDataProvider {
     const provider = this.providers.find((p) => p.capabilities.has(capability));
     if (!provider) {
@@ -41,13 +53,13 @@ export class ProviderRegistry {
         status: 501,
         code: 'capability_not_supported',
         title: 'Not Implemented',
-        detail: `No configured provider supports the "${capability}" capability`,
+        detail: `No enabled provider supports the "${capability}" capability`,
       });
     }
     return provider;
   }
 
-  /** Capability -> the names of providers offering it (for diagnostics). */
+  /** Capability -> the names of enabled providers offering it (for diagnostics). */
   capabilityMap(): Record<Capability, string[]> {
     const map = {} as Record<Capability, string[]>;
     for (const provider of this.providers) {
@@ -60,12 +72,52 @@ export class ProviderRegistry {
 }
 
 /**
- * Factory: instantiates the low-level vendor clients, wraps them in providers,
- * and registers them in priority order. Yahoo first (broad coverage), ECB for
- * FX. Adding a provider is one line here plus its adapter.
+ * Factory: instantiates the vendor clients, wraps them in providers, loads their
+ * admin-editable settings from the DB, and registers only the *enabled* ones in
+ * priority order (Yahoo first for broad coverage, ECB for FX). Adding a provider
+ * is one adapter here plus a seeded `providers.provider_settings` row.
+ *
+ * Enforces the class contract: a `symbol`-class provider must implement
+ * `symbol_search`, otherwise startup fails fast (a misconfiguration).
  */
-export function buildRegistry(config: ProvidersConfig, logger: Logger): ProviderRegistry {
+export async function buildRegistry(
+  config: ProvidersConfig,
+  settingsRepo: ProviderSettingsRepository,
+  logger: Logger,
+): Promise<ProviderRegistry> {
   const yahoo = new YahooProvider(new YahooClient(logger));
   const ecb = new EcbProvider(new EcbClient(config.ecb.dailyUrl, config.ecb.histUrl, logger));
-  return new ProviderRegistry([yahoo, ecb]);
+  const lstc = new LstcProvider(new LstcClient(config.lstc, logger));
+  // Yahoo first so it stays the default for shared capabilities; lstc is opt-in
+  // via its provider_settings row and selected per-instrument where wanted.
+  const adapters: MarketDataProvider[] = [yahoo, ecb, lstc];
+
+  const settingsByName = new Map((await settingsRepo.listAll()).map((s) => [s.provider, s]));
+
+  const enabled: MarketDataProvider[] = [];
+  for (const provider of adapters) {
+    const settings = settingsByName.get(provider.name);
+    if (!settings) {
+      logger.warn(
+        { provider: provider.name, error_code: 'provider_no_settings' },
+        'No settings row for provider; not registering',
+      );
+      continue;
+    }
+    if (!settings.enabled) {
+      logger.info({ provider: provider.name }, 'Provider disabled by settings; not registering');
+      continue;
+    }
+    if (settings.providerClass === 'symbol' && typeof provider.searchSymbols !== 'function') {
+      throw new AppError({
+        status: 500,
+        code: 'provider_missing_symbol_search',
+        title: 'Provider misconfigured',
+        detail: `Symbol-class provider "${provider.name}" must implement symbol_search`,
+      });
+    }
+    enabled.push(provider);
+  }
+
+  return new ProviderRegistry(enabled);
 }

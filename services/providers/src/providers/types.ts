@@ -12,7 +12,7 @@
 export const CAPABILITIES = [
   'quotes',
   'chart',
-  'search',
+  'symbol_search',
   'analyst',
   'fundamentals',
   'fx',
@@ -21,6 +21,47 @@ export const CAPABILITIES = [
   'news',
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
+
+/**
+ * Provider class. `symbol` providers are symbol-based (quotes/chart/…) and MUST
+ * implement `symbol_search`; `reference` providers are reference-data/FX sources
+ * (e.g. ECB) for which symbol search is meaningless and not required.
+ */
+export type ProviderClass = 'symbol' | 'reference';
+
+/** Static, admin-assigned data-quality grade. Informational only — never routes. */
+export type DataQuality = 'high' | 'medium' | 'low' | 'unknown';
+
+/**
+ * Admin-editable, provider-intrinsic settings persisted in
+ * `providers.provider_settings`. Loaded at startup and attached to each
+ * registered provider. Pacing fields are consumed by the market refresh
+ * scheduler; `maxBatchSize === null` means the provider only accepts single-symbol
+ * queries and must be throttled rather than batched.
+ */
+export interface ProviderSettings {
+  provider: string;
+  enabled: boolean;
+  providerClass: ProviderClass;
+  dataQuality: DataQuality;
+  capabilityQuality: Partial<Record<Capability, DataQuality>>;
+  maxBatchSize: number | null;
+  rateLimitPerMin: number | null;
+  maxConcurrency: number;
+}
+
+/**
+ * Admin-editable fields of a provider's settings. `providerClass` is *not*
+ * editable — it is intrinsic to the adapter implementation. Pacing fields accept
+ * `null` to mean "unset" (single-symbol / no limit).
+ */
+export interface ProviderSettingsUpdate {
+  enabled?: boolean;
+  dataQuality?: DataQuality;
+  maxBatchSize?: number | null;
+  rateLimitPerMin?: number | null;
+  maxConcurrency?: number;
+}
 
 /** A latest tick for one symbol (no series). */
 export interface QuoteDto {
@@ -41,9 +82,17 @@ export interface ChartDto {
 }
 
 export interface SearchResultDto {
+  /** The provider's own symbol for this result — what gets stored as the
+   *  per-listing provider identifier (e.g. Yahoo `SAP.DE`). */
   symbol: string;
   name: string;
+  /** Human-readable exchange label as the provider reports it (e.g. "XETRA"). */
   exchange: string | null;
+  /** Official market identifier code, when the provider supplies one (else null —
+   *  Yahoo, for instance, does not expose MICs). */
+  mic: string | null;
+  /** Quote currency, when known. */
+  currency: string | null;
   quoteType: string | null;
 }
 
@@ -153,7 +202,8 @@ export interface MarketDataProvider {
   fetchQuotes?(symbols: string[]): Promise<Map<string, QuoteDto>>;
   /** Single symbol with a daily series; `from` starts the series (backfill). */
   fetchChart?(symbol: string, from?: Date): Promise<ChartDto | null>;
-  search?(query: string, limit: number): Promise<SearchResultDto[]>;
+  /** Symbol search. Required for `symbol`-class providers; absent on `reference`/FX. */
+  searchSymbols?(query: string, limit: number): Promise<SearchResultDto[]>;
   fetchAnalyst?(symbol: string): Promise<AnalystDto | null>;
   fetchFundamentals?(symbol: string): Promise<FundamentalsDto | null>;
   fetchFxRates?(): Promise<FxRatesDto>;

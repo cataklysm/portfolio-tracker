@@ -32,6 +32,8 @@ export const en = {
     events: "Events",
     administration: "Administration",
     symbols: "Symbols",
+    providers: "Providers",
+    exchanges: "Exchanges",
     addPosition: "Add position",
     soon: "soon",
     profileAndSettings: "Profile & settings",

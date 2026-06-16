@@ -84,4 +84,54 @@ here so nothing is lost. Each item notes the backend it depends on.
   indicator should link to or reveal the relevant notifications and must not
   imply that every notification is critical.
 
+## Provider configuration & selection (admin) — P4 of provider-todo.md
+
+Backend context: providers service now owns admin-editable provider settings
+(migration 018) and instruments owns per-(instrument × capability) provider
+selection (migration 019). See `documentation/provider-todo.md`.
+
+- [ ] **Per-instrument provider selection UI.** Backend ready & gateway-exposed:
+  `GET /instruments/:id/providers` → `[{ capability, provider }]` and
+  `PUT /instruments/:id/providers` `{ capability, provider }` → updated full
+  selection list (scopes `instruments:read`/`write`). UI on the instrument/admin
+  detail should render provider dropdowns by selection group: **price series**
+  (`quotes` + `chart`, one control), **events feed** (`earnings` +
+  `corporate_actions` + `news`, one control), plus standalone `analyst` and
+  `fundamentals`. The server writes all members of a group when any member is set.
+  Provider symbols are per listing/provider and are set via the existing
+  `PATCH /listings/:id` `provider_identifiers[]` upsert; **pre-fill missing
+  provider symbols with the instrument/listing base symbol** and let the admin
+  correct them (e.g. `SAP.DE`).
+- [ ] **Quotes/chart provider switch → purge + rebuild, with a prominent warning.**
+  When the admin changes the quotes/chart provider, warn loudly that the stored
+  price history will be **purged and rebuilt** from the new provider, then trigger
+  `POST /quotes/rebuild` `{ listing_ids[], from?, confirm: true }` (gateway-exposed,
+  `system:admin`; rebuild range = `from` → today). Backend ready. The UI should
+  supply `from` = the instrument's first-acquisition date when available, and all
+  active `listing_ids` for the instrument; `confirm: true` is required. If the
+  admin surface cannot derive the first-acquisition date yet, call that out in the
+  UI implementation plan rather than silently using the backend's short default
+  rebuild window.
+- [ ] **Provider admin screen (enable/disable, pacing, data-quality).** Backend
+  ready & gateway-exposed (`system:admin`): `GET /admin/providers` →
+  `{ providers: [{ provider, enabled, providerClass, dataQuality, maxBatchSize,
+  rateLimitPerMin, maxConcurrency, capabilityQuality }] }` and
+  `PATCH /admin/providers/:provider`
+  `{ enabled?, data_quality?, max_batch_size?, rate_limit_per_min?, max_concurrency? }`
+  (class is intrinsic, not editable). Show the enabled toggle, class, admin-assigned
+  data-quality grade, per-capability quality map, and pacing fields; surface the
+  grade as a provenance badge where provider-sourced data is shown. Note:
+  pacing/quality edits take effect live; a routing-level enable/disable currently
+  applies on service restart.
+- [ ] **Disable-in-use warning.** Backend ready & gateway-exposed:
+  `GET /instruments/provider-usage?provider=X` (`instruments:read`) →
+  `[{ instrument_id, instrument_name, capability }]`. Before disabling a provider
+  (via the admin screen above), call this and warn, listing the affected
+  instruments/capabilities (no failover by design — those go dark until reassigned).
+- [ ] **Exchange calendar editor.** Backend ready & gateway-exposed:
+  `PATCH /exchanges/:id` `{ name?, timezone?, regular_open_local?,
+  regular_close_local?, holidays? }`. UI on an exchange admin view to edit the
+  trading session + full-closure holiday dates. The existing open/closed session
+  display (`GET /listings/sessions`) already consumes this calendar.
+
 ## (add new items below as backend features ship)

@@ -14,7 +14,7 @@ interface SelectedListing {
   currency: string
 }
 
-export function AddPositionForm({ portfolios, exchanges }: { portfolios: Portfolio[]; exchanges: ExchangeView[] }) {
+export function AddPositionForm({ portfolios, exchanges, defaultPortfolioId, redirectTo }: { portfolios: Portfolio[]; exchanges: ExchangeView[]; defaultPortfolioId?: string; redirectTo?: string }) {
   const t = useTranslations()
   const [error, formAction, isPending] = useActionState(createPositionAction, null)
   const [query, setQuery] = useState("")
@@ -34,11 +34,12 @@ export function AddPositionForm({ portfolios, exchanges }: { portfolios: Portfol
 
   return (
     <form action={formAction} className="space-y-5">
+      {redirectTo ? <input type="hidden" name="redirect_to" value={redirectTo} /> : null}
       {error && <p className="rounded-xl border border-rose-500/20 bg-rose-950/40 px-3 py-2.5 text-sm text-rose-400">{error}</p>}
 
       <div>
         <label htmlFor="portfolio_id" className={labelClass}>{t("addPosition.portfolio")}</label>
-        <select id="portfolio_id" name="portfolio_id" required className={inputClass} defaultValue={portfolios[0]?.id}>
+        <select id="portfolio_id" name="portfolio_id" required className={inputClass} defaultValue={defaultPortfolioId ?? portfolios[0]?.id}>
           {portfolios.map((p) => (
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}

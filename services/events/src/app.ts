@@ -7,7 +7,6 @@ import {
   createRedis,
   createService,
   OutboxPublisher,
-  WatchSet,
   UserTokenVerifier,
   type RedisClientType,
 } from '@portfolio/platform';
@@ -22,10 +21,10 @@ import {
   KyselyRefreshStateRepository,
   KyselyEventsEventStore,
   ProvidersEventsProvider,
-  InstrumentsListingResolver,
+  InstrumentsPlanClient,
   registerEventsRoutes,
 } from './modules/feed/index.js';
-import { RefreshService, RefreshScheduler } from './modules/refresh/index.js';
+import { RefreshService, RefreshScheduler, InstrumentsListingsClient } from './modules/refresh/index.js';
 
 export interface BuiltService {
   app: FastifyInstance;
@@ -51,17 +50,9 @@ export async function buildApp(config: EventsConfig): Promise<BuiltService> {
   const verifier = new UserTokenVerifier(config.auth);
 
   const providers = new ProvidersClient(config.providersBaseUrl, logger);
-  const resolver = new InstrumentsListingResolver(config.instrumentsBaseUrl, logger);
-
-  // The deduped watched-listing set, owned by the instruments service: hydrated
-  // from its snapshot and kept live via instruments.watch.* deltas.
-  const watchSet = new WatchSet({
-    snapshotUrl: new URL('/internal/watch-set', config.instrumentsBaseUrl).toString(),
-    redis,
-    group: 'events-watch',
-    consumer: `events-watch-${process.pid}`,
-    logger,
-  });
+  // The active-listing set (whole catalog) and the per-capability provider plan.
+  const listings = new InstrumentsListingsClient(config.instrumentsBaseUrl, logger);
+  const planResolver = new InstrumentsPlanClient(config.instrumentsBaseUrl, logger);
 
   const eventsService = new EventsService({
     earnings: new KyselyEarningsRepository(db),
@@ -69,7 +60,7 @@ export async function buildApp(config: EventsConfig): Promise<BuiltService> {
     news: new KyselyNewsRepository(db),
     refreshState: new KyselyRefreshStateRepository(db),
     provider: new ProvidersEventsProvider(providers),
-    resolver,
+    planResolver,
     events: new KyselyEventsEventStore(db),
     logger,
     minAgeMs: config.refresh.minAgeMs,
@@ -77,7 +68,7 @@ export async function buildApp(config: EventsConfig): Promise<BuiltService> {
   });
 
   const refreshService = new RefreshService({
-    watchSet,
+    listings,
     events: eventsService,
     logger,
   });
@@ -110,12 +101,10 @@ export async function buildApp(config: EventsConfig): Promise<BuiltService> {
   });
   publisher.start();
 
-  // Hydrate the watch set from the instruments snapshot before the first refresh
-  // cycle, then drive the periodic refresh. The watch set only feeds the refresh
-  // cycle, so it shares the refresh on/off switch.
+  // Drive the periodic refresh. Each cycle pulls the active-listing set from the
+  // instruments service (whole catalog).
   const scheduler = new RefreshScheduler(refreshService, config.refresh.intervalMs, logger);
   if (config.refresh.enabled) {
-    await watchSet.start();
     scheduler.start();
   }
 
@@ -124,7 +113,6 @@ export async function buildApp(config: EventsConfig): Promise<BuiltService> {
     shutdown: async () => {
       scheduler.stop();
       publisher.stop();
-      await watchSet.stop();
       await app.close();
       await redis.quit();
       await pool.end();

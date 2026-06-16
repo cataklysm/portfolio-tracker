@@ -1,7 +1,7 @@
 export { EventsService, type EventsServiceDeps } from './application/events-service.js';
 export type {
   EventsProvider,
-  ListingResolver,
+  PlanResolver,
   EarningsRepository,
   CorporateActionsRepository,
   NewsRepository,
@@ -13,6 +13,6 @@ export { KyselyCorporateActionsRepository } from './infrastructure/corporate-act
 export { KyselyNewsRepository } from './infrastructure/news-repository.js';
 export { KyselyRefreshStateRepository } from './infrastructure/refresh-state-repository.js';
 export { ProvidersEventsProvider } from './infrastructure/providers-events-provider.js';
-export { InstrumentsListingResolver } from './infrastructure/instruments-listing-resolver.js';
+export { InstrumentsPlanClient } from './infrastructure/instruments-plan-client.js';
 export { KyselyEventsEventStore } from './infrastructure/event-store.js';
 export { registerEventsRoutes, type EventsRouteDeps } from './http/events-routes.js';

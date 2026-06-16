@@ -1,6 +1,7 @@
 import type { FastifyInstance, preHandlerHookHandler } from 'fastify';
 import { Type } from '@sinclair/typebox';
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
+import { AppError } from '@portfolio/platform';
 import type { QuoteService } from '../application/quote-service.js';
 import type { AnalystService } from '../../analyst/index.js';
 
@@ -15,6 +16,15 @@ const RefreshBody = Type.Object({
   // Optional start date for the daily-history backfill (e.g. a position's first
   // transaction). Omitted → a short default window.
   from: Type.Optional(Type.String({ format: 'date' })),
+});
+
+const RebuildBody = Type.Object({
+  listing_ids: Type.Array(Type.String({ format: 'uuid' }), { minItems: 1 }),
+  // Rebuild range start (the instrument's first-acquisition date). Omitted → a
+  // short default window.
+  from: Type.Optional(Type.String({ format: 'date' })),
+  // Explicit confirmation — this purges the listings' entire stored price history.
+  confirm: Type.Boolean(),
 });
 
 export interface QuoteRouteDeps {
@@ -32,6 +42,7 @@ export interface QuoteRouteDeps {
 export function registerQuoteRoutes(app: FastifyInstance, deps: QuoteRouteDeps): void {
   const r = app.withTypeProvider<TypeBoxTypeProvider>();
   const read = [deps.authenticate, deps.requireScope('market:read')];
+  const admin = [deps.authenticate, deps.requireScope('system:admin')];
 
   r.get('/quotes', { preHandler: read, schema: { querystring: QuotesQuery } }, async (request) => {
     const ids = splitIds(request.query.listing_ids);
@@ -49,6 +60,20 @@ export function registerQuoteRoutes(app: FastifyInstance, deps: QuoteRouteDeps):
   r.get('/quotes/:listingId/history', { preHandler: read, schema: { querystring: HistoryQuery } }, async (request) => {
     const { listingId } = request.params as { listingId: string };
     return deps.service.getDailyHistory(listingId, request.query.from, request.query.to);
+  });
+
+  // Admin: purge + rebuild a listing's stored price history from its currently
+  // selected provider (after switching the quotes/chart provider). Destructive —
+  // requires `confirm`. Gateway-exposed under `/quotes`, system:admin.
+  r.post('/quotes/rebuild', { preHandler: admin, schema: { body: RebuildBody } }, async (request) => {
+    if (!request.body.confirm) {
+      throw AppError.badRequest(
+        'confirmation_required',
+        'Rebuild purges the listings’ stored price history; set confirm=true to proceed',
+      );
+    }
+    const from = request.body.from ? new Date(request.body.from) : undefined;
+    return deps.service.purgeAndRebuild(request.body.listing_ids, from);
   });
 
   // User-facing on-demand refresh: pull fresh quotes for specific listings now
@@ -74,6 +99,21 @@ export function registerQuoteRoutes(app: FastifyInstance, deps: QuoteRouteDeps):
   r.get('/internal/quotes', { schema: { querystring: QuotesQuery } }, async (request) =>
     deps.service.getLatestQuotes(splitIds(request.query.listing_ids)),
   );
+
+  // Internal: purge + rebuild a listing's stored price history from its currently
+  // selected provider (after an admin switches the quotes/chart provider, so the
+  // series never mixes two sources). Destructive — requires explicit confirm.
+  // Network/gateway restricted.
+  r.post('/internal/quotes/rebuild', { schema: { body: RebuildBody } }, async (request) => {
+    if (!request.body.confirm) {
+      throw AppError.badRequest(
+        'confirmation_required',
+        'Rebuild purges the listings’ stored price history; set confirm=true to proceed',
+      );
+    }
+    const from = request.body.from ? new Date(request.body.from) : undefined;
+    return deps.service.purgeAndRebuild(request.body.listing_ids, from);
+  });
 }
 
 function splitIds(raw: string): string[] {

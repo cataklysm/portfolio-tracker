@@ -42,4 +42,7 @@ export const GATEWAY_ROUTES: GatewayRoute[] = [
   { prefix: '/fundamentals', upstream: 'fundamentals', protected: true },
   { prefix: '/events', upstream: 'events', protected: true },
   { prefix: '/notifications', upstream: 'notifications', protected: true },
+  // Admin: provider settings (enable/disable, pacing, data-quality). The providers
+  // service's `/internal/*` routes stay un-routed; only these admin routes are exposed.
+  { prefix: '/admin/providers', upstream: 'providers', protected: true },
 ];

@@ -44,9 +44,10 @@ export class ProvidersClient {
     private readonly timeoutMs = 8000,
   ) {}
 
-  async fetchFundamentals(symbol: string): Promise<ProvidersFundamentalsDto | null> {
+  async fetchFundamentals(symbol: string, provider?: string): Promise<ProvidersFundamentalsDto | null> {
     const url = new URL('/internal/fundamentals', this.baseUrl);
     url.searchParams.set('symbol', symbol);
+    if (provider) url.searchParams.set('provider', provider);
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);

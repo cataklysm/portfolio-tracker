@@ -1,8 +1,7 @@
 /**
  * Records per-listing refresh scheduling state in `market.data_refresh_state`.
- * The watched-listing set itself now comes from the shared in-memory WatchSet
- * (hydrated from the instruments watch-set snapshot + deltas), not a local
- * projection table.
+ * The listing set comes from the instruments refresh plan (the whole active
+ * catalog), resolved per cycle — not a local projection or watch set.
  */
 export interface RefreshStateRepository {
   recordRefresh(listingIds: string[], provider: string, nextDueAt: Date): Promise<void>;

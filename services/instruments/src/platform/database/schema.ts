@@ -71,12 +71,11 @@ export interface BenchmarkCatalogTable {
   created_at: Generated<Date>;
 }
 
-export interface WatchInterestsTable {
-  interest_id: string;
-  listing_id: string;
-  interest_type: 'position' | 'watchlist';
-  active: boolean;
-  aggregate_version: string | number;
+/** Per-(instrument × capability) provider choice. References a provider by name. */
+export interface ProviderSelectionTable {
+  instrument_id: string;
+  capability: string;
+  provider: string;
   updated_at: Timestamp;
 }
 
@@ -114,7 +113,7 @@ export interface InstrumentsDatabase {
   'instruments.listings': ListingsTable;
   'instruments.listing_provider_identifiers': ListingProviderIdentifiersTable;
   'instruments.benchmark_catalog': BenchmarkCatalogTable;
-  'instruments.watch_interests': WatchInterestsTable;
+  'instruments.provider_selection': ProviderSelectionTable;
   'instruments.outbox_events': OutboxEventsTable;
   'portfolio.positions': PortfolioPositionsReferencesTable;
   'portfolio.watchlist_items': PortfolioWatchlistReferencesTable;

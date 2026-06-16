@@ -1,6 +1,6 @@
 # Service-Endpunkte und Zuständigkeitsprüfung
 
-Stand: 2026-06-15
+Stand: 2026-06-16
 
 ## Zweck und Bewertungsmaßstab
 
@@ -40,15 +40,13 @@ die Trennungen zwischen Instrument-Stammdaten, Marktdaten, Fundamentals,
 objektiven Events, nutzereigenen Insights und angewendeten Corporate Actions im
 Portfolio.
 
-Es bestehen jedoch zwei klare Grenzverletzungen:
+Die früher hier dokumentierte Watch-Projektion in `instruments` wurde **entfernt**
+(2026-06-16): Das Refresh-Modell sweept jetzt den gesamten aktiven Katalog, daher
+gibt es keine Refresh-Interest-/Watch-Projektion mehr (`watch_interests`,
+`instruments.watch.*`, `/internal/watch-set` sind weg; Migration `020`). Es
+verbleibt eine klare Grenzverletzung:
 
-1. **`instruments` besitzt eine fachfremde Refresh-Interest-/Watch-Projektion.**
-   Der Service konsumiert Portfolio-Interessen, persistiert
-   `instruments.watch_interests`, publiziert `instruments.watch.*` und stellt
-   `/internal/watch-set` bereit. Laut definiertem Service-Schnitt gehört die
-   konsolidierte Refresh-Interest-Projektion zu `market`, nicht zu den
-   Instrument-Stammdaten.
-2. **`instruments` liest direkt aus `portfolio.positions` und
+1. **`instruments` liest direkt aus `portfolio.positions` und
    `portfolio.watchlist_items`.** Das geschieht für die Admin-Symbolansicht und
    beim Deaktivieren eines Listings. Damit ist die Vorgabe verletzt, Services
    so zu bauen, als lägen ihre Datenbanken physisch getrennt.
@@ -98,6 +96,7 @@ Edge-Authentifizierung, CORS, Security Header und Rate Limiting beschränkt.
 | `/fundamentals` | fundamentals | Bearer | Passend |
 | `/events` | events | Bearer | Passend |
 | `/notifications` | notifications | Bearer | Passend |
+| `/admin/providers` | providers | Bearer | Passend: Admin-Provider-Settings (Service prüft `system:admin`) |
 
 Die Gateway-Routingtabelle ist vollständiger als `services/gateway/README.md`;
 das README ist veraltet und nennt mehrere inzwischen exponierte Prefixe nicht.
@@ -236,11 +235,15 @@ Provider-Identifier.
 |---|---|---|---|
 | `GET` | `/exchanges` | `instruments:read` | Passend |
 | `POST` | `/exchanges` | `instruments:write` | Passend |
+| `PATCH` | `/exchanges/:id` | `instruments:write` | Passend: Börse/Kalender editierbar (Name/TZ/Session/Feiertage) |
 | `GET` | `/benchmarks` | `instruments:read` | Passend: kuratierter Benchmark-Katalog (Key → Index-Listing) |
 | `GET` | `/instruments/search` | `instruments:read` | Passend, sucht aktuell nur lokal |
 | `GET` | `/instruments/:id` | `instruments:read` | Passend |
 | `PATCH` | `/instruments/:id` | `instruments:write` | Passend |
 | `POST` | `/instruments` | `instruments:write` | Passend |
+| `GET` | `/instruments/:id/providers` | `instruments:read` | Passend: Provider-Auswahl je (Instrument × Capability) |
+| `PUT` | `/instruments/:id/providers` | `instruments:write` | Passend: setzt Auswahl, erzwingt `quotes`=`chart`-Paar |
+| `GET` | `/instruments/provider-usage` | `instruments:read` | Passend: Instrumente/Capabilities, die einen Provider gewählt haben (Disable-in-use-Warnung) |
 | `GET` | `/instruments/admin/symbols` | `system:admin` | Endpunkt passend, Implementierung verletzt Grenze |
 | `DELETE` | `/instruments/admin/symbols/:id` | `system:admin` | Endpunkt passend, Implementierung verletzt Grenze |
 | `GET` | `/listings` | `instruments:read` | Passend |
@@ -248,7 +251,8 @@ Provider-Identifier.
 | `GET` | `/listings/:id` | `instruments:read` | Passend |
 | `PATCH` | `/listings/:id` | `instruments:write` | Passend |
 | `GET` | `/internal/listings/resolve` | intern, ohne Token | Passend; Service-Auth fehlt |
-| `GET` | `/internal/watch-set` | intern, ohne Token | Verschieben |
+| `GET` | `/internal/refresh-plan` | intern, ohne Token | Passend: aufgelöster Refresh-Plan je Capability (Listing → Provider + Provider-Symbol) |
+| `GET` | `/internal/listings/all` | intern, ohne Token | Passend: alle aktiven Listings (Voll-Katalog-Sweep von market/fundamentals/events) |
 
 Klare Grenzverletzung:
 
@@ -263,10 +267,10 @@ Zielbild:
   eventbasierte, instruments-eigene Referenzprojektion beziehen.
 - Das Deaktivieren eines Listings anhand eines stabilen, lokalen
   Referenzstatus entscheiden; keine direkte Portfolio-Abfrage.
-- `watch_interests`, den Portfolio-Interest-Consumer, `instruments.watch.*` und
-  `/internal/watch-set` nach `market` verschieben. Alternativ einen expliziten
-  gemeinsamen `refresh-interests`-Service einführen, falls Market,
-  Fundamentals und Events unabhängig dieselbe Projektion benötigen.
+- ✅ Erledigt (2026-06-16): `watch_interests`, der Portfolio-Interest-Consumer,
+  `instruments.watch.*` und `/internal/watch-set` wurden entfernt (Migration `020`).
+  Statt einer Projektion sweepen market/fundamentals/events den gesamten aktiven
+  Katalog über `/internal/listings/all` bzw. `/internal/refresh-plan`.
 
 Die spezifizierte Discovery-Kette ist zudem unvollständig: Der interne
 Market-Endpunkt `/internal/discovery/search` existiert, wird von `instruments`
@@ -283,12 +287,14 @@ Refresh-Scheduler und Providerzugriff für Marktdaten.
 | `GET` | `/quotes/:listingId/series` | `market:read` | Passend |
 | `GET` | `/quotes/:listingId/history` | `market:read` | Passend |
 | `POST` | `/quotes/refresh` | `market:read` | Service passend, Scope prüfen |
+| `POST` | `/quotes/rebuild` | `system:admin` | Passend: Purge + Rebuild der Kursserie bei Provider-Wechsel (verlangt `confirm`) |
 | `GET` | `/fx/rates` | `market:read` | Passend |
 | `GET` | `/fx/rate` | `market:read` | Passend |
 | `GET` | `/fx/series` | `market:read` | Passend |
 | `POST` | `/fx/refresh` | `market:read` | Service passend, Scope prüfen |
 | `GET` | `/internal/quotes` | intern, ohne Token | Passend; Service-Auth fehlt |
 | `POST` | `/internal/quotes/refresh` | intern, ohne Token | Passend; Service-Auth fehlt |
+| `POST` | `/internal/quotes/rebuild` | intern, ohne Token | Passend: Purge + Rebuild der Kursserie bei Provider-Wechsel (verlangt `confirm`); Service-Auth fehlt |
 | `POST` | `/internal/fx/refresh` | intern, ohne Token | Passend; Service-Auth fehlt |
 | `GET` | `/internal/discovery/search` | intern, ohne Token | Passend, derzeit ungenutzt |
 
@@ -298,8 +304,13 @@ das Analystenbewertungen vom Providers-Service lädt und ein Market-Event für
 `insights`-Daten. Diese Orchestrierung sollte nach `insights` verschoben werden;
 `market` sollte keine fachlichen Analysten-Events produzieren.
 
-Umgekehrt fehlt dem Market-Service die laut Spezifikation ihm zugeordnete
-persistierte Refresh-Interest-Projektion. Diese liegt aktuell in `instruments`.
+Zum Refresh-Modell (Stand P3 von `provider-todo.md`): Der Market-Scheduler
+fragt kein Watch-Set mehr ab, sondern sweept den **gesamten aktiven Katalog**
+über `instruments` `GET /internal/refresh-plan?capability=quotes`, gruppiert je
+ausgewähltem Provider und batcht gemäß dessen `max_batch_size`. Jeder gespeicherte
+Quote wird mit seinem tatsächlichen Provider getaggt. Eine Refresh-Interest-/
+Watch-Projektion gibt es nicht mehr (entfernt 2026-06-16, Migration `020`);
+fundamentals/events sweepen denselben Katalog über `/internal/listings/all`.
 
 ## Fundamentals-Service
 
@@ -310,9 +321,11 @@ Sollzuständigkeit: objektive Unternehmens- und Finanzkennzahlen.
 | `GET` | `/fundamentals` | `fundamentals:read` | Passend |
 | `POST` | `/fundamentals/refresh` | `fundamentals:read` | Service passend, Scope prüfen |
 
-Der Service besitzt seine Snapshots und Refresh-Logik sauber. Die Abhängigkeit
-vom gemeinsamen Watch-Set ist fachlich sinnvoll; nur dessen aktuelle
-Eigentümerschaft bei `instruments` ist falsch.
+Der Service besitzt seine Snapshots und Refresh-Logik sauber. Er bezieht die
+Listing-Menge über `instruments` `GET /internal/listings/all` (Voll-Katalog-Sweep)
+und löst je Instrument den **ausgewählten** Fundamentals-Provider via
+`GET /internal/refresh-plan?capability=fundamentals` auf — kein hartcodierter
+Provider mehr (2026-06-16).
 
 ## Events-Service
 
@@ -329,7 +342,10 @@ Kalenderereignisse.
 
 Die objektiven Corporate-Action-Fakten sind korrekt von den angewendeten
 Portfolio-Corporate-Actions getrennt. Ein Macro-Calendar ist laut Service-
-Schnitt vorgesehen, hat aber noch keinen Endpunkt.
+Schnitt vorgesehen, hat aber noch keinen Endpunkt. Der Refresh bezieht die
+Listing-Menge über `/internal/listings/all` und löst je Instrument den gewählten
+Provider via `/internal/refresh-plan?capability=earnings` auf
+(earnings/corporate_actions/news teilen sich eine Auswahl).
 
 ## Insights-Service
 
@@ -373,21 +389,32 @@ Service-Tokens geschützt.
 
 ## Providers-Service
 
-Aktuelle Zuständigkeit: stateless, zentraler Egress und Normalisierungsschicht
-zu externen Datenprovidern.
+Aktuelle Zuständigkeit: zentraler Egress und Normalisierungsschicht zu externen
+Datenprovidern. **Nicht mehr stateless** (Stand P1 von `provider-todo.md`): der
+Service besitzt jetzt `providers.provider_settings` (Migration `018`) — die
+admin-editierbare, providereigene Konfiguration (Enabled-Schalter, `provider_class`
+symbol/reference, statische Datenqualität, Refresh-Pacing). Instrument-gekoppelte
+Zuordnungen (Provider-Auswahl je Instrument, Provider-Symbole je Listing) bleiben
+in `instruments`; beide referenzieren sich nur über den Provider-Namen. Der
+Service hat jetzt Auth-Konfiguration für die `/admin/*`-Routen (gateway-exponiert,
+`system:admin`); die `/internal/*`-Routen bleiben tokenlos und nur
+netzwerkbeschränkt.
 
 | Methode | Pfad | Exposition | Bewertung |
 |---|---|---|---|
+| `GET` | `/admin/providers` | Bearer, `system:admin` | Passend: gateway-exponierte Admin-Leseansicht der Provider-Settings |
+| `PATCH` | `/admin/providers/:provider` | Bearer, `system:admin` | Passend: editiert `enabled`/Pacing/Datenqualität (Klasse bleibt intrinsisch) |
 | `GET` | `/internal/capabilities` | intern, ohne Token | Passend für zentralen Provider-Egress |
-| `POST` | `/internal/quotes` | intern, ohne Token | Passend |
-| `GET` | `/internal/chart` | intern, ohne Token | Passend |
-| `GET` | `/internal/search` | intern, ohne Token | Passend |
-| `GET` | `/internal/analyst` | intern, ohne Token | Passend als Provideradapter |
-| `GET` | `/internal/fundamentals` | intern, ohne Token | Passend |
+| `GET` | `/internal/providers` | intern, ohne Token | Passend: Provider-Settings live aus der DB (Scheduler-Pacing) |
+| `POST` | `/internal/quotes` | intern, ohne Token | Passend; akzeptiert optionalen expliziten `provider` (sonst erster aktivierter) |
+| `GET` | `/internal/chart` | intern, ohne Token | Passend; akzeptiert optionalen expliziten `provider` |
+| `GET` | `/internal/search` | intern, ohne Token | Passend; Capability intern `search`→`symbol_search` umbenannt |
+| `GET` | `/internal/analyst` | intern, ohne Token | Passend; akzeptiert optionalen expliziten `provider` |
+| `GET` | `/internal/fundamentals` | intern, ohne Token | Passend; akzeptiert optionalen expliziten `provider` |
 | `GET` | `/internal/fx/rates` | intern, ohne Token | Passend |
-| `GET` | `/internal/earnings` | intern, ohne Token | Passend |
-| `GET` | `/internal/corporate-actions` | intern, ohne Token | Passend |
-| `GET` | `/internal/news` | intern, ohne Token | Passend |
+| `GET` | `/internal/earnings` | intern, ohne Token | Passend; akzeptiert optionalen expliziten `provider` |
+| `GET` | `/internal/corporate-actions` | intern, ohne Token | Passend; akzeptiert optionalen expliziten `provider` |
+| `GET` | `/internal/news` | intern, ohne Token | Passend; akzeptiert optionalen expliziten `provider` |
 
 Der Providers-Service ist intern kohärent, fehlt aber im definierten
 Service-Schnitt. Aktuell widersprechen sich zwei Architekturmodelle:
@@ -408,9 +435,9 @@ im jeweils zuständigen Service bleiben.
 ### Priorität 1: echte Grenzverletzungen entfernen
 
 1. Direkte `portfolio.*`-Reads aus `instruments` entfernen.
-2. `instruments.watch_interests`, Watch-Consumer, Watch-Outbox-Events und
-   `/internal/watch-set` nach `market` oder in einen expliziten
-   Refresh-Interest-Service verschieben.
+2. ✅ Erledigt (2026-06-16): `instruments.watch_interests`, Watch-Consumer,
+   Watch-Outbox-Events und `/internal/watch-set` wurden entfernt (Migration `020`);
+   der Refresh sweept den gesamten Katalog statt einer Watch-Projektion.
 3. Interne Endpunkte mit Service-Authentifizierung absichern; reine
    Gateway-Nichterreichbarkeit ist keine vollständige Vertrauensgrenze.
 

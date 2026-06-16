@@ -44,12 +44,13 @@ never leak into business logic.
 Internal endpoints are unauthenticated today and **must** be network/gateway
 restricted; they move to service-token auth when that is introduced.
 
-## Events
+## Refresh set
 
-Hydrates the watched-listing set from the instruments service
-(`GET /internal/watch-set`) and stays current by consuming `instruments.watch.*`
-deltas off the `instruments` Redis stream (group `market-watch`), held in memory.
-No longer consumes the `portfolio` stream directly.
+The refresh cycle sweeps the **whole active catalog**: it pulls the quotes
+refresh plan from the instruments service (`GET /internal/refresh-plan?capability=quotes`),
+which resolves each active listing to its selected provider and that provider's
+symbol. No watch set / `instruments.watch.*` consumption — the cycle groups
+listings by provider and batches per the provider's `max_batch_size`.
 
 ## Persistence ownership
 

@@ -8,7 +8,8 @@ export type UpstreamName =
   | 'insights'
   | 'fundamentals'
   | 'events'
-  | 'notifications';
+  | 'notifications'
+  | 'providers';
 
 /** Gateway configuration: the public edge, upstream targets, and edge limits. */
 export interface GatewayConfig {
@@ -41,6 +42,7 @@ export function loadConfig(): GatewayConfig {
       fundamentals: optionalEnv('FUNDAMENTALS_BASE_URL') ?? 'http://localhost:3007',
       events: optionalEnv('EVENTS_BASE_URL') ?? 'http://localhost:3008',
       notifications: optionalEnv('NOTIFICATIONS_BASE_URL') ?? 'http://localhost:3009',
+      providers: optionalEnv('PROVIDERS_BASE_URL') ?? 'http://localhost:3010',
     },
     auth: {
       jwksUri: optionalEnv('AUTH_JWKS_URI') ?? `${authUpstream}/.well-known/jwks.json`,

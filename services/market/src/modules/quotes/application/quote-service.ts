@@ -1,10 +1,11 @@
 import { deriveFreshness, type FreshnessStatus } from '../domain/freshness.js';
 import type {
   DailyClose,
-  ListingResolver,
+  PlanListing,
   ProviderQuote,
   QuoteProvider,
   QuoteRepository,
+  RefreshPlanResolver,
 } from './ports.js';
 
 export interface QuoteView {
@@ -19,15 +20,17 @@ export interface QuoteView {
 export interface QuoteServiceDeps {
   repo: QuoteRepository;
   provider: QuoteProvider;
-  resolver: ListingResolver;
+  /** Resolves which provider + provider symbol serves the `quotes` capability per listing. */
+  planResolver: RefreshPlanResolver;
   staleAfterMs: number;
 }
 
 /**
  * Serves normalized quotes from stored data (never calling a provider during a
  * read) and refreshes a listing's quote from the provider on demand or on a
- * schedule. Every read carries a freshness status so the frontend can mark
- * stale or unavailable data.
+ * schedule. The provider that serves each listing is resolved per instrument
+ * (the refresh plan), so a stored quote is always tagged with the provider it
+ * actually came from. Every read carries a freshness status.
  */
 export class QuoteService {
   constructor(private readonly deps: QuoteServiceDeps) {}
@@ -59,54 +62,69 @@ export class QuoteService {
   }
 
   /**
-   * Refreshes one or more listings from the provider and stores the normalized
-   * results, including each listing's daily series (one provider request per
-   * listing). Used for on-demand refresh and series backfill. `from` starts the
-   * daily history at that date (e.g. a position's first transaction) so the full
-   * range of daily closes is stored; otherwise a short default window is used.
-   * Returns the count actually stored. Provider/instruments failures are
-   * swallowed (logged by adapters); stored data stays usable.
+   * Refreshes specific listings from their selected providers, fetching a daily
+   * series per listing (one provider request each). Used for on-demand refresh
+   * and series backfill. `from` starts the daily history at that date (e.g. a
+   * position's first transaction). Listings with no selected provider or no
+   * provider symbol are skipped. Returns the count actually stored.
    */
   async refreshListings(listingIds: string[], from?: Date): Promise<number> {
     if (listingIds.length === 0) return 0;
-    const resolved = await this.deps.resolver.resolve(listingIds, this.deps.provider.name);
+    const plan = await this.deps.planResolver.resolve('quotes', listingIds);
     let stored = 0;
-    for (const listingId of listingIds) {
-      const listing = resolved.get(listingId);
-      if (!listing) continue;
-      const quote = await this.deps.provider.fetchQuote(listing.providerSymbol, from);
+    for (const entry of plan) {
+      if (!entry.provider || !entry.providerSymbol) continue;
+      const quote = await this.deps.provider.fetchQuote(entry.provider, entry.providerSymbol, from);
       if (!quote) continue;
-      await this.store(listingId, listing.currency, quote);
+      await this.store(entry.listingId, entry.currency, entry.provider, quote);
       stored += 1;
     }
     return stored;
   }
 
   /**
-   * Refreshes the latest tick for many listings in a single batched provider
-   * request (no series). Used by the scheduler so a cycle is one call per
-   * chunk instead of one per listing. Returns the count actually stored.
+   * Refreshes the latest tick (no series) for a group of listings that all use
+   * the same provider, in batched provider requests of at most `batchSize`
+   * (a single-symbol provider passes batchSize 1, so each symbol is its own
+   * request). Used by the scheduler. Returns the count actually stored.
    */
-  async refreshLatest(listingIds: string[]): Promise<number> {
-    if (listingIds.length === 0) return 0;
-    const resolved = await this.deps.resolver.resolve(listingIds, this.deps.provider.name);
-    const symbols = [...new Set([...resolved.values()].map((l) => l.providerSymbol))];
-    if (symbols.length === 0) return 0;
-
-    const quotes = await this.deps.provider.fetchQuotes(symbols);
+  async refreshLatestBatched(provider: string, entries: PlanListing[], batchSize: number): Promise<number> {
+    const fetchable = entries.filter((e) => e.providerSymbol);
+    if (fetchable.length === 0) return 0;
+    const size = batchSize > 0 ? batchSize : 1;
     let stored = 0;
-    for (const listingId of listingIds) {
-      const listing = resolved.get(listingId);
-      if (!listing) continue;
-      const quote = quotes.get(listing.providerSymbol);
-      if (!quote) continue;
-      await this.store(listingId, listing.currency, quote);
-      stored += 1;
+    for (const chunk of chunked(fetchable, size)) {
+      const symbols = [...new Set(chunk.map((e) => e.providerSymbol as string))];
+      const quotes = await this.deps.provider.fetchQuotes(provider, symbols);
+      for (const entry of chunk) {
+        const quote = quotes.get(entry.providerSymbol as string);
+        if (!quote) continue;
+        await this.store(entry.listingId, entry.currency, provider, quote);
+        stored += 1;
+      }
     }
     return stored;
   }
 
-  private async store(listingId: string, listingCurrency: string, quote: ProviderQuote): Promise<void> {
+  /**
+   * Purges the stored price history for the given listings and rebuilds it from
+   * each listing's currently-selected provider over `[from, today]`. Used when an
+   * admin switches the quotes/chart provider, so the series never mixes prices
+   * from two sources. `from` should be the instrument's first-acquisition date.
+   */
+  async purgeAndRebuild(listingIds: string[], from?: Date): Promise<{ purged: number; rebuilt: number }> {
+    if (listingIds.length === 0) return { purged: 0, rebuilt: 0 };
+    const purged = await this.deps.repo.purgeListings(listingIds);
+    const rebuilt = await this.refreshListings(listingIds, from);
+    return { purged, rebuilt };
+  }
+
+  private async store(
+    listingId: string,
+    listingCurrency: string,
+    provider: string,
+    quote: ProviderQuote,
+  ): Promise<void> {
     const currency = quote.currency ?? listingCurrency;
     const providerTimestamp = quote.timestampMs ? new Date(quote.timestampMs) : null;
     const now = new Date();
@@ -116,7 +134,7 @@ export class QuoteService {
       await this.deps.repo.upsertQuote({
         listingId,
         time: new Date(point.timeMs),
-        provider: this.deps.provider.name,
+        provider,
         price: point.close,
         currency,
         providerTimestamp,
@@ -126,10 +144,14 @@ export class QuoteService {
     await this.deps.repo.upsertQuote({
       listingId,
       time: providerTimestamp ?? now,
-      provider: this.deps.provider.name,
+      provider,
       price: quote.price,
       currency,
       providerTimestamp,
     });
   }
+}
+
+function* chunked<T>(items: T[], size: number): Generator<T[]> {
+  for (let i = 0; i < items.length; i += size) yield items.slice(i, i + size);
 }

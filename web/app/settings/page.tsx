@@ -1,10 +1,12 @@
 import { apiFetch } from "@/lib/api"
 import { SettingsForm } from "./SettingsForm"
 import { ApiTokensSection } from "@/components/ApiTokensSection"
-import { TaxResidencyCard } from "@/components/TaxResidencyCard"
-import { UserTaxSettingsCard } from "@/components/UserTaxSettingsCard"
 import { getTranslations } from "@/lib/i18n"
-import type { ApiToken, MeData, TaxRule, TaxResidencyView, UserTaxSettings } from "@/lib/types"
+import type { ApiToken, MeData, TaxRule, TaxResidencyView, TaxSettingsSchema, UserTaxSettings } from "@/lib/types"
+
+function withoutDerivedFields(schema: TaxSettingsSchema | null): TaxSettingsSchema | null {
+  return schema ? { ...schema, fields: schema.fields.filter((field) => field.key !== "taxCurrency") } : null
+}
 
 export default async function SettingsPage() {
   const t = getTranslations()
@@ -32,18 +34,24 @@ export default async function SettingsPage() {
   const userTaxSettings = taxSettingsResp.ok ? ((await taxSettingsResp.json()) as UserTaxSettings | null) : null
 
   return (
-    <div className="mx-auto max-w-xl px-4 py-8">
-      <header className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight text-white">{t("settings.title")}</h1>
-        <p className="mt-1 text-xs text-slate-600">{t("settings.subtitle")}</p>
+    <div className="mx-auto max-w-[1320px] px-3 py-4 sm:px-5 sm:py-6">
+      <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-[var(--app-text)]">{t("settings.title")}</h1>
+          <p className="mt-1 text-xs text-[var(--app-text-muted)]">{t("settings.subtitle")}</p>
+        </div>
+        <div className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-raised)] px-3 py-2 text-right">
+          <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--app-text-faint)]">Signed in as</p>
+          <p className="mt-0.5 text-xs font-medium text-[var(--app-text)]">{me.email}</p>
+        </div>
       </header>
-      <div className="space-y-6">
-        <SettingsForm me={me} />
-        <TaxResidencyCard residency={residency} />
-        <UserTaxSettingsCard
-          country={country}
-          schema={rules[0]?.user_settings_schema ?? null}
-          current={userTaxSettings?.settings ?? {}}
+      <div className="space-y-4">
+        <SettingsForm
+          me={me}
+          residency={residency}
+          taxSettingsCountry={country}
+          taxSettingsSchema={withoutDerivedFields(rules[0]?.user_settings_schema ?? null)}
+          currentTaxSettings={userTaxSettings?.settings ?? {}}
         />
         <ApiTokensSection tokens={tokens} availableScopes={availableScopes} />
       </div>

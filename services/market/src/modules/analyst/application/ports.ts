@@ -10,8 +10,7 @@ export interface AnalystAssessment {
 }
 
 export interface AnalystProvider {
-  readonly name: string;
-  fetchAssessment(providerSymbol: string): Promise<AnalystAssessment | null>;
+  fetchAssessment(provider: string, providerSymbol: string): Promise<AnalystAssessment | null>;
 }
 
 /** An assessment ready to publish, attributed to its instrument + quote currency. */

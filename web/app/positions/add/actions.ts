@@ -78,5 +78,6 @@ export async function createPositionAction(
   }
   if (!posResp.ok) return problemDetail(posResp, "Failed to create the position.")
 
-  redirect("/dashboard")
+  const redirectTo = formData.get("redirect_to")
+  redirect(typeof redirectTo === "string" && (redirectTo === "/dashboard" || redirectTo.startsWith("/dashboard?")) ? redirectTo : "/dashboard")
 }

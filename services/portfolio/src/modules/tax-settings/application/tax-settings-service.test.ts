@@ -18,7 +18,6 @@ const userSchema: TaxSettingsSchema = {
   version: 1,
   fields: [
     { key: 'churchTaxEnabled', label: 'Church tax', type: 'checkbox', order: 1 },
-    { key: 'taxCurrency', label: 'Tax currency', type: 'currency', required: true, order: 2 },
   ],
 };
 
@@ -77,15 +76,15 @@ function service(): { svc: TaxSettingsService; users: FakeUsers; portfolios: Fak
 describe('TaxSettingsService — user settings', () => {
   test('valid settings are validated and stored', async () => {
     const { svc, users } = service();
-    const saved = await svc.setUserSettings(USER, { countryCode: 'de', settings: { churchTaxEnabled: false, taxCurrency: 'EUR' } });
+    const saved = await svc.setUserSettings(USER, { countryCode: 'de', settings: { churchTaxEnabled: false } });
     assert.equal(saved.country_code, 'DE');
-    assert.deepEqual(users.row?.settings, { churchTaxEnabled: false, taxCurrency: 'EUR' });
+    assert.deepEqual(users.row?.settings, { churchTaxEnabled: false });
   });
 
   test('invalid settings are rejected with a 400 and field errors', async () => {
     const { svc, users } = service();
     await assert.rejects(
-      () => svc.setUserSettings(USER, { countryCode: 'DE', settings: { taxCurrency: 'euro' } }),
+      () => svc.setUserSettings(USER, { countryCode: 'DE', settings: { churchTaxEnabled: 'yes' } }),
       (err: unknown) => err instanceof AppError && err.status === 400 && err.code === 'invalid_tax_settings',
     );
     assert.equal(users.row, null); // nothing persisted

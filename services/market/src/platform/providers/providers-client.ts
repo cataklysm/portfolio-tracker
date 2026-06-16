@@ -57,6 +57,17 @@ export interface ProvidersFxRatesDto {
   history: ProvidersFxDailyDto[];
 }
 
+/** A provider's admin-editable settings, as served by /internal/providers. */
+export interface ProvidersProviderSettingsDto {
+  provider: string;
+  enabled: boolean;
+  providerClass: 'symbol' | 'reference';
+  dataQuality: 'high' | 'medium' | 'low' | 'unknown';
+  maxBatchSize: number | null;
+  rateLimitPerMin: number | null;
+  maxConcurrency: number;
+}
+
 export class ProvidersClient {
   constructor(
     private readonly baseUrl: string,
@@ -64,20 +75,27 @@ export class ProvidersClient {
     private readonly timeoutMs = 8000,
   ) {}
 
-  async fetchQuotes(symbols: string[]): Promise<ProvidersQuoteDto[]> {
+  async fetchQuotes(symbols: string[], provider?: string): Promise<ProvidersQuoteDto[]> {
     if (symbols.length === 0) return [];
     const body = await this.request<{ quotes: ProvidersQuoteDto[] }>('/internal/quotes', {
       method: 'POST',
-      body: JSON.stringify({ symbols }),
+      body: JSON.stringify(provider ? { symbols, provider } : { symbols }),
     });
     return body?.quotes ?? [];
   }
 
-  async fetchChart(symbol: string, from?: Date): Promise<ProvidersChartDto | null> {
+  async fetchChart(symbol: string, from?: Date, provider?: string): Promise<ProvidersChartDto | null> {
     const params = new URLSearchParams({ symbol });
     if (from) params.set('from', toIsoDate(from));
+    if (provider) params.set('provider', provider);
     const body = await this.request<{ chart: ProvidersChartDto | null }>(`/internal/chart?${params}`);
     return body?.chart ?? null;
+  }
+
+  /** The enabled providers' settings (pacing/quality) — used to pace the refresh sweep. */
+  async fetchProviderSettings(): Promise<ProvidersProviderSettingsDto[]> {
+    const body = await this.request<{ providers: ProvidersProviderSettingsDto[] }>('/internal/providers');
+    return body?.providers ?? [];
   }
 
   async search(query: string, limit: number): Promise<ProvidersSearchResultDto[]> {
@@ -86,8 +104,9 @@ export class ProvidersClient {
     return body?.results ?? [];
   }
 
-  async fetchAnalyst(symbol: string): Promise<ProvidersAnalystDto | null> {
+  async fetchAnalyst(symbol: string, provider?: string): Promise<ProvidersAnalystDto | null> {
     const params = new URLSearchParams({ symbol });
+    if (provider) params.set('provider', provider);
     const body = await this.request<{ assessment: ProvidersAnalystDto | null }>(`/internal/analyst?${params}`);
     return body?.assessment ?? null;
   }

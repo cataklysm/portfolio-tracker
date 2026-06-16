@@ -5,8 +5,8 @@ import type {
   EarningsRepository,
   EventsEventStore,
   EventsProvider,
-  ListingResolver,
   NewsRepository,
+  PlanResolver,
   RefreshStateRepository,
   StoredCorporateAction,
   StoredEarnings,
@@ -20,7 +20,12 @@ export interface EventsServiceDeps {
   news: NewsRepository;
   refreshState: RefreshStateRepository;
   provider: EventsProvider;
-  resolver: ListingResolver;
+  /**
+   * Resolves the events plan: each instrument → its selected provider + symbol.
+   * earnings/corporate_actions/news share one selection, so a single plan
+   * (capability `earnings`) drives all three feeds.
+   */
+  planResolver: PlanResolver;
   events: EventsEventStore;
   logger: Logger;
   /** Instruments refreshed within this window are skipped by a non-forced cycle. */
@@ -61,14 +66,16 @@ export class EventsService {
    */
   async refreshListings(listingIds: string[], force = false): Promise<number> {
     if (listingIds.length === 0) return 0;
-    const resolved = await this.deps.resolver.resolve(listingIds, this.deps.provider.name);
+    const plan = await this.deps.planResolver.resolve('earnings', listingIds);
 
-    const byInstrument = new Map<string, { providerSymbol: string; currency: string }>();
-    for (const listing of resolved.values()) {
-      if (!byInstrument.has(listing.instrumentId)) {
-        byInstrument.set(listing.instrumentId, {
-          providerSymbol: listing.providerSymbol,
-          currency: listing.currency,
+    const byInstrument = new Map<string, { provider: string; providerSymbol: string; currency: string }>();
+    for (const entry of plan) {
+      if (!entry.provider || !entry.providerSymbol) continue;
+      if (!byInstrument.has(entry.instrumentId)) {
+        byInstrument.set(entry.instrumentId, {
+          provider: entry.provider,
+          providerSymbol: entry.providerSymbol,
+          currency: entry.currency,
         });
       }
     }
@@ -85,7 +92,7 @@ export class EventsService {
       const target = byInstrument.get(instrumentId);
       if (!target) continue;
       try {
-        await this.refreshInstrument(instrumentId, target.providerSymbol, target.currency);
+        await this.refreshInstrument(instrumentId, target.provider, target.providerSymbol, target.currency);
         processed.push(instrumentId);
       } catch (err) {
         this.deps.logger.warn(
@@ -99,12 +106,16 @@ export class EventsService {
     return processed.length;
   }
 
-  private async refreshInstrument(instrumentId: string, providerSymbol: string, currency: string): Promise<void> {
-    const provider = this.deps.provider.name;
+  private async refreshInstrument(
+    instrumentId: string,
+    provider: string,
+    providerSymbol: string,
+    currency: string,
+  ): Promise<void> {
     const [earnings, actions, news] = await Promise.all([
-      this.deps.provider.fetchEarnings(providerSymbol),
-      this.deps.provider.fetchCorporateActions(providerSymbol),
-      this.deps.provider.fetchNews(providerSymbol),
+      this.deps.provider.fetchEarnings(provider, providerSymbol),
+      this.deps.provider.fetchCorporateActions(provider, providerSymbol),
+      this.deps.provider.fetchNews(provider, providerSymbol),
     ]);
 
     if (earnings) await this.deps.earnings.upsert(toEarningsRows(instrumentId, provider, earnings));

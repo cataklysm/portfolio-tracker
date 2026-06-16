@@ -6,15 +6,12 @@ import type { FundamentalsProvider, FundamentalsSnapshot } from '../application/
  * to the service's normalized snapshot, deriving the two stored fields the
  * provider doesn't supply directly — price-to-sales (market cap / revenue) and
  * net debt (total debt − total cash) — and stashing the full DTO in `raw`.
- * `name` is the upstream symbol namespace ('yahoo'), used by the resolver.
  */
 export class ProvidersFundamentalsProvider implements FundamentalsProvider {
-  readonly name = 'yahoo';
-
   constructor(private readonly client: ProvidersClient) {}
 
-  async fetchFundamentals(providerSymbol: string): Promise<FundamentalsSnapshot | null> {
-    const dto = await this.client.fetchFundamentals(providerSymbol);
+  async fetchFundamentals(provider: string, providerSymbol: string): Promise<FundamentalsSnapshot | null> {
+    const dto = await this.client.fetchFundamentals(providerSymbol, provider);
     if (!dto) return null;
 
     const psRatio =

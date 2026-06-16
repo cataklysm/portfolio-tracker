@@ -99,6 +99,15 @@ export class KyselyQuoteRepository implements QuoteRepository {
     return [...anchor.rows, ...inRange.rows];
   }
 
+  async purgeListings(listingIds: string[]): Promise<number> {
+    if (listingIds.length === 0) return 0;
+    const result = await this.db
+      .deleteFrom('market.price_quotes')
+      .where('listing_id', 'in', listingIds)
+      .executeTakeFirst();
+    return Number(result.numDeletedRows ?? 0n);
+  }
+
   async upsertQuote(quote: NormalizedQuote): Promise<void> {
     await this.db
       .insertInto('market.price_quotes')

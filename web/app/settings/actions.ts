@@ -33,32 +33,50 @@ export async function updatePreferencesAction(
   return { ok: true }
 }
 
-/**
- * Records a new effective-dated tax residence. Residence is explicitly
- * user-confirmed and never inferred from locale, currency, or broker; it only
- * controls jurisdiction-specific labels and disclosures, not tax calculation.
- */
-export async function setTaxResidencyAction(
+export async function saveSettingsAction(
+  taxSettings: Record<string, unknown>,
   formData: FormData,
 ): Promise<{ ok: true } | { error: string }> {
+  const preferences = await updatePreferencesAction(formData)
+  if ("error" in preferences) return preferences
+
   const countryCode = formData.get("country_code")
   const validFrom = formData.get("valid_from")
+  const currentCountry = formData.get("current_country_code")
+  const currentValidFrom = formData.get("current_valid_from")
   if (typeof countryCode !== "string" || !countryCode) return { error: "Select a country of tax residence." }
   if (typeof validFrom !== "string" || !validFrom) return { error: "Choose an effective date." }
 
-  let resp: Response
-  try {
-    resp = await apiFetch("/tax-residency", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ country_code: countryCode, valid_from: validFrom }),
-    })
-  } catch {
-    return { error: "Cannot reach the gateway." }
+  if (countryCode !== currentCountry || validFrom !== currentValidFrom) {
+    let residencyResp: Response
+    try {
+      residencyResp = await apiFetch("/tax-residency", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ country_code: countryCode, valid_from: validFrom }),
+      })
+    } catch {
+      return { error: "Preferences saved, but the gateway could not save tax residence." }
+    }
+    if (!residencyResp.ok) return { error: await problemDetail(residencyResp, "Preferences saved, but tax residence failed.") }
   }
 
-  if (!resp.ok) return { error: await problemDetail(resp, "Request failed") }
+  const taxSettingsCountry = formData.get("tax_settings_country")
+  if (typeof taxSettingsCountry === "string" && taxSettingsCountry === countryCode) {
+    let taxResp: Response
+    try {
+      taxResp = await apiFetch("/tax-settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ country: countryCode, settings: taxSettings }),
+      })
+    } catch {
+      return { error: "Profile saved, but the gateway could not save tax-specific settings." }
+    }
+    if (!taxResp.ok) return { error: await problemDetail(taxResp, "Profile saved, but tax-specific settings failed.") }
+  }
 
   revalidatePath("/settings")
+  revalidatePath("/reports")
   return { ok: true }
 }

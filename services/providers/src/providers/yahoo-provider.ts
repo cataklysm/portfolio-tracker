@@ -22,7 +22,7 @@ export class YahooProvider implements MarketDataProvider {
   readonly capabilities: ReadonlySet<Capability> = new Set<Capability>([
     'quotes',
     'chart',
-    'search',
+    'symbol_search',
     'analyst',
     'fundamentals',
     'earnings',
@@ -59,8 +59,18 @@ export class YahooProvider implements MarketDataProvider {
     };
   }
 
-  search(query: string, limit: number): Promise<SearchResultDto[]> {
-    return this.client.search(query, limit);
+  async searchSymbols(query: string, limit: number): Promise<SearchResultDto[]> {
+    const results = await this.client.search(query, limit);
+    // Yahoo's search exposes a human exchange label and the provider symbol, but
+    // neither an official MIC nor a reliable currency — left null for the caller.
+    return results.map((r) => ({
+      symbol: r.symbol,
+      name: r.name,
+      exchange: r.exchange,
+      mic: null,
+      currency: null,
+      quoteType: r.quoteType,
+    }));
   }
 
   fetchAnalyst(symbol: string): Promise<AnalystDto | null> {

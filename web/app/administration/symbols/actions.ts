@@ -3,8 +3,6 @@ import { revalidatePath } from "next/cache"
 import { apiFetch, problemDetail } from "@/lib/api"
 
 export async function createAdminSymbolAction(formData: FormData): Promise<string | null> {
-  const provider = String(formData.get("provider") ?? "").trim()
-  const providerIdentifier = String(formData.get("provider_identifier") ?? "").trim()
   try {
     const resp = await apiFetch("/instruments", {
       method: "POST",
@@ -21,9 +19,6 @@ export async function createAdminSymbolAction(formData: FormData): Promise<strin
           symbol: String(formData.get("symbol") ?? "").trim(),
           currency: String(formData.get("currency") ?? "").trim(),
         },
-        provider_identifier: provider && providerIdentifier
-          ? { provider, provider_identifier: providerIdentifier }
-          : undefined,
       }),
     })
     if (!resp.ok) return problemDetail(resp, "Failed to add the symbol.")
@@ -31,6 +26,7 @@ export async function createAdminSymbolAction(formData: FormData): Promise<strin
     return "Cannot reach the gateway."
   }
   revalidatePath("/administration/symbols")
+  revalidatePath("/administration/providers")
   return null
 }
 
@@ -48,17 +44,13 @@ export async function updateAdminSymbolAction(formData: FormData): Promise<strin
     })
     if (!instrumentResp.ok) return problemDetail(instrumentResp, "Failed to update the instrument.")
 
-    const provider = String(formData.get("provider") ?? "").trim()
-    const providerIdentifier = String(formData.get("provider_identifier") ?? "").trim()
     const listingResp = await apiFetch(`/listings/${listingId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         symbol: String(formData.get("symbol") ?? "").trim(),
         currency: String(formData.get("currency") ?? "").trim(),
-        provider_identifiers: provider && providerIdentifier
-          ? [{ provider, provider_identifier: providerIdentifier }]
-          : undefined,
+        exchange_id: String(formData.get("exchange_id") ?? "").trim() || undefined,
       }),
     })
     if (!listingResp.ok) return problemDetail(listingResp, "Failed to update the listing.")
@@ -66,6 +58,7 @@ export async function updateAdminSymbolAction(formData: FormData): Promise<strin
     return "Cannot reach the gateway."
   }
   revalidatePath("/administration/symbols")
+  revalidatePath("/administration/providers")
   return null
 }
 
@@ -77,5 +70,6 @@ export async function deactivateAdminSymbolAction(listingId: string): Promise<st
     return "Cannot reach the gateway."
   }
   revalidatePath("/administration/symbols")
+  revalidatePath("/administration/providers")
   return null
 }

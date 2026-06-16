@@ -1,11 +1,12 @@
-import Link from "next/link"
 import { apiFetch } from "@/lib/api"
 import { getLocale } from "@/lib/locale"
-import { DashboardOverview } from "@/components/DashboardOverview"
+import { DashboardOverview, PortfolioIntelligence } from "@/components/DashboardOverview"
 import { PerformanceChart } from "@/components/PerformanceChart"
 import { CreatePortfolioForm } from "@/components/CreatePortfolioForm"
+import { AddPositionModal } from "@/components/AddPositionModal"
+import { DashboardPrivacyProvider } from "@/components/DashboardPrivacy"
 import { getTranslations } from "@/lib/i18n"
-import type { ActivityPage, PositionView, Portfolio, MeData, TaxReport, PerformancePeriod, PerformanceReport } from "@/lib/types"
+import type { ActivityPage, BenchmarkReport, ExchangeView, IntelligenceReport, NotificationInbox, PositionView, Portfolio, MeData, PerformancePeriod, PerformanceReport } from "@/lib/types"
 
 interface Props {
   searchParams: Promise<{ portfolio?: string; period?: string }>
@@ -17,12 +18,21 @@ function asPeriod(raw: string | undefined): PerformancePeriod {
   return PERIODS.includes(raw as PerformancePeriod) ? (raw as PerformancePeriod) : "1Y"
 }
 
-async function fetchTaxReport(query: string): Promise<TaxReport | null> {
+async function fetchIntelligence(query: string): Promise<IntelligenceReport | null> {
   try {
-    const response = await apiFetch(`/reporting/tax${query}`, { cache: "no-store" })
-    return response.ok ? ((await response.json()) as TaxReport) : null
+    const response = await apiFetch(`/reporting/intelligence${query}`, { cache: "no-store" })
+    return response.ok ? ((await response.json()) as IntelligenceReport) : null
   } catch {
     return null
+  }
+}
+
+async function fetchNotifications(): Promise<NotificationInbox> {
+  try {
+    const response = await apiFetch("/notifications?limit=50", { cache: "no-store" })
+    return response.ok ? ((await response.json()) as NotificationInbox) : { unread_count: 0, notifications: [] }
+  } catch {
+    return { unread_count: 0, notifications: [] }
   }
 }
 
@@ -30,6 +40,16 @@ async function fetchPerformance(query: string): Promise<PerformanceReport | null
   try {
     const response = await apiFetch(`/reporting/performance${query}`, { cache: "no-store" })
     return response.ok ? ((await response.json()) as PerformanceReport) : null
+  } catch {
+    return null
+  }
+}
+
+async function fetchBenchmark(portfolioId: string | undefined, period: PerformancePeriod): Promise<BenchmarkReport | null> {
+  if (!portfolioId) return null
+  try {
+    const response = await apiFetch(`/reporting/benchmark?portfolio_id=${portfolioId}&period=${period}`, { cache: "no-store" })
+    return response.ok ? ((await response.json()) as BenchmarkReport) : null
   } catch {
     return null
   }
@@ -49,13 +69,15 @@ export default async function DashboardPage({ searchParams }: Props) {
   const t = getTranslations()
   const { portfolio: selectedRaw, period: periodRaw } = await searchParams
   const period = asPeriod(periodRaw)
-  const [portfoliosResp, meResp, locale] = await Promise.all([
+  const [portfoliosResp, meResp, exchangesResp, locale] = await Promise.all([
     apiFetch("/portfolios", { cache: "no-store" }),
     apiFetch("/me", { cache: "no-store" }),
+    apiFetch("/exchanges", { cache: "no-store" }),
     getLocale(),
   ])
   const portfolios = (await portfoliosResp.json()) as Portfolio[]
   const me = (await meResp.json()) as MeData
+  const exchanges = exchangesResp.ok ? ((await exchangesResp.json()) as ExchangeView[]) : []
   const reporting = me.preferences.reporting_currency
 
   // No portfolio yet → show the creation form (never auto-create one).
@@ -72,10 +94,12 @@ export default async function DashboardPage({ searchParams }: Props) {
   const selected = portfolios.find((p) => p.id === selectedRaw)?.id
   const query = selected ? `?portfolio_id=${selected}` : ""
   const perfQuery = `?period=${period}${selected ? `&portfolio_id=${selected}` : ""}`
-  const [positionsResp, taxReport, performance, activity] = await Promise.all([
+  const [positionsResp, intelligence, notifications, performance, benchmark, activity] = await Promise.all([
     apiFetch(selected ? `/positions${query}` : "/positions", { cache: "no-store" }),
-    fetchTaxReport(query),
+    fetchIntelligence(perfQuery),
+    fetchNotifications(),
     fetchPerformance(perfQuery),
+    fetchBenchmark(selected, period),
     fetchActivity(query),
   ])
   const positions = (await positionsResp.json()) as PositionView[]
@@ -87,36 +111,43 @@ export default async function DashboardPage({ searchParams }: Props) {
     .pop()
 
   return (
-    <div className="mx-auto max-w-[1500px] px-3 py-3 sm:px-4 lg:px-5">
+    <div className="mx-auto w-full max-w-[1920px] px-3 py-3 sm:px-4 lg:px-5">
       {positions.length === 0 ? (
         <div className="app-panel flex flex-col items-center justify-center rounded-xl py-24 text-center">
           <p className="mb-2 text-lg font-medium text-[var(--app-text)]">{t("dashboard.emptyTitle")}</p>
           <p className="mb-6 text-sm text-[var(--app-text-muted)]">{t("dashboard.emptySubtitle")}</p>
-          <Link href="/positions/add" className="rounded-lg bg-[var(--app-accent)] px-4 py-2 text-sm font-medium text-white">
-            {t("dashboard.addFirstPosition")}
-          </Link>
+          <AddPositionModal portfolios={portfolios} exchanges={exchanges} selectedPortfolioId={selected} label={t("dashboard.addFirstPosition")} className="rounded-lg bg-[var(--app-accent)] px-4 py-2 text-sm font-medium text-white" />
         </div>
       ) : (
+        <DashboardPrivacyProvider>
         <div className="space-y-3">
-          <PerformanceChart
-            report={performance}
-            period={period}
-            portfolioId={selected}
-            portfolioName={selected ? portfolios.find((portfolio) => portfolio.id === selected)?.name ?? t("dashboard.title") : t("dashboard.allPortfolios")}
-            latestQuote={latestQuote}
-            currency={reporting}
-            locale={locale}
-          />
-          <DashboardOverview
-            positions={positions}
-            portfolios={portfolios}
-            selectedPortfolioId={selected}
-            activity={activity}
-            reportingCurrency={reporting}
-            locale={locale}
-            taxReport={taxReport}
-          />
+          <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="min-w-0 space-y-3">
+              <PerformanceChart
+                report={performance}
+                benchmark={benchmark}
+                period={period}
+                portfolioId={selected}
+                latestQuote={latestQuote}
+                currency={reporting}
+                locale={locale}
+              />
+              <DashboardOverview
+                positions={positions}
+                portfolios={portfolios}
+                exchanges={exchanges}
+                selectedPortfolioId={selected}
+                activity={activity}
+                reportingCurrency={reporting}
+                locale={locale}
+              />
+            </div>
+            <aside className="space-y-3">
+              <PortfolioIntelligence positions={positions} locale={locale} currency={reporting} intelligence={intelligence} notifications={notifications} selectedPortfolioId={selected} />
+            </aside>
+          </div>
         </div>
+        </DashboardPrivacyProvider>
       )}
     </div>
   )

@@ -22,6 +22,7 @@ export interface Portfolio {
   sort_order: number
   archived: boolean
   preferred_headline_metric: string
+  preferred_benchmark: string | null
   created_at: string
 }
 
@@ -148,6 +149,57 @@ export interface PerformanceReport {
   to: string
   points: PerformancePoint[]
   returns: PerformanceReturns
+}
+
+export interface BenchmarkReport {
+  period: string
+  reporting_currency: string
+  from: string
+  to: string
+  benchmark_listing_id: string
+  portfolio_return_pct: string | null
+  benchmark_return_pct: string | null
+  excess_return_pct: string | null
+  beta: string | null
+  correlation: string | null
+  tracking_error_pct: string | null
+  series: { date: string; portfolio: string | null; benchmark: string | null }[]
+}
+
+export type PortfolioPulseStatus = "strong" | "balanced" | "fragile" | "at_risk" | "insufficient_data"
+export type PortfolioPulseComponent = "structure" | "risk" | "data_quality"
+
+export interface IntelligenceReport {
+  period: PerformancePeriod
+  reporting_currency: string
+  version: number
+  score: number | null
+  status: PortfolioPulseStatus
+  confidence: number
+  primary_driver: PortfolioPulseComponent | null
+  components: {
+    structure: {
+      available: boolean
+      score: number | null
+      weight: number
+      top1_pct: number | null
+      top3_pct: number | null
+      hhi: number | null
+    }
+    risk: {
+      available: boolean
+      score: number | null
+      weight: number
+    }
+    data_quality: {
+      available: boolean
+      score: number
+      weight: number
+      priced_value_pct: number
+      fresh_value_pct: number
+      ledger_valid: boolean
+    }
+  }
 }
 
 export interface PositionDetail extends PositionView {
@@ -493,6 +545,8 @@ export interface ExchangeView {
   mic: string
   name: string
   timezone: string
+  regular_open_local: string | null
+  regular_close_local: string | null
 }
 
 export interface InstrumentListing {
@@ -531,6 +585,39 @@ export interface AdminSymbolView extends ListingDetail {
   isin: string | null
   underlying_identifier: string | null
   in_use: boolean
+}
+
+export type ProviderCapability =
+  | "quotes"
+  | "chart"
+  | "analyst"
+  | "fundamentals"
+  | "earnings"
+  | "corporate_actions"
+  | "news"
+
+export type DataQuality = "high" | "medium" | "low" | "unknown"
+
+export interface ProviderSelectionView {
+  capability: ProviderCapability
+  provider: string
+}
+
+export interface ProviderSettingsView {
+  provider: string
+  enabled: boolean
+  providerClass: "symbol" | "reference"
+  dataQuality: DataQuality
+  capabilityQuality: Partial<Record<ProviderCapability | "fx" | "symbol_search", DataQuality>>
+  maxBatchSize: number | null
+  rateLimitPerMin: number | null
+  maxConcurrency: number
+}
+
+export interface ProviderUsageView {
+  instrument_id: string
+  instrument_name: string
+  capability: ProviderCapability
 }
 
 // ---- Watchlist --------------------------------------------------------------

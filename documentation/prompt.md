@@ -42,15 +42,20 @@ Real-time is **not** required. A slight delay (e.g. 15-minute delayed quotes) is
 - Every position belongs to exactly one portfolio. The same instrument may be
   held in multiple portfolios owned by the same user, with one logical position
   per exchange-specific listing within each portfolio.
-- Only active/open positions can be moved between the user's portfolios. A
-  position moves as a whole together with its authoritative transaction and
-  corporate-action history; individual history entries cannot be moved
-  independently. The move creates linked internal `transfer_out` and
-  `transfer_in` ledger records at the transfer timestamp so historical
-  portfolio attribution is preserved. These internal transfers are excluded
-  from combined all-portfolios performance because no money entered or left
-  the user's total holdings. Moves trigger validation and recalculation of all
-  affected portfolio metrics.
+- Only active/open holdings can be moved between the user's portfolios. A
+  position may move as a whole together with its authoritative transaction and
+  corporate-action history. For FIFO/LIFO positions, the user may alternatively
+  move a selected subset of **fully open buy lots** to a same-listing position
+  in another owned portfolio; each selected lot moves intact with its original
+  transaction ID, quantity, cost basis, and acquisition date. Splitting and
+  moving only part of one open buy lot is deferred because it requires an
+  explicit authoritative lot-split/provenance model and must not silently
+  mutate the original buy transaction. Transfers create linked internal
+  `transfer_out` and `transfer_in` records at the transfer timestamp so
+  historical portfolio attribution is preserved. These internal transfers are
+  excluded from combined all-portfolios performance because no money entered or
+  left the user's total holdings. Moves trigger validation and recalculation of
+  all affected portfolio metrics.
 - Dividend receipts received before a position move remain attributed to the
   portfolio that received them. Future dividends are attributed to the
   destination portfolio. Deposits and withdrawals never move between
@@ -118,7 +123,9 @@ Real-time is **not** required. A slight delay (e.g. 15-minute delayed quotes) is
   invalid.
 - Supported asset classes: **equities**, **funds** (including ETFs), and
   **crypto (BTC spot)**. Keep the architecture generic enough that further
-  crypto/asset types can be added later.
+  crypto/asset types can be added later. The instrument catalog additionally
+  supports **index** as a non-holdable reference asset type for benchmark
+  series; index listings cannot be used to create portfolio positions.
 - Watchlist for not-yet-held instruments/listings (for entry evaluation).
 - Positions and transactions are entered manually initially. CSV and JSON
   import are planned extension points for a later version.
@@ -181,9 +188,11 @@ it is annualized:
   time-weighted return, annualized return/CAGR, and income return.
 - **Income views:** yield on cost, trailing-twelve-month dividend yield, and
   annual dividend income.
-- **Risk and comparison metrics:** benchmark-relative return, volatility,
-  maximum drawdown, Sharpe ratio, best/worst day or month, and closed-position
-  win rate.
+- **Risk and comparison metrics:** benchmark-relative return, beta,
+  correlation, annualized tracking error, volatility, maximum drawdown, Sharpe
+  ratio, best/worst day or month, and closed-position win rate. Additional
+  benchmark-relative risk measures beyond beta/correlation/tracking error are a
+  deferred follow-up rather than an implicit V1 requirement.
 
 Core values, simple return, total return, and XIRR are required for the initial
 portfolio reporting implementation. Time-weighted, income, risk, and comparison
@@ -195,7 +204,7 @@ selected headline metric as the only definition of performance.
 
 ```text
 total return =
-  (current value + gross sell proceeds + dividends
+  (current value + gross sell proceeds + dividends + returned capital
    - total contributed capital - fees)
   / total contributed capital
 ```
@@ -203,9 +212,10 @@ total return =
 `total contributed capital` is the gross purchase consideration contributed by
 the user, excluding fees. Buy and sell fees are subtracted exactly once through
 the separate `fees` term. This definition remains valid after partial sells and
-returned capital. Deposits and withdrawals are used as external cash flows for
-money-weighted/XIRR and time-weighted calculations but do not change this
-purchase-based total-return denominator.
+returned capital; a return-of-capital receipt reduces open cost basis but does
+not rewrite historical contributed capital. Deposits and withdrawals are used
+as external cash flows for money-weighted/XIRR and time-weighted calculations
+but do not change this purchase-based total-return denominator.
 
 Initial benchmark options are **MSCI World**, **S&P 500**, **DAX**, and
 **NASDAQ-100**. Initial comparison periods are **YTD**, **1Y**, **3Y**, **5Y**,
@@ -213,9 +223,21 @@ Initial benchmark options are **MSCI World**, **S&P 500**, **DAX**, and
 must be extensible so users can select additional benchmarks and period options
 in later versions.
 
+The initial benchmarks are exposed through a curated catalog owned by the
+instruments service. Each catalog entry has a stable key and resolves directly
+to a seeded index listing with provider mappings; runtime symbol lookup is not
+used because symbols are not globally unique and provider identifiers differ.
+The portfolio service stores only the selected `listing_id`. The normal
+instrument/listing search remains available as a fallback for benchmarks
+outside the curated set. Index instruments are reference assets and cannot be
+held as portfolio positions; users who hold an index-tracking product select
+the corresponding fund/ETF listing instead.
+
 Each portfolio may define an optional preferred benchmark. The combined
-all-portfolios view uses a separate preferred benchmark configured per user.
-It does not derive or blend a benchmark from the included portfolios.
+all-portfolios view uses a separate preferred benchmark configured per user and
+stored by authentication as `user_preferences.combined_benchmark`. It resolves
+to a benchmark listing independently of portfolio-level preferences and does
+not derive or blend a benchmark from the included portfolios.
 
 The Sharpe ratio uses the **Euro short-term rate (€STR)** as its initial default
 risk-free rate. The risk-free-rate source must remain configurable for future
@@ -247,7 +269,10 @@ Treat estimates honestly and in layers rather than as a single "magic" forecast:
 Events are modeled **relationally and separated by type** (no generic catch-all table), so they can be filtered by criteria and grouped by time period. Raw provider payloads may additionally be archived as a JSONB column; all query-relevant fields belong in real columns.
 
 - **Earnings** as a dedicated entity, cleanly displayable by quarters and years. Fiscal year and quarter are stored **separately from the period-end date**, since fiscal years often differ from the calendar year. Fields include: fiscal year, fiscal quarter, period end, report date, EPS estimate/actual, revenue estimate/actual, derived surprise; upcoming dates + history (beat/miss).
-- **Corporate actions** as a dedicated concept (splits, reverse splits, dividends, buybacks, spin-offs, **capital increases/dilution**). The action is an **objective market fact** and exists independently of whether the user holds the security.
+- **Corporate actions** as a dedicated concept (splits, reverse splits,
+  dividends, buybacks, spin-offs, return of capital, **capital
+  increases/dilution**). The action is an **objective market fact** and exists
+  independently of whether the user holds the security.
   - *Capital increase:* new share count, subscription price, share count before/after, derived **dilution ratio**. Relevant for explaining price movements and for all per-share metrics (EPS, P/E) as well as the DCF (diluted share count).
   - *Splits / reverse splits:* see interaction in §2.6.
 - **News** per instrument as a relational entity (filterable), ideally with a sentiment tag.
@@ -257,17 +282,27 @@ Events are modeled **relationally and separated by type** (no generic catch-all 
   visible directly on held securities without creating cross-service database
   ownership.
 
-### 2.6 Applying Splits/Reverse Splits to Positions
-Strictly separate the **fact** (the corporate action in the market) from the **application to the user's specific position** (e.g. 10 shares at cost X → 40 shares at cost X/4 for 4:1).
+### 2.6 Applying Corporate Actions to Positions
+Strictly separate the **fact** (the corporate action in the market) from the
+**application to the user's specific position** (e.g. 10 shares at cost X → 40
+shares at cost X/4 for 4:1).
 
-- The events/notifications flow informs the frontend that a relevant split exists. The frontend displays the event and any available context or insights; the user decides when to apply it.
-- The user applies a split **deliberately via a frontend interaction** — only possible if a position exists in the affected security. Events returns the displayed immutable corporate-action version together with a short-lived signed application token. The frontend sends that token, the position ID, and the selected fractional-share handling to portfolio. Events does not call portfolio or execute the change, and portfolio does not synchronously call events while applying it.
+- The events/notifications flow informs the frontend that a relevant corporate
+  action exists. The frontend displays the event and any available context or
+  insights; the user decides when to apply it.
+- The user applies a supported corporate action **deliberately via a frontend
+  interaction** — only possible if a position exists in the affected security.
+  Events returns the displayed immutable corporate-action version together with
+  a short-lived signed application token. The frontend sends that token,
+  position ID, and action-specific application choices to portfolio. Events
+  does not call portfolio or execute the change, and portfolio does not
+  synchronously call events while applying it.
 - The signed application token contains the corporate-action ID and version,
-  instrument ID, action type, effective date, ratio numerator/denominator,
-  source, and expiration. Portfolio verifies the events-service signature and
-  verifies that the position's listing belongs to the signed instrument, and
-  applies exactly the action version the user confirmed. Expired tokens require
-  the frontend to reload the action.
+  instrument ID, action type, effective date, all objective action-specific
+  values, source, and expiration. Portfolio verifies the events-service
+  signature, verifies that the position's listing belongs to the signed
+  instrument, and applies exactly the action version the user confirmed.
+  Expired tokens require the frontend to reload the action.
 - Corporate-action versions are immutable. Provider corrections create a new
   version while older versions remain identifiable. The frontend warns when a
   newer version exists before application.
@@ -276,16 +311,65 @@ Strictly separate the **fact** (the corporate action in the market) from the **a
   trail**. Reversed records remain preserved. A corrected action version can be
   applied only after the previous application is reversed.
 - **Reversible rather than destructive:** the authoritative application record
-  preserves the complete signed action snapshot, applied ratio/effective date,
-  fractional handling, actor, applied timestamp, and token signature/hash.
-  Applying it rebuilds derived quantities, cost bases, realization allocations,
-  and position state from the action's effective point onward. It does not
-  mutate authoritative buy/sell transactions or create synthetic trades.
+  preserves the complete signed action snapshot, action-specific applied values
+  and overrides, effective date, actor, applied timestamp, and token
+  signature/hash. Applying it rebuilds derived quantities, cost bases,
+  realization allocations, and position state from the action's effective
+  point onward. It does not mutate authoritative buy/sell transactions or
+  create synthetic trades.
 - Reversal marks the application record as reversed and performs the same
   deterministic rebuild without that application. If reversal makes the
   remaining ledger inconsistent, the normal invalid-position rules apply until
   the user repairs the history.
+- Jurisdiction-specific application policy is selected from the user's primary
+  tax residence effective on the corporate action date. It is never inferred
+  from UI locale, reporting currency, or listing venue. If the tax residence is
+  missing or the relevant policy is unsupported, the application is rejected
+  rather than silently applying a default policy.
+
+**Splits / reverse splits**
+
 - **Reverse splits — fractional shares:** since fractional shares are supported, the **default is to keep fractions** (e.g. 10 shares → 3.33 at 1:3). Alternatively selectable on application: **cash settlement** of the remainder, recorded as an authoritative cash-in-lieu ledger entry linked to the application rather than as a synthetic user sell. Both paths are supported.
+
+**Return of capital**
+
+- The objective event stores the return-of-capital amount **per share** and its
+  currency. On application, portfolio calculates the position-specific total
+  from the quantity held at the effective date. A user may override that total
+  from a broker statement; the application record preserves both the objective
+  per-share value and the applied total together with its source.
+- Return of capital reduces the remaining open cost basis without changing
+  quantity and is not income or a synthetic sale. The explicitly confirmed
+  application records the received amount as a linked authoritative
+  `return_of_capital` cash flow so reporting includes the distribution without
+  classifying it as dividend income or an external contribution. For the
+  initial DE policy, cost basis may be reduced only to zero. An application
+  whose amount exceeds the remaining basis is rejected with a dedicated error
+  until an explicit excess-return realization type is supported. The user must
+  not record the excess as a sale because no shares were disposed of.
+
+**Spin-offs**
+
+- The objective spin-off fact contains the distributed-quantity ratio and,
+  when supplied by the issuer/provider, the basis-allocation ratio. Portfolio
+  uses that authoritative allocation ratio first; if it is unavailable, the
+  user must provide an explicit allocation override, which is preserved with
+  its source in the application audit record.
+- The spun-off instrument and selected listing must already exist before the
+  portfolio application command runs. The frontend may search or create them
+  through the instruments service before applying the action; portfolio never
+  creates instruments or listings.
+- Distributed quantity is derived from the objective ratio. The default is
+  `keep_fractional`; alternatively, `cash_settlement` removes the undelivered
+  fractional quantity and records a linked authoritative cash-in-lieu entry.
+- The application requires an explicit treatment:
+  `tax_neutral_spinoff` or `taxable_distribution`. Under a tax-neutral
+  spin-off, each open parent lot creates a corresponding child lot carrying
+  the parent's acquisition date and its allocated portion of cost basis. Under
+  a taxable distribution, the child lot uses the actual booking date and the
+  applicable recognized value as cost basis. The initial narrow
+  implementation may support only `tax_neutral_spinoff` and must reject other
+  treatments rather than guess.
 
 ### 2.7 Notifications (optional, v2)
 - Threshold alerts (price reaches target zone, upcoming earnings in X days, significant daily move).
@@ -931,8 +1015,9 @@ These URLs target the same database by default, but may target separate database
 
 **Initial table ownership:**
 - **authentication:** `instance_config`, `users`, `invitations`,
-  `local_credentials`, `refresh_tokens`, `user_preferences`
-- **instruments:** `instruments`, `listings`, `exchanges`, `listing_provider_identifiers`
+  `local_credentials`, `refresh_tokens`, `user_preferences`, `tax_residencies`
+- **instruments:** `instruments`, `listings`, `exchanges`,
+  `listing_provider_identifiers`, `benchmark_catalog`
 - **portfolio:** `portfolios`, `positions`, `transactions`,
   `realization_allocations`, `average_cost_realizations`, `position_transfers`,
   `cash_flows`, `position_corporate_action_applications`, `watchlist_items`
@@ -956,12 +1041,23 @@ Core tables (details extensible):
   state)
 - `invitations` (email, role, expiry, hashed single-use token, invited_by)
 - `local_credentials` (user_id, argon2id hash, reset-token fields) — only when local auth is active
-- `instruments` (name, asset type, ISIN/underlying identifiers, optional primary listing)
+- `instruments` (name, asset type: equity/fund/crypto/index,
+  ISIN/underlying identifiers, optional primary listing; index instruments are
+  reference-only and cannot back portfolio positions)
 - `exchanges` (ISO 10383 MIC, name, timezone, regular trading session, holiday calendar)
 - `listings` (instrument_id, exchange_id/venue, symbol, listing currency, active state)
 - `listing_provider_identifiers` (listing_id, provider, provider-specific symbol/identifier)
+- `benchmark_catalog` (stable key, label, region, listing_id, active state) —
+  instruments-owned curated benchmark entries that resolve directly to seeded
+  index listings; initial keys represent MSCI World, S&P 500, DAX, and
+  NASDAQ-100
 - `user_preferences` (user_id, reporting currency, preferred combined-view
-  headline metric, preferred combined-view benchmark)
+  headline metric, `combined_benchmark` resolving to a benchmark listing)
+- `tax_residencies` (user_id, ISO country code, valid_from, optional
+  valid_until, primary flag, confirmed_at) — authentication-owned,
+  effective-dated source for selecting jurisdiction-specific labels and
+  supported accounting policies; never inferred from locale, currency, or
+  listing venue
 - `portfolios` (user_id, name, manual sort order, archived state,
   preferred headline metric, optional preferred benchmark)
 - `positions` (portfolio_id ↔ listing, derived open/closed/invalid state,
@@ -978,16 +1074,19 @@ Core tables (details extensible):
   quantity, calculation_version) — derived and rebuildable average-cost
   realization snapshots
 - `position_transfers` (position_id, source_portfolio_id,
-  destination_portfolio_id, effective_at, stable creation sequence) —
-  authoritative internal transfers representing linked transfer-out and
-  transfer-in attribution entries; excluded from combined all-portfolios
-  external cash flows
+  destination_portfolio_id, transfer kind, optional selected fully-open buy-lot
+  transaction IDs, effective_at, stable creation sequence) — authoritative
+  internal transfers representing linked transfer-out and transfer-in
+  attribution entries; excluded from combined all-portfolios external cash
+  flows; splitting and moving only part of one buy lot remains deferred
 - `cash_flows` (user_id, portfolio_id, optional position_id, optional
   corporate_action_id, optional corporate_action_application_id, type:
-  dividend/deposit/withdrawal/cash_in_lieu, gross_amount,
+  dividend/deposit/withdrawal/cash_in_lieu/return_of_capital, gross_amount,
   withholding_tax, fee, net_amount, currency, payment_date, tax-relevant value
   date, note) — portfolio ID is required and is snapshotted for
-  position-linked receipts
+  position-linked receipts; return-of-capital receipts are linked to their
+  confirmed application and excluded from dividend income and external cash
+  flows
 - `price_quotes` (listing_id, time, price, currency, provider,
   provider_timestamp, retrieved_at, freshness_status) — normalized
   cache/history; store the **raw price** (see §9)
@@ -1004,16 +1103,19 @@ Core tables (details extensible):
   user-owned and survive position lifecycle changes
 - `earnings` (instrument_id, fiscal_year, fiscal_quarter, period_end_date, report date, eps_est/eps_actual, revenue_est/revenue_actual, surprise) — fiscal year/quarter separate from period end
 - `corporate_actions` (stable action ID, immutable version, instrument_id, type:
-  split/reverse_split/dividend/buyback/spinoff/capital_increase, ex-date,
-  type-specific fields; for capital increase: new shares, subscription price,
-  shares before/after, dilution ratio; optional raw payload as JSONB) —
-  **unique (action ID, version)**
+  split/reverse_split/dividend/buyback/spinoff/return_of_capital/capital_increase,
+  ex-date, type-specific fields; for return of capital: amount per share and
+  currency; for spin-off: child instrument identifier, distributed-quantity
+  ratio, optional basis-allocation ratio; for capital increase: new shares,
+  subscription price, shares before/after, dilution ratio; optional raw payload
+  as JSONB) — **unique (action ID, version)**
 - `position_corporate_action_applications` (position_id, corporate_action_id,
   corporate_action_version, signed_action_snapshot, token_signature_hash,
-  ratio, effective_at, stable creation sequence, fractional_handling,
-  applied_by, applied_at, reversed_at) — authoritative position-ledger records
-  that trigger deterministic rebuilds of derived position/accounting state;
-  preserve all records for audit and enforce **unique
+  action-specific applied values and override provenance, effective_at, stable
+  creation sequence, optional fractional_handling, optional spin-off treatment
+  and child listing ID, applied_by, applied_at, reversed_at) — authoritative
+  position-ledger records that trigger deterministic rebuilds of derived
+  position/accounting state; preserve all records for audit and enforce **unique
   (position_id, corporate_action_id) where reversed_at is null** so only one
   active application exists
 - `news` (instrument_id, time, source, headline, URL, sentiment, optional raw payload as JSONB) — relational, filterable
@@ -1221,6 +1323,19 @@ Unresolved product and architecture decisions are tracked in
 [`open-decisions.md`](open-decisions.md). They must not be chosen implicitly by
 the implementer. When a decision is made, update both that decision record and
 the relevant requirements in this specification.
+
+Smaller explicitly deferred follow-ups include:
+- **Single-lot transfer splitting:** moving a partial quantity from one open buy
+  lot. This requires a durable lot-split/provenance model before implementation;
+  moving whole fully-open lots is already supported.
+- **Additional benchmark-relative risk metrics:** beta, correlation, and
+  annualized tracking error form the current baseline. The later metric set
+  beyond that baseline, such as information ratio, alpha, and
+  upside/downside-capture measures, remains a product decision.
+
+The combined all-portfolios benchmark is not deferred: it is an independent,
+authentication-owned user preference stored as
+`user_preferences.combined_benchmark`.
 
 > This application is a tool for preparing information, not investment advice. Valuations and target zones are decision aids, not guarantees.
 

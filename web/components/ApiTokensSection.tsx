@@ -5,8 +5,8 @@ import { useTranslations } from "@/lib/i18n"
 import type { ApiToken } from "@/lib/types"
 
 const inputClass =
-  "w-full rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
-const labelClass = "mb-1 block text-[11px] text-slate-500"
+  "w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-raised)] px-3 py-2 text-xs text-[var(--app-text)] placeholder:text-[var(--app-text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--app-accent-soft)]"
+const labelClass = "mb-1 block text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--app-text-faint)]"
 
 interface Props {
   tokens: ApiToken[]
@@ -24,25 +24,24 @@ export function ApiTokensSection({ tokens, availableScopes }: Props) {
   const showReveal = created && created.id !== dismissed
 
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-slate-700/40 bg-gradient-to-b from-slate-800/60 to-[#080d17]/80 p-6 shadow-[0_8px_32px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.05)]">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/12 to-transparent" />
-      <div className="mb-1 flex items-center justify-between">
-        <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-500">{t("apiTokens.title")}</h2>
+    <section className="app-panel overflow-hidden rounded-xl">
+      <div className="flex items-start justify-between gap-4 border-b border-[var(--app-border)] px-5 py-4">
+        <div><h2 className="text-xs font-semibold text-[var(--app-text)]">{t("apiTokens.title")}</h2><p className="mt-1 max-w-3xl text-[10px] leading-4 text-[var(--app-text-faint)]">{t("apiTokens.desc")}</p></div>
         {!open && !showReveal && (
           <button
             onClick={() => setOpen(true)}
-            className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-sm font-medium text-sky-200 hover:bg-sky-500/20"
+            className="shrink-0 rounded-lg bg-[var(--app-accent)] px-3 py-1.5 text-xs font-semibold text-white hover:brightness-110"
           >
             {t("apiTokens.create")}
           </button>
         )}
       </div>
-      <p className="mb-4 text-xs text-slate-600">{t("apiTokens.desc")}</p>
+      <div className="p-5">
 
       {showReveal && <RevealBox token={created.token} onDone={() => { setDismissed(created.id); setOpen(false) }} />}
 
       {open && !showReveal && (
-        <form action={formAction} className="mb-4 rounded-xl border border-slate-700/50 bg-slate-900/60 p-3">
+        <form action={formAction} className="mb-4 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-raised)] p-4">
           {error && <p className="mb-2 rounded-lg bg-rose-950/50 px-3 py-2 text-xs text-rose-400">{error}</p>}
           <div className="mb-3">
             <label htmlFor="pat-name" className={labelClass}>{t("apiTokens.name")}</label>
@@ -52,13 +51,13 @@ export function ApiTokensSection({ tokens, availableScopes }: Props) {
             <span className={labelClass}>{t("apiTokens.scopes")}</span>
             <div className="grid grid-cols-2 gap-1.5">
               {availableScopes.map((scope) => (
-                <label key={scope} className="flex items-center gap-2 text-xs text-slate-300">
-                  <input type="checkbox" name="scopes" value={scope} defaultChecked className="accent-sky-500" />
+                <label key={scope} className="flex items-center gap-2 text-xs text-[var(--app-text-muted)]">
+                  <input type="checkbox" name="scopes" value={scope} defaultChecked className="accent-[var(--app-accent)]" />
                   <span className="font-mono">{scope}</span>
                 </label>
               ))}
             </div>
-            <p className="mt-1 text-[11px] text-slate-600">{t("apiTokens.scopesHint")}</p>
+            <p className="mt-1 text-[10px] text-[var(--app-text-faint)]">{t("apiTokens.scopesHint")}</p>
           </div>
           <div className="mb-3">
             <label htmlFor="pat-exp" className={labelClass}>{t("apiTokens.expiry")}</label>
@@ -73,11 +72,11 @@ export function ApiTokensSection({ tokens, availableScopes }: Props) {
             <button
               type="submit"
               disabled={pending}
-              className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-500 disabled:opacity-50"
+            className="rounded-lg bg-[var(--app-accent)] px-3 py-1.5 text-xs font-semibold text-white hover:brightness-110 disabled:opacity-50"
             >
               {pending ? t("apiTokens.creating") : t("apiTokens.createButton")}
             </button>
-            <button type="button" onClick={() => setOpen(false)} className="text-xs text-slate-500 hover:text-slate-300">
+            <button type="button" onClick={() => setOpen(false)} className="text-xs text-[var(--app-text-muted)] hover:text-[var(--app-text)]">
               {t("apiTokens.cancel")}
             </button>
           </div>
@@ -85,7 +84,7 @@ export function ApiTokensSection({ tokens, availableScopes }: Props) {
       )}
 
       {tokens.length === 0 ? (
-        <p className="text-sm text-slate-500">{t("apiTokens.empty")}</p>
+        <p className="text-xs text-[var(--app-text-muted)]">{t("apiTokens.empty")}</p>
       ) : (
         <ul className="space-y-2">
           {tokens.map((token) => (
@@ -93,6 +92,7 @@ export function ApiTokensSection({ tokens, availableScopes }: Props) {
           ))}
         </ul>
       )}
+      </div>
     </section>
   )
 }
@@ -114,14 +114,14 @@ function RevealBox({ token, onDone }: { token: string; onDone: () => void }) {
       <p className="mb-1 text-xs font-semibold text-emerald-300">{t("apiTokens.createdTitle")}</p>
       <p className="mb-2 text-[11px] text-amber-400/80">{t("apiTokens.createdWarning")}</p>
       <div className="flex items-center gap-2">
-        <code className="min-w-0 flex-1 truncate rounded-lg bg-slate-950 px-3 py-2 font-mono text-xs text-emerald-200">
+        <code className="min-w-0 flex-1 truncate rounded-lg bg-[var(--app-bg-muted)] px-3 py-2 font-mono text-xs text-[var(--app-positive)]">
           {token}
         </code>
-        <button onClick={copy} className="rounded-lg border border-slate-600 px-2.5 py-2 text-xs text-slate-300 hover:bg-slate-800">
+        <button onClick={copy} className="rounded-lg border border-[var(--app-border)] px-2.5 py-2 text-xs text-[var(--app-text-muted)] hover:bg-[var(--app-surface-hover)]">
           {copied ? t("apiTokens.copied") : t("apiTokens.copy")}
         </button>
       </div>
-      <button onClick={onDone} className="mt-3 text-xs text-slate-400 hover:text-white">
+      <button onClick={onDone} className="mt-3 text-xs text-[var(--app-text-muted)] hover:text-[var(--app-text)]">
         {t("apiTokens.done")}
       </button>
     </div>
@@ -134,18 +134,18 @@ function TokenRow({ token }: { token: ApiToken }) {
   const fmtDate = (iso: string) => iso.slice(0, 10)
 
   return (
-    <li className="rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2.5">
+    <li className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-raised)] px-3 py-2.5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-white">{token.name}</p>
+          <p className="truncate text-xs font-semibold text-[var(--app-text)]">{token.name}</p>
           <div className="mt-1 flex flex-wrap gap-1">
             {token.scopes.map((scope) => (
-              <span key={scope} className="rounded border border-slate-700/50 bg-slate-800/60 px-1.5 py-0.5 font-mono text-[10px] text-slate-400">
+              <span key={scope} className="rounded border border-[var(--app-border)] px-1.5 py-0.5 font-mono text-[9px] text-[var(--app-text-muted)]">
                 {scope}
               </span>
             ))}
           </div>
-          <p className="mt-1.5 text-[11px] text-slate-600">
+          <p className="mt-1.5 text-[10px] text-[var(--app-text-faint)]">
             {t("apiTokens.created", { date: fmtDate(token.created_at) })}
             {" · "}
             {token.last_used_at ? t("apiTokens.lastUsed", { date: fmtDate(token.last_used_at) }) : t("apiTokens.neverUsed")}
@@ -159,7 +159,7 @@ function TokenRow({ token }: { token: ApiToken }) {
             startRevoke(async () => void (await revokeApiTokenAction(token.id)))
           }}
           disabled={isRevoking}
-          className="shrink-0 rounded-md border border-slate-700/60 px-2 py-1 text-xs text-slate-400 hover:border-rose-500/40 hover:text-rose-300 disabled:opacity-50"
+          className="shrink-0 rounded-md border border-[var(--app-border)] px-2 py-1 text-[10px] text-[var(--app-text-muted)] hover:border-[var(--app-negative)] hover:text-[var(--app-negative)] disabled:opacity-50"
         >
           {isRevoking ? t("apiTokens.revoking") : t("apiTokens.revoke")}
         </button>

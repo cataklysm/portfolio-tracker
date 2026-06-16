@@ -30,6 +30,8 @@ export interface QuoteRepository {
    */
   getDailyCloseSeries(listingId: string, from: string, to: string): Promise<DailyClose[]>;
   upsertQuote(quote: NormalizedQuote): Promise<void>;
+  /** Deletes all stored quotes for the given listings (for provider-switch rebuilds). */
+  purgeListings(listingIds: string[]): Promise<number>;
 }
 
 /** Provider symbol + currency a listing maps to (resolved from instruments). */
@@ -54,17 +56,50 @@ export interface ProviderQuote {
   series: { timeMs: number; close: string }[];
 }
 
+/**
+ * Fetches market data from a named provider via the providers service. Provider
+ * is a parameter (not a fixed `.name`) because the selected provider now varies
+ * per instrument — the caller resolves it from the instruments refresh plan.
+ */
 export interface QuoteProvider {
-  readonly name: string;
   /**
    * Single symbol with a daily series (used for on-demand refresh + backfill).
    * `from` starts the daily series at that date (else a short default window).
    */
-  fetchQuote(providerSymbol: string, from?: Date): Promise<ProviderQuote | null>;
+  fetchQuote(provider: string, providerSymbol: string, from?: Date): Promise<ProviderQuote | null>;
   /**
-   * Latest ticks for many symbols in one request (no series). Used by the
-   * scheduler so a cycle is one call per chunk, not one per listing. Keyed by
-   * the provider symbol passed in.
+   * Latest ticks for many symbols from one provider in one request (no series).
+   * Used by the scheduler so a cycle is one call per chunk, not one per listing.
+   * Keyed by the provider symbol passed in.
    */
-  fetchQuotes(providerSymbols: string[]): Promise<Map<string, ProviderQuote>>;
+  fetchQuotes(provider: string, providerSymbols: string[]): Promise<Map<string, ProviderQuote>>;
+}
+
+/**
+ * One listing in a capability's refresh plan, resolved by the instruments
+ * service: the listing joined to the provider selected for that capability and
+ * that provider's own symbol. `provider`/`providerSymbol` are null when no
+ * provider is selected or no symbol is mapped — such listings cannot be fetched.
+ */
+/** Exchange-local market status, as reported by the instruments refresh plan. */
+export type MarketStatus = 'open' | 'closed' | 'holiday' | 'weekend' | 'unknown';
+
+export interface PlanListing {
+  listingId: string;
+  instrumentId: string;
+  symbol: string;
+  currency: string;
+  provider: string | null;
+  providerSymbol: string | null;
+  /**
+   * Current market status of the listing's exchange. The scheduled sweep skips
+   * definitively-closed listings (`closed`/`weekend`/`holiday`); `open`/`unknown`
+   * (and absent) are refreshed. On-demand refresh ignores this.
+   */
+  marketStatus?: MarketStatus;
+}
+
+export interface RefreshPlanResolver {
+  /** The refresh plan for a capability, optionally restricted to specific listings. */
+  resolve(capability: string, listingIds?: string[]): Promise<PlanListing[]>;
 }

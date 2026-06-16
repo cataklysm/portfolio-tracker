@@ -22,23 +22,26 @@ export interface FundamentalsSnapshot {
   raw: Record<string, unknown>;
 }
 
-/** Fetches a fundamentals snapshot for a provider symbol (via providers service). */
+/** Fetches a fundamentals snapshot from a named provider (via providers service). */
 export interface FundamentalsProvider {
-  readonly name: string;
-  fetchFundamentals(providerSymbol: string): Promise<FundamentalsSnapshot | null>;
+  fetchFundamentals(provider: string, providerSymbol: string): Promise<FundamentalsSnapshot | null>;
 }
 
-/** Provider symbol + currency a listing maps to (resolved from instruments). */
-export interface ResolvedListing {
+/**
+ * One listing in the `fundamentals` refresh plan, resolved by the instruments
+ * service to the provider selected for that instrument's fundamentals and that
+ * provider's symbol. `provider`/`providerSymbol` are null when unselected/unmapped.
+ */
+export interface PlanListing {
   listingId: string;
   instrumentId: string;
-  symbol: string;
   currency: string;
-  providerSymbol: string;
+  provider: string | null;
+  providerSymbol: string | null;
 }
 
-export interface ListingResolver {
-  resolve(listingIds: string[], provider: string): Promise<Map<string, ResolvedListing>>;
+export interface PlanResolver {
+  resolve(capability: string, listingIds?: string[]): Promise<PlanListing[]>;
 }
 
 /** A stored snapshot as served to readers (strings preserve NUMERIC precision). */

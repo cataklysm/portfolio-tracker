@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 const GATEWAY_URL = process.env.GATEWAY_URL ?? "http://127.0.0.1:3001"
+const RETRYABLE_FETCH_ERROR_CODES = new Set(["ECONNRESET", "ECONNREFUSED", "UND_ERR_SOCKET"])
 
 const COOKIE_OPTS = {
   httpOnly: true,
@@ -24,7 +25,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   // No access token but refresh token present — attempt silent refresh
   if (refreshToken) {
     try {
-      const resp = await fetch(`${GATEWAY_URL}/auth/refresh`, {
+      const resp = await fetchWithRetry(`${GATEWAY_URL}/auth/refresh`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-API-Version": "1" },
         body: JSON.stringify({ refresh_token: refreshToken }),
@@ -63,4 +64,24 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon\\.ico).*)"],
+}
+
+async function fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init)
+  } catch (error) {
+    if (!isRetryableFetchError(error)) throw error
+    await delay(75)
+    return fetch(url, init)
+  }
+}
+
+function isRetryableFetchError(error: unknown): boolean {
+  const cause = typeof error === "object" && error !== null && "cause" in error ? (error as { cause?: unknown }).cause : undefined
+  const code = typeof cause === "object" && cause !== null && "code" in cause ? String((cause as { code?: unknown }).code) : ""
+  return RETRYABLE_FETCH_ERROR_CODES.has(code)
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }

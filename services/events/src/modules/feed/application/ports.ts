@@ -36,23 +36,26 @@ export interface NewsItem {
 
 /** Fetches event data for a provider symbol (via the providers service). */
 export interface EventsProvider {
-  readonly name: string;
-  fetchEarnings(symbol: string): Promise<EarningsSnapshot | null>;
-  fetchCorporateActions(symbol: string): Promise<CorporateActionInput[]>;
-  fetchNews(symbol: string): Promise<NewsItem[]>;
+  fetchEarnings(provider: string, symbol: string): Promise<EarningsSnapshot | null>;
+  fetchCorporateActions(provider: string, symbol: string): Promise<CorporateActionInput[]>;
+  fetchNews(provider: string, symbol: string): Promise<NewsItem[]>;
 }
 
-/** Provider symbol + currency a listing maps to (resolved from instruments). */
-export interface ResolvedListing {
+/**
+ * One listing in a refresh plan, resolved by the instruments service to the
+ * provider selected for the instrument and that provider's symbol.
+ * `provider`/`providerSymbol` are null when unselected/unmapped.
+ */
+export interface PlanListing {
   listingId: string;
   instrumentId: string;
-  symbol: string;
   currency: string;
-  providerSymbol: string;
+  provider: string | null;
+  providerSymbol: string | null;
 }
 
-export interface ListingResolver {
-  resolve(listingIds: string[], provider: string): Promise<Map<string, ResolvedListing>>;
+export interface PlanResolver {
+  resolve(capability: string, listingIds?: string[]): Promise<PlanListing[]>;
 }
 
 // ---- Storage rows (decimal-safe strings) ------------------------------------

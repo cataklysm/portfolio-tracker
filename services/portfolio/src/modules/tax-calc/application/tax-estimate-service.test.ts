@@ -105,7 +105,7 @@ function buildDeps(over: Partial<{ churchEnabled: boolean }> = {}): TaxEstimateD
     userTax: {
       get: async () => ({
         country_code: 'DE',
-        settings: over.churchEnabled ? { taxCurrency: 'EUR', churchTaxEnabled: true, churchTaxRate: '0.09' } : { taxCurrency: 'EUR' },
+        settings: over.churchEnabled ? { churchTaxEnabled: true, churchTaxRate: '0.09' } : {},
       }),
     } as unknown as UserTaxSettingsRepository,
     rules: { getRule: async (key: string) => RULES[key] ?? null },

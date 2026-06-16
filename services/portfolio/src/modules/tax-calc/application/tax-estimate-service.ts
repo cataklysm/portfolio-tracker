@@ -90,7 +90,7 @@ export class TaxEstimateService {
 
   async getEstimate(userId: string, bearerToken: string, portfolioId?: string): Promise<TaxEstimate> {
     const userTax = await this.deps.userTax.get(userId);
-    const taxCurrency = pickString(userTax?.settings.taxCurrency) ?? 'EUR';
+    const taxCurrency = taxCurrencyForResidence(userTax?.country_code);
     const churchRate =
       userTax?.settings.churchTaxEnabled === true && userTax.settings.churchTaxRate != null
         ? new Decimal(String(userTax.settings.churchTaxRate))
@@ -211,6 +211,15 @@ export class TaxEstimateService {
   }
 }
 
+function taxCurrencyForResidence(countryCode: string | undefined): string {
+  switch (countryCode) {
+    case 'DE':
+      return 'EUR';
+    default:
+      return 'EUR';
+  }
+}
+
 type Convert = (amount: Decimal, fromCurrency: string, valueDate: string) => Decimal | null;
 
 /** Per-sell realized P&L, converted to the tax currency at the sell's value date. */
@@ -323,10 +332,6 @@ function decParam(params: Record<string, unknown>, key: string, fallback: string
 function numberParam(params: Record<string, unknown>, key: string, fallback: number): number {
   const v = Number(params[key]);
   return Number.isFinite(v) ? v : fallback;
-}
-
-function pickString(v: unknown): string | null {
-  return typeof v === 'string' && v.length > 0 ? v : null;
 }
 
 function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {

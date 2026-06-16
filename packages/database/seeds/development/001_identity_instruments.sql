@@ -31,7 +31,8 @@ VALUES
     ('30000000-0000-4000-8000-000000000001', 'XNAS', 'Nasdaq', 'America/New_York', '09:30', '16:00'),
     ('30000000-0000-4000-8000-000000000005', 'XASX', 'Australian Securities Exchange', 'Australia/Sydney', '10:00', '16:00'),
     ('30000000-0000-4000-8000-000000000003', 'XASE', 'NYSE American', 'America/New_York', '09:30', '16:00'),
-    ('30000000-0000-4000-8000-000000000004', 'XETR', 'Xetra', 'Europe/Berlin', '09:00', '17:30')
+    ('30000000-0000-4000-8000-000000000004', 'XETR', 'Xetra', 'Europe/Berlin', '09:00', '17:30'),
+    ('30000000-0000-4000-8000-000000000006', 'LSSI', 'Lang & Schwarz TradeCenter AG', 'Europe/Berlin', '07:30', '23:00')
 ON CONFLICT DO NOTHING;
 
 -- CSV-derived instrument master data. Only mapped German-exchange symbols provided by the user are seeded.
@@ -188,8 +189,8 @@ ON CONFLICT DO NOTHING;
 INSERT INTO instruments.instruments
     (id, name, asset_type, isin, underlying_identifier, created_at, updated_at)
 VALUES
-    ('a0000000-0000-4000-8000-000000000041', 'Bitcoin', 'crypto', NULL, 'crypto:BTC', '2026-06-12T00:00:00.000Z', '2026-06-12T00:00:00.000Z'),
-    ('a0000000-0000-4000-8000-000000000042', 'Ethereum', 'crypto', NULL, 'crypto:ETH', '2026-06-12T00:00:00.000Z', '2026-06-12T00:00:00.000Z')
+    ('a0000000-0000-4000-8000-000000000041', 'Bitcoin', 'crypto', NULL, 'BTC', '2026-06-12T00:00:00.000Z', '2026-06-12T00:00:00.000Z'),
+    ('a0000000-0000-4000-8000-000000000042', 'Ethereum', 'crypto', NULL, 'ETH', '2026-06-12T00:00:00.000Z', '2026-06-12T00:00:00.000Z')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO instruments.listings

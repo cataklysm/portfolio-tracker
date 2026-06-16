@@ -14,6 +14,7 @@ const ICONS = {
   events: "M6 3v3m12-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z",
   addPosition: "M12 5v14M5 12h14",
   administration: "M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM19 12l2-1-2-3-2 .2-1.5-1L15 5H9l-.5 2.2-1.5 1L5 8l-2 3 2 1v2l-2 1 2 3 2-.2 1.5 1L9 21h6l.5-2.2 1.5-1 2 .2 2-3-2-1v-2Z",
+  settings: "M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM19 12l2-1-2-3-2 .2-1.5-1L15 5H9l-.5 2.2-1.5 1L5 8l-2 3 2 1v2l-2 1 2 3 2-.2 1.5 1L9 21h6l.5-2.2 1.5-1 2 .2 2-3-2-1v-2Z",
   collapse: "m15 18-6-6 6-6",
   expand: "m9 18 6-6-6-6",
 } as const
@@ -56,13 +57,16 @@ export function Sidebar({ collapsed, onToggle, animate, me, unreadCount = 0, por
         {!collapsed && portfolios.length > 0 ? (
           <div className="mb-1 ml-4 border-l border-[var(--app-border)] pl-2">
             {portfolios.map((portfolio) => (
-              <SubNavRow key={portfolio.id} href={`/dashboard?portfolio=${portfolio.id}`} label={portfolio.name} active={selectedPortfolio === portfolio.id} />
+              <PortfolioSubNavRow
+                key={portfolio.id}
+                portfolio={portfolio}
+                active={selectedPortfolio === portfolio.id || pathname === `/portfolios/${portfolio.id}/settings`}
+                settingsActive={pathname === `/portfolios/${portfolio.id}/settings`}
+              />
             ))}
           </div>
         ) : null}
         {NAV_ITEMS.map((item) => <NavRow key={item.labelKey} item={item} active={!!item.href && pathname.startsWith(item.href)} collapsed={collapsed} badge={item.href === "/notifications" ? unreadCount : undefined} />)}
-        <div className="my-2 h-px bg-[var(--app-border)]" />
-        <NavRow item={{ labelKey: "nav.addPosition", icon: "addPosition", href: "/positions/add" }} active={pathname === "/positions/add"} collapsed={collapsed} />
         {me?.role === "admin" ? (
           <>
             <div className="my-2 h-px bg-[var(--app-border)]" />
@@ -70,6 +74,8 @@ export function Sidebar({ collapsed, onToggle, animate, me, unreadCount = 0, por
             {!collapsed ? (
               <div className="ml-4 border-l border-[var(--app-border)] pl-2">
                 <SubNavRow href="/administration/symbols" label={t("nav.symbols")} active={pathname === "/administration/symbols"} />
+                <SubNavRow href="/administration/providers" label={t("nav.providers")} active={pathname === "/administration/providers"} />
+                <SubNavRow href="/administration/exchanges" label={t("nav.exchanges")} active={pathname === "/administration/exchanges"} />
               </div>
             ) : null}
           </>
@@ -90,6 +96,31 @@ function SubNavRow({ href, label, active }: { href: string; label: string; activ
     <Link href={href} className={`relative block truncate rounded-md px-2.5 py-1.5 text-[11px] transition ${active ? "bg-[var(--app-accent-soft)] font-medium text-[var(--app-accent)]" : "text-[var(--app-text-faint)] hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text)]"}`}>
       {label}
     </Link>
+  )
+}
+
+function PortfolioSubNavRow({ portfolio, active, settingsActive }: { portfolio: Portfolio; active: boolean; settingsActive: boolean }) {
+  return (
+    <div className={`flex items-center rounded-md transition ${active ? "bg-[var(--app-accent-soft)]" : "hover:bg-[var(--app-surface-hover)]"}`}>
+      <Link
+        href={`/dashboard?portfolio=${portfolio.id}`}
+        className={`min-w-0 flex-1 truncate px-2.5 py-1.5 text-[11px] transition ${
+          active ? "font-medium text-[var(--app-accent)]" : "text-[var(--app-text-faint)] hover:text-[var(--app-text)]"
+        }`}
+      >
+        {portfolio.name}
+      </Link>
+      <Link
+        href={`/portfolios/${portfolio.id}/settings`}
+        aria-label={`${portfolio.name} settings`}
+        title={`${portfolio.name} settings`}
+        className={`mr-1 flex h-6 w-6 shrink-0 items-center justify-center rounded transition ${
+          settingsActive ? "text-[var(--app-accent)]" : "text-[var(--app-text-faint)] hover:bg-[var(--app-surface)] hover:text-[var(--app-text)]"
+        }`}
+      >
+        <Icon icon="settings" />
+      </Link>
+    </div>
   )
 }
 

@@ -7,7 +7,6 @@ import {
   createRedis,
   createService,
   OutboxPublisher,
-  WatchSet,
   UserTokenVerifier,
   type RedisClientType,
 } from '@portfolio/platform';
@@ -18,7 +17,7 @@ import {
   QuoteService,
   KyselyQuoteRepository,
   ProvidersQuoteProvider,
-  InstrumentsListingResolver,
+  InstrumentsRefreshPlanClient,
   registerQuoteRoutes,
 } from './modules/quotes/index.js';
 import { FxService, KyselyFxRepository, ProvidersFxProvider, registerFxRoutes } from './modules/fx/index.js';
@@ -50,34 +49,27 @@ export async function buildApp(config: MarketConfig): Promise<BuiltService> {
 
   const providers = new ProvidersClient(config.providersBaseUrl, logger);
 
-  const resolver = new InstrumentsListingResolver(config.instrumentsBaseUrl, logger);
-
-  // The deduped watched-listing set, owned by the instruments service: hydrated
-  // from its snapshot and kept live via instruments.watch.* deltas.
-  const watchSet = new WatchSet({
-    snapshotUrl: new URL('/internal/watch-set', config.instrumentsBaseUrl).toString(),
-    redis,
-    group: 'market-watch',
-    consumer: `market-watch-${process.pid}`,
-    logger,
-  });
+  // The refresh-plan client resolves each listing to its selected provider +
+  // symbol per capability (quotes sweep + analyst refresh).
+  const planResolver = new InstrumentsRefreshPlanClient(config.instrumentsBaseUrl, logger);
 
   const quoteService = new QuoteService({
     repo: new KyselyQuoteRepository(db),
     provider: new ProvidersQuoteProvider(providers),
-    resolver,
+    planResolver,
     staleAfterMs: config.refresh.heldQuoteMaxAgeMs,
   });
   const fxService = new FxService({ repo: new KyselyFxRepository(db), provider: new ProvidersFxProvider(providers) });
   const discoveryService = new DiscoveryService(new ProvidersDiscoveryProvider(providers));
   const analystService = new AnalystService({
-    resolver,
+    planResolver,
     provider: new ProvidersAnalystProvider(providers),
     events: new KyselyAnalystEventStore(db),
     logger,
   });
   const refreshService = new RefreshService({
-    watchSet,
+    planResolver,
+    providers,
     refreshState: new KyselyRefreshStateRepository(db),
     quotes: quoteService,
     fx: fxService,
@@ -117,12 +109,10 @@ export async function buildApp(config: MarketConfig): Promise<BuiltService> {
   });
   publisher.start();
 
-  // Hydrate the watch set from the instruments snapshot before the first refresh
-  // cycle, then drive the periodic refresh. The watch set only feeds the refresh
-  // cycle, so it shares the refresh on/off switch.
+  // Drive the periodic refresh. Each cycle sweeps the whole active catalog via the
+  // instruments refresh plan (no local watch set), grouped/paced per provider.
   const scheduler = new RefreshScheduler(refreshService, config.refresh.intervalMs, logger);
   if (config.refresh.enabled) {
-    await watchSet.start();
     scheduler.start();
   }
 
@@ -131,7 +121,6 @@ export async function buildApp(config: MarketConfig): Promise<BuiltService> {
     shutdown: async () => {
       scheduler.stop();
       publisher.stop();
-      await watchSet.stop();
       await app.close();
       await redis.quit();
       await pool.end();

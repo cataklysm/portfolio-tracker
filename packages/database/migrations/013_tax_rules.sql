@@ -48,10 +48,9 @@ INSERT INTO portfolio.tax_rules
      user_settings_schema, portfolio_settings_schema, parameters, calculation_engine_key)
 VALUES (
     'DE', 'de_securities_tax', 1, ARRAY['equity'], '2009-01-01',
-    '{"schemaKey":"de_user_tax_settings","version":1,"fields":[
+    '{"schemaKey":"de_user_tax_settings","version":2,"fields":[
         {"key":"churchTaxEnabled","label":"Church tax","type":"checkbox","default":false,"order":1,"helpText":"Enable if your broker withholds church tax (Kirchensteuer) for you."},
-        {"key":"churchTaxRate","label":"Church tax rate","type":"select","required":true,"order":2,"visibleWhen":[{"field":"churchTaxEnabled","equals":true}],"options":[{"value":"0.08","label":"8% (Bavaria, Baden-Wuerttemberg)"},{"value":"0.09","label":"9% (other states)"}]},
-        {"key":"taxCurrency","label":"Tax currency","type":"currency","default":"EUR","required":true,"order":3,"helpText":"Currency your tax is assessed in. Germany: EUR."}
+        {"key":"churchTaxRate","label":"Church tax rate","type":"select","required":true,"order":2,"visibleWhen":[{"field":"churchTaxEnabled","equals":true}],"options":[{"value":"0.08","label":"8% (Bavaria, Baden-Wuerttemberg)"},{"value":"0.09","label":"9% (other states)"}]}
     ]}'::jsonb,
     '{"schemaKey":"de_securities_portfolio_tax_settings","version":1,"fields":[
         {"key":"automaticTaxWithholding","label":"Automatic tax withholding","type":"checkbox","default":true,"order":1,"helpText":"German brokers usually withhold capital gains tax automatically. Disable for foreign brokers that do not."},
@@ -73,10 +72,9 @@ INSERT INTO portfolio.tax_rules
      user_settings_schema, portfolio_settings_schema, parameters, calculation_engine_key)
 VALUES (
     'DE', 'de_crypto_private_disposal', 1, ARRAY['crypto'], '2009-01-01',
-    '{"schemaKey":"de_user_tax_settings","version":1,"fields":[
+    '{"schemaKey":"de_user_tax_settings","version":2,"fields":[
         {"key":"churchTaxEnabled","label":"Church tax","type":"checkbox","default":false,"order":1,"helpText":"Enable if your broker withholds church tax (Kirchensteuer) for you."},
-        {"key":"churchTaxRate","label":"Church tax rate","type":"select","required":true,"order":2,"visibleWhen":[{"field":"churchTaxEnabled","equals":true}],"options":[{"value":"0.08","label":"8% (Bavaria, Baden-Wuerttemberg)"},{"value":"0.09","label":"9% (other states)"}]},
-        {"key":"taxCurrency","label":"Tax currency","type":"currency","default":"EUR","required":true,"order":3,"helpText":"Currency your tax is assessed in. Germany: EUR."}
+        {"key":"churchTaxRate","label":"Church tax rate","type":"select","required":true,"order":2,"visibleWhen":[{"field":"churchTaxEnabled","equals":true}],"options":[{"value":"0.08","label":"8% (Bavaria, Baden-Wuerttemberg)"},{"value":"0.09","label":"9% (other states)"}]}
     ]}'::jsonb,
     '{"schemaKey":"de_crypto_portfolio_tax_settings","version":1,"fields":[
         {"key":"automaticTaxWithholding","label":"Automatic tax withholding","type":"checkbox","default":false,"order":1,"helpText":"Crypto private disposals are not subject to automatic German capital gains withholding. Usually off."},

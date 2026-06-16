@@ -4,13 +4,14 @@ import type {
   FundamentalsEventStore,
   FundamentalsProvider,
   FundamentalsRepository,
-  ListingResolver,
+  PlanResolver,
 } from './ports.js';
 
 export interface FundamentalsServiceDeps {
   repo: FundamentalsRepository;
   provider: FundamentalsProvider;
-  resolver: ListingResolver;
+  /** Resolves the `fundamentals` plan: each instrument → its selected provider + symbol. */
+  planResolver: PlanResolver;
   events: FundamentalsEventStore;
   logger: Logger;
   /** Snapshots younger than this are considered fresh and not re-fetched. */
@@ -42,15 +43,18 @@ export class FundamentalsService {
    */
   async refreshListings(listingIds: string[], force = false): Promise<number> {
     if (listingIds.length === 0) return 0;
-    const resolved = await this.deps.resolver.resolve(listingIds, this.deps.provider.name);
+    const plan = await this.deps.planResolver.resolve('fundamentals', listingIds);
 
-    // Dedupe to one (instrumentId, providerSymbol, currency) per instrument.
-    const byInstrument = new Map<string, { providerSymbol: string; currency: string }>();
-    for (const listing of resolved.values()) {
-      if (!byInstrument.has(listing.instrumentId)) {
-        byInstrument.set(listing.instrumentId, {
-          providerSymbol: listing.providerSymbol,
-          currency: listing.currency,
+    // Dedupe to one (provider, providerSymbol, currency) per instrument; skip
+    // listings with no selected fundamentals provider or no mapped symbol.
+    const byInstrument = new Map<string, { provider: string; providerSymbol: string; currency: string }>();
+    for (const entry of plan) {
+      if (!entry.provider || !entry.providerSymbol) continue;
+      if (!byInstrument.has(entry.instrumentId)) {
+        byInstrument.set(entry.instrumentId, {
+          provider: entry.provider,
+          providerSymbol: entry.providerSymbol,
+          currency: entry.currency,
         });
       }
     }
@@ -67,9 +71,9 @@ export class FundamentalsService {
       const target = byInstrument.get(instrumentId);
       if (!target) continue;
       try {
-        const snapshot = await this.deps.provider.fetchFundamentals(target.providerSymbol);
+        const snapshot = await this.deps.provider.fetchFundamentals(target.provider, target.providerSymbol);
         if (!snapshot) continue;
-        const row = toRow(instrumentId, this.deps.provider.name, snapshot);
+        const row = toRow(instrumentId, target.provider, snapshot);
         await this.deps.repo.upsert(row);
         await this.deps.events.enqueueSnapshotUpdated({
           instrumentId,

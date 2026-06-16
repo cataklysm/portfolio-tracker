@@ -8,7 +8,7 @@
 -- rows hold only the calculation inputs.
 --
 --  * portfolio.user_tax_settings — per-user, residence-level inputs
---    (e.g. churchTaxEnabled, churchTaxRate, taxCurrency). One row per user;
+--    (e.g. churchTaxEnabled, churchTaxRate). One row per user;
 --    overwritten on change. `country_code` records which residence the saved
 --    values were entered for, so the right rule schema validates them.
 --

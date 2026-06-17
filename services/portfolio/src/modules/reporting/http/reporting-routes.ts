@@ -3,6 +3,17 @@ import { Type } from '@sinclair/typebox';
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import { AppError } from '@portfolio/platform';
 import type { ReportingService } from '../application/reporting-service.js';
+import {
+  PortfolioSummarySchema,
+  HoldingGroupSchema,
+  AllocationReportSchema,
+  TaxReportSchema,
+  ReportingSnapshotSchema,
+  PerformanceReportSchema,
+  RiskReportSchema,
+  IntelligenceReportSchema,
+  BenchmarkReportSchema,
+} from '../../../schemas.js';
 
 const ScopeQuery = Type.Object({ portfolio_id: Type.Optional(Type.String({ format: 'uuid' })) });
 const PeriodUnion = Type.Union([
@@ -36,27 +47,27 @@ export function registerReportingRoutes(app: FastifyInstance, deps: ReportingRou
   const r = app.withTypeProvider<TypeBoxTypeProvider>();
   const read = [deps.authenticate, deps.requireScope('portfolio:read')];
 
-  r.get('/reporting/summary', { preHandler: read, schema: { querystring: ScopeQuery } }, async (request) =>
+  r.get('/reporting/summary', { preHandler: read, schema: { querystring: ScopeQuery, response: { 200: PortfolioSummarySchema } } }, async (request) =>
     deps.service.getSummary(uid(request.user?.sub), bearer(request.headers.authorization), request.query.portfolio_id),
   );
 
-  r.get('/reporting/holdings', { preHandler: read, schema: { querystring: ScopeQuery } }, async (request) =>
+  r.get('/reporting/holdings', { preHandler: read, schema: { querystring: ScopeQuery, response: { 200: Type.Array(HoldingGroupSchema) } } }, async (request) =>
     deps.service.getHoldings(uid(request.user?.sub), bearer(request.headers.authorization), request.query.portfolio_id),
   );
 
-  r.get('/reporting/allocation', { preHandler: read, schema: { querystring: ScopeQuery } }, async (request) =>
+  r.get('/reporting/allocation', { preHandler: read, schema: { querystring: ScopeQuery, response: { 200: AllocationReportSchema } } }, async (request) =>
     deps.service.getAllocation(uid(request.user?.sub), bearer(request.headers.authorization), request.query.portfolio_id),
   );
 
-  r.get('/reporting/tax', { preHandler: read, schema: { querystring: ScopeQuery } }, async (request) =>
+  r.get('/reporting/tax', { preHandler: read, schema: { querystring: ScopeQuery, response: { 200: TaxReportSchema } } }, async (request) =>
     deps.service.getTaxReport(uid(request.user?.sub), bearer(request.headers.authorization), request.query.portfolio_id),
   );
 
-  r.get('/reporting/snapshot', { preHandler: read, schema: { querystring: ScopeQuery } }, async (request) =>
+  r.get('/reporting/snapshot', { preHandler: read, schema: { querystring: ScopeQuery, response: { 200: ReportingSnapshotSchema } } }, async (request) =>
     deps.service.getSnapshot(uid(request.user?.sub), bearer(request.headers.authorization), request.query.portfolio_id),
   );
 
-  r.get('/reporting/performance', { preHandler: read, schema: { querystring: PerformanceQuery } }, async (request) =>
+  r.get('/reporting/performance', { preHandler: read, schema: { querystring: PerformanceQuery, response: { 200: PerformanceReportSchema } } }, async (request) =>
     deps.service.getPerformance(
       uid(request.user?.sub),
       bearer(request.headers.authorization),
@@ -65,7 +76,7 @@ export function registerReportingRoutes(app: FastifyInstance, deps: ReportingRou
     ),
   );
 
-  r.get('/reporting/risk', { preHandler: read, schema: { querystring: PerformanceQuery } }, async (request) =>
+  r.get('/reporting/risk', { preHandler: read, schema: { querystring: PerformanceQuery, response: { 200: RiskReportSchema } } }, async (request) =>
     deps.service.getRisk(
       uid(request.user?.sub),
       bearer(request.headers.authorization),
@@ -74,7 +85,7 @@ export function registerReportingRoutes(app: FastifyInstance, deps: ReportingRou
     ),
   );
 
-  r.get('/reporting/intelligence', { preHandler: read, schema: { querystring: PerformanceQuery } }, async (request) =>
+  r.get('/reporting/intelligence', { preHandler: read, schema: { querystring: PerformanceQuery, response: { 200: IntelligenceReportSchema } } }, async (request) =>
     deps.service.getIntelligence(
       uid(request.user?.sub),
       bearer(request.headers.authorization),
@@ -83,7 +94,7 @@ export function registerReportingRoutes(app: FastifyInstance, deps: ReportingRou
     ),
   );
 
-  r.get('/reporting/benchmark', { preHandler: read, schema: { querystring: BenchmarkQuery } }, async (request) =>
+  r.get('/reporting/benchmark', { preHandler: read, schema: { querystring: BenchmarkQuery, response: { 200: BenchmarkReportSchema } } }, async (request) =>
     deps.service.getBenchmark(
       uid(request.user?.sub),
       bearer(request.headers.authorization),

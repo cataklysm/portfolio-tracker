@@ -1,4 +1,4 @@
-import { sql } from 'kysely';
+﻿import { sql } from 'kysely';
 import type { FastifyInstance } from 'fastify';
 import {
   connectRedis,
@@ -74,7 +74,7 @@ export async function buildApp(config: EventsConfig): Promise<BuiltService> {
     logger,
   });
 
-  const app = createService({
+  const app = await createService({
     name: 'events',
     logger,
     health: {

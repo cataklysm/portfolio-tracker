@@ -20,6 +20,10 @@ export interface GatewayConfig {
   auth: { jwksUri: string; issuer: string; audience: string };
   cors: { origins: string[] | true };
   rateLimit: { max: number; timeWindowMs: number };
+  /** Public base URL of the gateway, advertised as `servers` in the aggregated spec. */
+  publicUrl: string;
+  /** How often the aggregated OpenAPI spec is refreshed from upstreams. */
+  openapiRefreshMs: number;
 }
 
 function parseOrigins(value: string | undefined): string[] | true {
@@ -54,5 +58,7 @@ export function loadConfig(): GatewayConfig {
       max: intEnv('GATEWAY_RATE_LIMIT_MAX', 300),
       timeWindowMs: intEnv('GATEWAY_RATE_LIMIT_WINDOW_MS', 60_000),
     },
+    publicUrl: optionalEnv('GATEWAY_PUBLIC_URL') ?? `http://localhost:${intEnv('GATEWAY_PORT', 3001)}`,
+    openapiRefreshMs: intEnv('GATEWAY_OPENAPI_REFRESH_MS', 5 * 60 * 1000),
   };
 }

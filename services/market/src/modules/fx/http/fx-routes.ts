@@ -16,6 +16,14 @@ const RateSeriesQuery = Type.Object({
 });
 const RefreshBody = Type.Object({ history: Type.Optional(Type.Boolean()) });
 
+const RatePointSchema = Type.Object({ date: Type.String(), rate: Type.String() });
+const FxRateForDateResponse = Type.Object({
+  quote_currency: Type.String(),
+  date: Type.String(),
+  rate: Type.String(),
+});
+const StoredResponse = Type.Object({ stored: Type.Integer() });
+
 export interface FxRouteDeps {
   service: FxService;
   authenticate: preHandlerHookHandler;
@@ -30,7 +38,7 @@ export function registerFxRoutes(app: FastifyInstance, deps: FxRouteDeps): void 
   const r = app.withTypeProvider<TypeBoxTypeProvider>();
   const read = [deps.authenticate, deps.requireScope('market:read')];
 
-  r.get('/fx/rates', { preHandler: read, schema: { querystring: RatesQuery } }, async (request) => {
+  r.get('/fx/rates', { preHandler: read, schema: { querystring: RatesQuery, response: { 200: Type.Record(Type.String(), Type.String()) } } }, async (request) => {
     const currencies = request.query.quote_currencies
       .split(',')
       .map((c) => c.trim().toUpperCase())
@@ -38,7 +46,7 @@ export function registerFxRoutes(app: FastifyInstance, deps: FxRouteDeps): void 
     return deps.service.getEurRates(currencies);
   });
 
-  r.get('/fx/rate', { preHandler: read, schema: { querystring: RateForDateQuery } }, async (request) => {
+  r.get('/fx/rate', { preHandler: read, schema: { querystring: RateForDateQuery, response: { 200: FxRateForDateResponse } } }, async (request) => {
     const result = await deps.service.getEurRateForDate(request.query.quote.toUpperCase(), request.query.date);
     if (!result) throw AppError.notFound('fx_rate_unavailable', 'No FX rate available on or before that date');
     return { quote_currency: request.query.quote.toUpperCase(), ...result };
@@ -47,7 +55,7 @@ export function registerFxRoutes(app: FastifyInstance, deps: FxRouteDeps): void 
   // Daily EUR-based rate series per currency over a date range, for historical
   // reporting (e.g. the portfolio performance series). One request covers the
   // whole window instead of one lookup per (currency, day).
-  r.get('/fx/series', { preHandler: read, schema: { querystring: RateSeriesQuery } }, async (request) => {
+  r.get('/fx/series', { preHandler: read, schema: { querystring: RateSeriesQuery, response: { 200: Type.Record(Type.String(), Type.Array(RatePointSchema)) } } }, async (request) => {
     const currencies = request.query.quote_currencies
       .split(',')
       .map((c) => c.trim().toUpperCase())
@@ -57,13 +65,13 @@ export function registerFxRoutes(app: FastifyInstance, deps: FxRouteDeps): void 
 
   // User-facing on-demand FX refresh (e.g. alongside a quote refresh) so
   // reporting-currency conversions have a current rate.
-  r.post('/fx/refresh', { preHandler: read }, async () => {
+  r.post('/fx/refresh', { preHandler: read, schema: { response: { 200: StoredResponse } } }, async () => {
     const stored = await deps.service.refreshDaily();
     return { stored };
   });
 
   // Internal: refresh from ECB. Network/gateway restricted.
-  r.post('/internal/fx/refresh', { schema: { body: RefreshBody } }, async (request) => {
+  r.post('/internal/fx/refresh', { schema: { body: RefreshBody, response: { 200: StoredResponse } } }, async (request) => {
     const stored = request.body.history
       ? await deps.service.refreshHistory()
       : await deps.service.refreshDaily();

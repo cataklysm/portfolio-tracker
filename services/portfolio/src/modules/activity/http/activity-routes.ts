@@ -4,6 +4,7 @@ import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import { AppError } from '@portfolio/platform';
 import type { ActivityService } from '../application/activity-service.js';
 import type { ActivityKind } from '../application/ports.js';
+import { ActivityPageSchema } from '../../../schemas.js';
 
 const ListQuery = Type.Object({
   portfolio_id: Type.Optional(Type.String({ format: 'uuid' })),
@@ -35,7 +36,7 @@ export function registerActivityRoutes(app: FastifyInstance, deps: ActivityRoute
   const r = app.withTypeProvider<TypeBoxTypeProvider>();
   const read = [deps.authenticate, deps.requireScope('portfolio:read')];
 
-  r.get('/activity', { preHandler: read, schema: { querystring: ListQuery } }, async (request) =>
+  r.get('/activity', { preHandler: read, schema: { querystring: ListQuery, response: { 200: ActivityPageSchema } } }, async (request) =>
     deps.service.list(uid(request.user?.sub), {
       portfolioId: request.query.portfolio_id,
       kind: request.query.type as ActivityKind | undefined,

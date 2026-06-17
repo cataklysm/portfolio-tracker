@@ -27,6 +27,22 @@ const RebuildBody = Type.Object({
   confirm: Type.Boolean(),
 });
 
+const Ns = Type.Union([Type.String(), Type.Null()]);
+
+const QuoteViewSchema = Type.Object({
+  listing_id: Type.String(),
+  latest: Ns,
+  previous: Ns,
+  currency: Ns,
+  latest_at: Ns,
+  freshness_status: Type.Union([Type.Literal('fresh'), Type.Literal('stale'), Type.Literal('unavailable')]),
+});
+
+const SeriesPointSchema = Type.Object({ time: Type.String(), price: Type.String() });
+const DailyCloseSchema = Type.Object({ date: Type.String(), price: Type.String() });
+const RebuildResponse = Type.Object({ purged: Type.Integer(), rebuilt: Type.Integer() });
+const RefreshedResponse = Type.Object({ refreshed: Type.Integer() });
+
 export interface QuoteRouteDeps {
   service: QuoteService;
   analyst?: AnalystService;
@@ -44,12 +60,12 @@ export function registerQuoteRoutes(app: FastifyInstance, deps: QuoteRouteDeps):
   const read = [deps.authenticate, deps.requireScope('market:read')];
   const admin = [deps.authenticate, deps.requireScope('system:admin')];
 
-  r.get('/quotes', { preHandler: read, schema: { querystring: QuotesQuery } }, async (request) => {
+  r.get('/quotes', { preHandler: read, schema: { querystring: QuotesQuery, response: { 200: Type.Array(QuoteViewSchema) } } }, async (request) => {
     const ids = splitIds(request.query.listing_ids);
     return deps.service.getLatestQuotes(ids);
   });
 
-  r.get('/quotes/:listingId/series', { preHandler: read, schema: { querystring: SeriesQuery } }, async (request) => {
+  r.get('/quotes/:listingId/series', { preHandler: read, schema: { querystring: SeriesQuery, response: { 200: Type.Array(SeriesPointSchema) } } }, async (request) => {
     const { listingId } = request.params as { listingId: string };
     const series = await deps.service.getSeries(listingId, request.query.limit ?? 90);
     return series.map((point) => ({ time: point.time.toISOString(), price: point.price }));
@@ -57,7 +73,7 @@ export function registerQuoteRoutes(app: FastifyInstance, deps: QuoteRouteDeps):
 
   // Daily closing prices over a date range, for historical reporting (the
   // portfolio performance series). Serves stored data only.
-  r.get('/quotes/:listingId/history', { preHandler: read, schema: { querystring: HistoryQuery } }, async (request) => {
+  r.get('/quotes/:listingId/history', { preHandler: read, schema: { querystring: HistoryQuery, response: { 200: Type.Array(DailyCloseSchema) } } }, async (request) => {
     const { listingId } = request.params as { listingId: string };
     return deps.service.getDailyHistory(listingId, request.query.from, request.query.to);
   });
@@ -65,11 +81,11 @@ export function registerQuoteRoutes(app: FastifyInstance, deps: QuoteRouteDeps):
   // Admin: purge + rebuild a listing's stored price history from its currently
   // selected provider (after switching the quotes/chart provider). Destructive —
   // requires `confirm`. Gateway-exposed under `/quotes`, system:admin.
-  r.post('/quotes/rebuild', { preHandler: admin, schema: { body: RebuildBody } }, async (request) => {
+  r.post('/quotes/rebuild', { preHandler: admin, schema: { body: RebuildBody, response: { 200: RebuildResponse } } }, async (request) => {
     if (!request.body.confirm) {
       throw AppError.badRequest(
         'confirmation_required',
-        'Rebuild purges the listings’ stored price history; set confirm=true to proceed',
+        "Rebuild purges the listings' stored price history; set confirm=true to proceed",
       );
     }
     const from = request.body.from ? new Date(request.body.from) : undefined;
@@ -79,7 +95,7 @@ export function registerQuoteRoutes(app: FastifyInstance, deps: QuoteRouteDeps):
   // User-facing on-demand refresh: pull fresh quotes for specific listings now
   // (e.g. right after a Yahoo symbol was corrected) rather than waiting for the
   // scheduler. The one read-scope endpoint that may call the provider.
-  r.post('/quotes/refresh', { preHandler: read, schema: { body: RefreshBody } }, async (request) => {
+  r.post('/quotes/refresh', { preHandler: read, schema: { body: RefreshBody, response: { 200: RefreshedResponse } } }, async (request) => {
     const from = request.body.from ? new Date(request.body.from) : undefined;
     const stored = await deps.service.refreshListings(request.body.listing_ids, from);
     // Best-effort: also publish analyst assessments for these listings.
@@ -88,7 +104,7 @@ export function registerQuoteRoutes(app: FastifyInstance, deps: QuoteRouteDeps):
   });
 
   // Internal: trigger an on-demand provider refresh. Network/gateway restricted.
-  r.post('/internal/quotes/refresh', { schema: { body: RefreshBody } }, async (request) => {
+  r.post('/internal/quotes/refresh', { schema: { body: RefreshBody, response: { 200: RefreshedResponse } } }, async (request) => {
     const from = request.body.from ? new Date(request.body.from) : undefined;
     const stored = await deps.service.refreshListings(request.body.listing_ids, from);
     return { refreshed: stored };
@@ -96,7 +112,7 @@ export function registerQuoteRoutes(app: FastifyInstance, deps: QuoteRouteDeps):
 
   // Internal: latest stored quotes for background workers (no user token), e.g.
   // the notifications evaluator. Network/gateway restricted; serves stored data.
-  r.get('/internal/quotes', { schema: { querystring: QuotesQuery } }, async (request) =>
+  r.get('/internal/quotes', { schema: { querystring: QuotesQuery, response: { 200: Type.Array(QuoteViewSchema) } } }, async (request) =>
     deps.service.getLatestQuotes(splitIds(request.query.listing_ids)),
   );
 
@@ -104,11 +120,11 @@ export function registerQuoteRoutes(app: FastifyInstance, deps: QuoteRouteDeps):
   // selected provider (after an admin switches the quotes/chart provider, so the
   // series never mixes two sources). Destructive — requires explicit confirm.
   // Network/gateway restricted.
-  r.post('/internal/quotes/rebuild', { schema: { body: RebuildBody } }, async (request) => {
+  r.post('/internal/quotes/rebuild', { schema: { body: RebuildBody, response: { 200: RebuildResponse } } }, async (request) => {
     if (!request.body.confirm) {
       throw AppError.badRequest(
         'confirmation_required',
-        'Rebuild purges the listings’ stored price history; set confirm=true to proceed',
+        "Rebuild purges the listings' stored price history; set confirm=true to proceed",
       );
     }
     const from = request.body.from ? new Date(request.body.from) : undefined;

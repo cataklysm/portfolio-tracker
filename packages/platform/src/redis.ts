@@ -57,6 +57,10 @@ export function createRedis(options: RedisOptions): RedisClientType {
 }
 
 export async function connectRedis(client: RedisClientType): Promise<void> {
+  // Spec-only build (OpenAPI dump): the app is constructed to read its route
+  // table, never to serve traffic, so skip the live connection. No Redis is
+  // required to generate the OpenAPI document.
+  if (process.env['OPENAPI_DUMP'] === '1') return;
   try {
     await client.connect();
     await client.ping();

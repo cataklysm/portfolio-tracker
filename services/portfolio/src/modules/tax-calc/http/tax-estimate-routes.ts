@@ -3,6 +3,7 @@ import { Type } from '@sinclair/typebox';
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import { AppError } from '@portfolio/platform';
 import type { TaxEstimateService } from '../application/tax-estimate-service.js';
+import { TaxEstimateSchema } from '../../../schemas.js';
 
 const ScopeQuery = Type.Object({ portfolio_id: Type.Optional(Type.String({ format: 'uuid' })) });
 
@@ -21,7 +22,7 @@ export function registerTaxEstimateRoutes(app: FastifyInstance, deps: TaxEstimat
   const r = app.withTypeProvider<TypeBoxTypeProvider>();
   const read = [deps.authenticate, deps.requireScope('portfolio:read')];
 
-  r.get('/reporting/tax/estimate', { preHandler: read, schema: { querystring: ScopeQuery } }, async (request) =>
+  r.get('/reporting/tax/estimate', { preHandler: read, schema: { querystring: ScopeQuery, response: { 200: TaxEstimateSchema } } }, async (request) =>
     deps.service.getEstimate(uid(request.user?.sub), bearer(request.headers.authorization), request.query.portfolio_id),
   );
 }

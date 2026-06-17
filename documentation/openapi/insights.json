@@ -1,0 +1,1132 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "insights API",
+    "description": "Internal HTTP API for the insights service.",
+    "version": "0.1.0"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {}
+  },
+  "paths": {
+    "/fair-values": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "in": "query",
+            "name": "instrument_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "instrument_id",
+                      "user_id",
+                      "method",
+                      "value",
+                      "currency",
+                      "assumptions",
+                      "effective_date",
+                      "source",
+                      "created_at"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "instrument_id": {
+                        "type": "string"
+                      },
+                      "user_id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "method": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "dcf"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "analyst"
+                            ]
+                          }
+                        ]
+                      },
+                      "value": {
+                        "type": "string"
+                      },
+                      "currency": {
+                        "type": "string"
+                      },
+                      "assumptions": {},
+                      "effective_date": {
+                        "type": "string"
+                      },
+                      "source": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "created_at": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "instrument_id",
+                  "currency",
+                  "assumptions"
+                ],
+                "properties": {
+                  "instrument_id": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "currency": {
+                    "minLength": 3,
+                    "maxLength": 3,
+                    "type": "string"
+                  },
+                  "effective_date": {
+                    "format": "date",
+                    "type": "string"
+                  },
+                  "source": {
+                    "maxLength": 200,
+                    "type": "string"
+                  },
+                  "assumptions": {
+                    "type": "object",
+                    "required": [
+                      "base_cash_flow",
+                      "growth_rate",
+                      "projection_years",
+                      "discount_rate",
+                      "terminal_growth",
+                      "shares_outstanding"
+                    ],
+                    "properties": {
+                      "base_cash_flow": {
+                        "type": "number"
+                      },
+                      "growth_rate": {
+                        "type": "number"
+                      },
+                      "projection_years": {
+                        "minimum": 1,
+                        "maximum": 50,
+                        "type": "integer"
+                      },
+                      "discount_rate": {
+                        "type": "number"
+                      },
+                      "terminal_growth": {
+                        "type": "number"
+                      },
+                      "shares_outstanding": {
+                        "exclusiveMinimum": 0,
+                        "type": "number"
+                      },
+                      "net_debt": {
+                        "type": "number"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "allOf": [
+                    {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "instrument_id",
+                        "user_id",
+                        "method",
+                        "value",
+                        "currency",
+                        "assumptions",
+                        "effective_date",
+                        "source",
+                        "created_at"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "instrument_id": {
+                          "type": "string"
+                        },
+                        "user_id": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "method": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "dcf"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "analyst"
+                              ]
+                            }
+                          ]
+                        },
+                        "value": {
+                          "type": "string"
+                        },
+                        "currency": {
+                          "type": "string"
+                        },
+                        "assumptions": {},
+                        "effective_date": {
+                          "type": "string"
+                        },
+                        "source": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "created_at": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "breakdown"
+                      ],
+                      "properties": {
+                        "breakdown": {
+                          "type": "object",
+                          "required": [
+                            "intrinsic_value_per_share",
+                            "enterprise_value",
+                            "equity_value",
+                            "present_value_of_cash_flows",
+                            "present_value_of_terminal"
+                          ],
+                          "properties": {
+                            "intrinsic_value_per_share": {
+                              "type": "number"
+                            },
+                            "enterprise_value": {
+                              "type": "number"
+                            },
+                            "equity_value": {
+                              "type": "number"
+                            },
+                            "present_value_of_cash_flows": {
+                              "type": "number"
+                            },
+                            "present_value_of_terminal": {
+                              "type": "number"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/fair-values/{id}": {
+      "delete": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/price-targets": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "in": "query",
+            "name": "instrument_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "instrument_id",
+                      "listing_id",
+                      "user_id",
+                      "horizon",
+                      "source",
+                      "zone_low",
+                      "zone_high",
+                      "currency",
+                      "effective_date",
+                      "note",
+                      "created_at",
+                      "updated_at"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "instrument_id": {
+                        "type": "string"
+                      },
+                      "listing_id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "user_id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "horizon": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "short"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "medium"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "long"
+                            ]
+                          }
+                        ]
+                      },
+                      "source": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "own"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "analyst"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "technical"
+                            ]
+                          }
+                        ]
+                      },
+                      "zone_low": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "zone_high": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "currency": {
+                        "type": "string"
+                      },
+                      "effective_date": {
+                        "type": "string"
+                      },
+                      "note": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "created_at": {
+                        "type": "string"
+                      },
+                      "updated_at": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "instrument_id",
+                  "horizon",
+                  "currency"
+                ],
+                "properties": {
+                  "instrument_id": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "listing_id": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "horizon": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "short"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "medium"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "long"
+                        ]
+                      }
+                    ]
+                  },
+                  "zone_low": {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "zone_high": {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "currency": {
+                    "minLength": 3,
+                    "maxLength": 3,
+                    "type": "string"
+                  },
+                  "effective_date": {
+                    "format": "date",
+                    "type": "string"
+                  },
+                  "note": {
+                    "maxLength": 1000,
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "instrument_id",
+                    "listing_id",
+                    "user_id",
+                    "horizon",
+                    "source",
+                    "zone_low",
+                    "zone_high",
+                    "currency",
+                    "effective_date",
+                    "note",
+                    "created_at",
+                    "updated_at"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "instrument_id": {
+                      "type": "string"
+                    },
+                    "listing_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "user_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "horizon": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "short"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "medium"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "long"
+                          ]
+                        }
+                      ]
+                    },
+                    "source": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "own"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "analyst"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "technical"
+                          ]
+                        }
+                      ]
+                    },
+                    "zone_low": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "zone_high": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "effective_date": {
+                      "type": "string"
+                    },
+                    "note": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/price-targets/{id}": {
+      "patch": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "horizon": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "short"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "medium"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "long"
+                        ]
+                      }
+                    ]
+                  },
+                  "zone_low": {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "zone_high": {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "note": {
+                    "anyOf": [
+                      {
+                        "maxLength": 1000,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "instrument_id",
+                    "listing_id",
+                    "user_id",
+                    "horizon",
+                    "source",
+                    "zone_low",
+                    "zone_high",
+                    "currency",
+                    "effective_date",
+                    "note",
+                    "created_at",
+                    "updated_at"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "instrument_id": {
+                      "type": "string"
+                    },
+                    "listing_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "user_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "horizon": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "short"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "medium"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "long"
+                          ]
+                        }
+                      ]
+                    },
+                    "source": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "own"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "analyst"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "technical"
+                          ]
+                        }
+                      ]
+                    },
+                    "zone_low": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "zone_high": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "effective_date": {
+                      "type": "string"
+                    },
+                    "note": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/price-targets": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "in": "query",
+            "name": "user_id",
+            "required": true
+          },
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 4000,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "instrument_ids",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "instrument_id",
+                      "listing_id",
+                      "user_id",
+                      "horizon",
+                      "source",
+                      "zone_low",
+                      "zone_high",
+                      "currency",
+                      "effective_date",
+                      "note",
+                      "created_at",
+                      "updated_at"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "instrument_id": {
+                        "type": "string"
+                      },
+                      "listing_id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "user_id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "horizon": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "short"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "medium"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "long"
+                            ]
+                          }
+                        ]
+                      },
+                      "source": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "own"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "analyst"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "technical"
+                            ]
+                          }
+                        ]
+                      },
+                      "zone_low": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "zone_high": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "currency": {
+                        "type": "string"
+                      },
+                      "effective_date": {
+                        "type": "string"
+                      },
+                      "note": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "created_at": {
+                        "type": "string"
+                      },
+                      "updated_at": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -92,7 +92,11 @@ export async function buildRegistry(
   // via its provider_settings row and selected per-instrument where wanted.
   const adapters: MarketDataProvider[] = [yahoo, ecb, lstc];
 
-  const settingsByName = new Map((await settingsRepo.listAll()).map((s) => [s.provider, s]));
+  // Spec-only build (OpenAPI dump): skip the boot-time settings read so the app
+  // can be constructed without a database. The HTTP routes only need the
+  // registry object to exist, not any enabled providers.
+  const settings = process.env['OPENAPI_DUMP'] === '1' ? [] : await settingsRepo.listAll();
+  const settingsByName = new Map(settings.map((s) => [s.provider, s]));
 
   const enabled: MarketDataProvider[] = [];
   for (const provider of adapters) {

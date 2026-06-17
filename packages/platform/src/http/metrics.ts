@@ -37,7 +37,7 @@ export function registerMetrics(app: FastifyInstance, serviceName: string): void
     if (reply.statusCode >= 500) httpErrors.inc(labels);
   });
 
-  app.get('/metrics', { logLevel: 'warn' }, async (_request, reply) => {
+  app.get('/metrics', { logLevel: 'warn', schema: { hide: true } }, async (_request, reply) => {
     reply.header('Content-Type', registry.contentType);
     return registry.metrics();
   });

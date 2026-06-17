@@ -3,6 +3,11 @@ import { Type } from '@sinclair/typebox';
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import { AppError } from '@portfolio/platform';
 import type { CorporateActionService } from '../application/corporate-action-service.js';
+import {
+  CorporateActionApplicationRecordSchema,
+  ApplyCorporateActionResultSchema,
+  ReverseCorporateActionResultSchema,
+} from '../../../schemas.js';
 
 const Decimalish = Type.String({ pattern: '^[0-9]+(\\.[0-9]+)?$' });
 
@@ -38,12 +43,12 @@ export function registerCorporateActionRoutes(app: FastifyInstance, deps: Corpor
   const read = [deps.authenticate, deps.requireScope('portfolio:read')];
   const write = [deps.authenticate, deps.requireScope('portfolio:write')];
 
-  r.get('/positions/:id/corporate-actions', { preHandler: read }, async (request) => {
+  r.get('/positions/:id/corporate-actions', { preHandler: read, schema: { response: { 200: Type.Array(CorporateActionApplicationRecordSchema) } } }, async (request) => {
     const { id } = request.params as { id: string };
     return deps.service.list(uid(request.user?.sub), id);
   });
 
-  r.post('/positions/:id/corporate-actions', { preHandler: write, schema: { body: ApplyBody } }, async (request, reply) => {
+  r.post('/positions/:id/corporate-actions', { preHandler: write, schema: { body: ApplyBody, response: { 201: ApplyCorporateActionResultSchema } } }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const result = await deps.service.apply(uid(request.user?.sub), bearer(request.headers.authorization), id, {
       corporateActionId: request.body.corporate_action_id,
@@ -58,7 +63,7 @@ export function registerCorporateActionRoutes(app: FastifyInstance, deps: Corpor
     return result;
   });
 
-  r.post('/corporate-actions/:applicationId/reverse', { preHandler: write, schema: { body: ReverseBody } }, async (request) => {
+  r.post('/corporate-actions/:applicationId/reverse', { preHandler: write, schema: { body: ReverseBody, response: { 200: ReverseCorporateActionResultSchema } } }, async (request) => {
     const { applicationId } = request.params as { applicationId: string };
     return deps.service.reverse(
       uid(request.user?.sub),

@@ -4,6 +4,7 @@ import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import { AppError } from '@portfolio/platform';
 import type { CashFlowService } from '../application/cash-flow-service.js';
 import type { CashFlowType } from '../application/ports.js';
+import { CashFlowRecordSchema, OkResponse } from '../../../schemas.js';
 
 const CashFlowKind = Type.Union([
   Type.Literal('dividend'),
@@ -55,7 +56,7 @@ export function registerCashFlowRoutes(app: FastifyInstance, deps: CashFlowRoute
 
   r.get(
     '/portfolios/:portfolioId/cash-flows',
-    { preHandler: read, schema: { querystring: ListQuery } },
+    { preHandler: read, schema: { querystring: ListQuery, response: { 200: Type.Array(CashFlowRecordSchema) } } },
     async (request) =>
       deps.service.list(uid(request.user?.sub), (request.params as { portfolioId: string }).portfolioId, {
         type: request.query.type as CashFlowType | undefined,
@@ -65,7 +66,7 @@ export function registerCashFlowRoutes(app: FastifyInstance, deps: CashFlowRoute
 
   r.post(
     '/portfolios/:portfolioId/cash-flows',
-    { preHandler: write, schema: { body: CreateBody } },
+    { preHandler: write, schema: { body: CreateBody, response: { 201: CashFlowRecordSchema } } },
     async (request, reply) => {
       const created = await deps.service.create(
         uid(request.user?.sub),
@@ -89,7 +90,7 @@ export function registerCashFlowRoutes(app: FastifyInstance, deps: CashFlowRoute
 
   r.patch(
     '/portfolios/:portfolioId/cash-flows/:id',
-    { preHandler: write, schema: { body: UpdateBody } },
+    { preHandler: write, schema: { body: UpdateBody, response: { 200: CashFlowRecordSchema } } },
     async (request) =>
       deps.service.update(uid(request.user?.sub), (request.params as { id: string }).id, {
         grossAmount: request.body.gross_amount,
@@ -102,9 +103,9 @@ export function registerCashFlowRoutes(app: FastifyInstance, deps: CashFlowRoute
       }),
   );
 
-  r.delete('/portfolios/:portfolioId/cash-flows/:id', { preHandler: write }, async (request) => {
+  r.delete('/portfolios/:portfolioId/cash-flows/:id', { preHandler: write, schema: { response: { 200: OkResponse } } }, async (request) => {
     await deps.service.delete(uid(request.user?.sub), (request.params as { id: string }).id);
-    return { ok: true };
+    return { ok: true as const };
   });
 }
 

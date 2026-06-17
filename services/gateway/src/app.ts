@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+﻿import type { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
@@ -13,6 +13,7 @@ import {
 } from '@portfolio/platform';
 import type { GatewayConfig } from './config/config.js';
 import { GATEWAY_ROUTES } from './routes.js';
+import { GatewaySpecCache } from './openapi/spec-cache.js';
 
 export interface BuiltService {
   app: FastifyInstance;
@@ -34,11 +35,25 @@ export async function buildApp(config: GatewayConfig): Promise<BuiltService> {
     pretty: config.environment === 'development',
   });
 
-  const app = createService({
+  // The gateway's public contract is the union of its upstreams, not its proxy
+  // routes, so it serves a live-aggregated spec (external-document mode) kept
+  // fresh in the background.
+  const specCache = new GatewaySpecCache({
+    upstreams: config.upstreams,
+    serverUrl: config.publicUrl,
+    version: config.serviceVersion,
+    logger,
+    refreshIntervalMs: config.openapiRefreshMs,
+  });
+
+  const app = await createService({
     name: 'gateway',
     logger,
     health: { ready: async () => undefined },
+    openapi: { document: () => specCache.getDocument() },
   });
+
+  specCache.start();
 
   const verifier = new UserTokenVerifier(config.auth);
 
@@ -96,6 +111,7 @@ export async function buildApp(config: GatewayConfig): Promise<BuiltService> {
   return {
     app,
     shutdown: async () => {
+      specCache.stop();
       await app.close();
     },
   };

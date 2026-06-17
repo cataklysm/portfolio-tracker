@@ -4,6 +4,7 @@ import type { Logger } from 'pino';
 import { AppError, PROBLEM_CONTENT_TYPE, toProblemDetails } from '../problem-details.js';
 import { registerHealth, type HealthChecks } from './health.js';
 import { registerMetrics } from './metrics.js';
+import { registerOpenApi, type OpenApiOptions } from './openapi.js';
 
 /** Current stable major HTTP API version selected via the X-API-Version header. */
 export const CURRENT_API_VERSION = 1;
@@ -18,6 +19,12 @@ export interface ServiceOptions {
    * stable version.
    */
   strictApiVersion?: boolean;
+  /**
+   * OpenAPI generation. Defaults to per-service generation from the route
+   * schemas. Pass `false` to disable, or `{ document }` for external-document
+   * mode (the gateway serves its live-aggregated upstream spec this way).
+   */
+  openapi?: false | OpenApiOptions;
 }
 
 /**
@@ -26,7 +33,7 @@ export interface ServiceOptions {
  * health probes, and Prometheus metrics. Feature modules register their own
  * encapsulated plugins onto the returned instance.
  */
-export function createService(options: ServiceOptions): FastifyInstance {
+export async function createService(options: ServiceOptions): Promise<FastifyInstance> {
   // Cast the pino logger to FastifyBaseLogger so the instance keeps the default
   // logger generic; feature route modules apply the TypeBox type provider
   // locally where typed schemas are needed.
@@ -38,7 +45,14 @@ export function createService(options: ServiceOptions): FastifyInstance {
 
   // X-API-Version negotiation. The resolved version is echoed on the response.
   app.addHook('onRequest', async (request, reply) => {
-    if (request.url.startsWith('/health') || request.url === '/metrics') return;
+    if (
+      request.url.startsWith('/health') ||
+      request.url === '/metrics' ||
+      request.url.startsWith('/docs') ||
+      request.url.startsWith('/openapi')
+    ) {
+      return;
+    }
     const raw = request.headers['x-api-version'] as string | undefined;
     if (raw === undefined) {
       if (options.strictApiVersion) {
@@ -108,6 +122,13 @@ export function createService(options: ServiceOptions): FastifyInstance {
     );
     reply.code(404).type(PROBLEM_CONTENT_TYPE).send(problem);
   });
+
+  // Registered before the feature routes (added by the caller after this returns)
+  // so the swagger plugin's onRoute hook captures them. Health/metrics are
+  // registered after and opt out of the document explicitly.
+  if (options.openapi !== false) {
+    await registerOpenApi(app, options.name, options.openapi || undefined);
+  }
 
   registerHealth(app, options.name, options.health);
   registerMetrics(app, options.name);

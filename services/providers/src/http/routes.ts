@@ -7,6 +7,67 @@ import type { ProviderSettingsRepository } from '../providers/settings-repositor
 import type { CapabilityRefreshRepository } from '../providers/capability-refresh-repository.js';
 import type { Capability, QuoteDto } from '../providers/types.js';
 
+const Ns = Type.Union([Type.String(), Type.Null()]);
+const Ni = Type.Union([Type.Integer(), Type.Null()]);
+
+const DataQualitySchema = Type.Union([
+  Type.Literal('high'), Type.Literal('medium'), Type.Literal('low'), Type.Literal('unknown'),
+]);
+
+const ProviderSettingsSchema = Type.Object({
+  provider: Type.String(),
+  enabled: Type.Boolean(),
+  providerClass: Type.Union([Type.Literal('symbol'), Type.Literal('reference')]),
+  dataQuality: DataQualitySchema,
+  capabilityQuality: Type.Record(Type.String(), DataQualitySchema),
+  maxBatchSize: Ni,
+  rateLimitPerMin: Ni,
+  maxConcurrency: Type.Integer(),
+});
+
+const ProvidersListResponse = Type.Object({ providers: Type.Array(ProviderSettingsSchema) });
+
+const CapabilityRefreshSchema = Type.Object({
+  provider: Type.String(),
+  capability: Type.String(),
+  refreshIntervalMs: Type.Integer(),
+  saveResolutionMs: Ni,
+  enabled: Type.Boolean(),
+});
+
+const CapabilityRefreshListResponse = Type.Object({ settings: Type.Array(CapabilityRefreshSchema) });
+
+const SearchResultSchema = Type.Object({
+  symbol: Type.String(),
+  name: Type.String(),
+  exchange: Ns,
+  mic: Ns,
+  currency: Ns,
+  quoteType: Ns,
+});
+
+const SeriesPointSchema = Type.Object({ timeMs: Type.Integer(), close: Type.String() });
+
+const QuoteDtoSchema = Type.Object({
+  symbol: Type.String(),
+  price: Type.String(),
+  previousClose: Ns,
+  currency: Ns,
+  timestampMs: Ni,
+  series: Type.Optional(Type.Array(SeriesPointSchema)),
+});
+
+const ChartDtoSchema = Type.Union([
+  Type.Object({
+    price: Type.String(),
+    previousClose: Ns,
+    currency: Ns,
+    timestampMs: Ni,
+    series: Type.Array(SeriesPointSchema),
+  }),
+  Type.Null(),
+]);
+
 const UpdateProviderBody = Type.Object({
   enabled: Type.Optional(Type.Boolean()),
   data_quality: Type.Optional(
@@ -75,30 +136,30 @@ export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRoute
   const admin = [deps.authenticate, deps.requireScope('system:admin')];
 
   // What the platform can currently source, and from which provider.
-  r.get('/internal/capabilities', async () => registry.capabilityMap());
+  r.get('/internal/capabilities', { schema: { response: { 200: Type.Record(Type.String(), Type.String()) } } }, async () => registry.capabilityMap());
 
   // Provider settings (class, static data-quality, refresh pacing). Read live from
   // the DB so the market scheduler picks up pacing/enable edits without a restart.
   // Consumed by the market refresh scheduler.
-  r.get('/internal/providers', async () => ({ providers: await settings.listAll() }));
+  r.get('/internal/providers', { schema: { response: { 200: ProvidersListResponse } } }, async () => ({ providers: await settings.listAll() }));
 
   // Per-(provider × capability) refresh cadence. Read live each heartbeat by the
   // market/fundamentals/events refreshers so edits apply without a restart.
-  r.get('/internal/capability-refresh', async () => ({ settings: await capabilityRefresh.listAll() }));
+  r.get('/internal/capability-refresh', { schema: { response: { 200: CapabilityRefreshListResponse } } }, async () => ({ settings: await capabilityRefresh.listAll() }));
 
   // Admin (gateway-exposed, system:admin): read + edit provider settings.
-  r.get('/admin/providers', { preHandler: admin }, async () => ({ providers: await settings.listAll() }));
+  r.get('/admin/providers', { preHandler: admin, schema: { response: { 200: ProvidersListResponse } } }, async () => ({ providers: await settings.listAll() }));
 
   // Admin: read the refresh cadence (static route — declared before the
   // `/:provider` param routes so it isn't captured as a provider name).
-  r.get('/admin/providers/capability-refresh', { preHandler: admin }, async () => ({
+  r.get('/admin/providers/capability-refresh', { preHandler: admin, schema: { response: { 200: CapabilityRefreshListResponse } } }, async () => ({
     settings: await capabilityRefresh.listAll(),
   }));
 
   // Admin: upsert one (provider, capability) cadence row.
   r.put(
     '/admin/providers/:provider/capability-refresh/:capability',
-    { preHandler: admin, schema: { body: UpdateCapabilityRefreshBody } },
+    { preHandler: admin, schema: { body: UpdateCapabilityRefreshBody, response: { 200: CapabilityRefreshSchema } } },
     async (request) => {
       const { provider, capability } = request.params as { provider: string; capability: string };
       const updated = await capabilityRefresh.upsert(provider, capability, {
@@ -118,7 +179,10 @@ export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRoute
 
   // Admin: search a specific provider's symbols (for the symbols-admin per-provider
   // identifier lookup). Gateway-exposed under `/admin/providers`, system:admin.
-  r.get('/admin/providers/:provider/search', { preHandler: admin, schema: { querystring: AdminSearchQuery } }, async (request) => {
+  r.get('/admin/providers/:provider/search', {
+    preHandler: admin,
+    schema: { querystring: AdminSearchQuery, response: { 200: Type.Object({ provider: Type.String(), results: Type.Array(SearchResultSchema) }) } },
+  }, async (request) => {
     const { provider: name } = request.params as { provider: string };
     const provider = registry.byName(name);
     if (!provider) throw AppError.notFound('provider_not_found', `No enabled provider named "${name}"`);
@@ -129,7 +193,7 @@ export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRoute
     return { provider: name, results };
   });
 
-  r.patch('/admin/providers/:provider', { preHandler: admin, schema: { body: UpdateProviderBody } }, async (request) => {
+  r.patch('/admin/providers/:provider', { preHandler: admin, schema: { body: UpdateProviderBody, response: { 200: ProviderSettingsSchema } } }, async (request) => {
     const { provider } = request.params as { provider: string };
     const updated = await settings.update(provider, {
       enabled: request.body.enabled,
@@ -143,7 +207,9 @@ export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRoute
   });
 
   // Batch latest ticks. POST because the symbol list can be long.
-  r.post('/internal/quotes', { schema: { body: QuotesBody } }, async (request) => {
+  r.post('/internal/quotes', {
+    schema: { body: QuotesBody, response: { 200: Type.Object({ provider: Type.String(), quotes: Type.Array(QuoteDtoSchema) }) } },
+  }, async (request) => {
     const provider = resolveProvider(registry, 'quotes', request.body.provider);
     const map = await provider.fetchQuotes!(request.body.symbols);
     const quotes: QuoteDto[] = [...map.values()];
@@ -151,50 +217,66 @@ export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRoute
   });
 
   // Single symbol + daily series (on-demand refresh / history backfill).
-  r.get('/internal/chart', { schema: { querystring: ChartQuery } }, async (request) => {
+  r.get('/internal/chart', {
+    schema: { querystring: ChartQuery, response: { 200: Type.Object({ provider: Type.String(), chart: ChartDtoSchema }) } },
+  }, async (request) => {
     const provider = resolveProvider(registry, 'chart', request.query.provider);
     const from = parseFromDate(request.query.from);
     const chart = await provider.fetchChart!(request.query.symbol, from);
     return { provider: provider.name, chart };
   });
 
-  r.get('/internal/search', { schema: { querystring: SearchQuery } }, async (request) => {
+  r.get('/internal/search', {
+    schema: { querystring: SearchQuery, response: { 200: Type.Object({ provider: Type.String(), results: Type.Array(SearchResultSchema) }) } },
+  }, async (request) => {
     const provider = registry.require('symbol_search');
     const results = await provider.searchSymbols!(request.query.q, request.query.limit ?? 10);
     return { provider: provider.name, results };
   });
 
-  r.get('/internal/analyst', { schema: { querystring: SymbolQuery } }, async (request) => {
+  r.get('/internal/analyst', {
+    schema: { querystring: SymbolQuery, response: { 200: Type.Object({ provider: Type.String(), assessment: Type.Unknown() }) } },
+  }, async (request) => {
     const provider = resolveProvider(registry, 'analyst', request.query.provider);
     const assessment = await provider.fetchAnalyst!(request.query.symbol);
     return { provider: provider.name, assessment };
   });
 
-  r.get('/internal/fundamentals', { schema: { querystring: SymbolQuery } }, async (request) => {
+  r.get('/internal/fundamentals', {
+    schema: { querystring: SymbolQuery, response: { 200: Type.Object({ provider: Type.String(), fundamentals: Type.Unknown() }) } },
+  }, async (request) => {
     const provider = resolveProvider(registry, 'fundamentals', request.query.provider);
     const fundamentals = await provider.fetchFundamentals!(request.query.symbol);
     return { provider: provider.name, fundamentals };
   });
 
-  r.get('/internal/fx/rates', async () => {
+  r.get('/internal/fx/rates', {
+    schema: { response: { 200: Type.Object({ provider: Type.String(), rates: Type.Unknown() }) } },
+  }, async () => {
     const provider = registry.require('fx');
     const rates = await provider.fetchFxRates!();
     return { provider: provider.name, rates };
   });
 
-  r.get('/internal/earnings', { schema: { querystring: SymbolQuery } }, async (request) => {
+  r.get('/internal/earnings', {
+    schema: { querystring: SymbolQuery, response: { 200: Type.Object({ provider: Type.String(), earnings: Type.Unknown() }) } },
+  }, async (request) => {
     const provider = resolveProvider(registry, 'earnings', request.query.provider);
     const earnings = await provider.fetchEarnings!(request.query.symbol);
     return { provider: provider.name, earnings };
   });
 
-  r.get('/internal/corporate-actions', { schema: { querystring: SymbolQuery } }, async (request) => {
+  r.get('/internal/corporate-actions', {
+    schema: { querystring: SymbolQuery, response: { 200: Type.Object({ provider: Type.String(), actions: Type.Unknown() }) } },
+  }, async (request) => {
     const provider = resolveProvider(registry, 'corporate_actions', request.query.provider);
     const actions = await provider.fetchCorporateActions!(request.query.symbol);
     return { provider: provider.name, actions };
   });
 
-  r.get('/internal/news', { schema: { querystring: SymbolQuery } }, async (request) => {
+  r.get('/internal/news', {
+    schema: { querystring: SymbolQuery, response: { 200: Type.Object({ provider: Type.String(), news: Type.Unknown() }) } },
+  }, async (request) => {
     const provider = resolveProvider(registry, 'news', request.query.provider);
     const news = await provider.fetchNews!(request.query.symbol);
     return { provider: provider.name, news };

@@ -55,6 +55,8 @@ export class OutboxPublisher {
 
   start(): void {
     if (this.timer) return;
+    // Spec-only build (OpenAPI dump): do not poll the outbox or touch Redis.
+    if (process.env['OPENAPI_DUMP'] === '1') return;
     this.timer = setInterval(() => void this.tick(), this.intervalMs);
     if (typeof this.timer.unref === 'function') this.timer.unref();
   }

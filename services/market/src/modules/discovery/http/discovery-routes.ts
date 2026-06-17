@@ -8,6 +8,14 @@ const SearchQuery = Type.Object({
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 25 })),
 });
 
+const DiscoverySuggestionSchema = Type.Object({
+  symbol: Type.String(),
+  name: Type.String(),
+  exchange: Type.Union([Type.String(), Type.Null()]),
+  quote_type: Type.Union([Type.String(), Type.Null()]),
+  provider: Type.String(),
+});
+
 export interface DiscoveryRouteDeps {
   service: DiscoveryService;
 }
@@ -18,7 +26,7 @@ export interface DiscoveryRouteDeps {
  */
 export function registerDiscoveryRoutes(app: FastifyInstance, deps: DiscoveryRouteDeps): void {
   const r = app.withTypeProvider<TypeBoxTypeProvider>();
-  r.get('/internal/discovery/search', { schema: { querystring: SearchQuery } }, async (request) =>
+  r.get('/internal/discovery/search', { schema: { querystring: SearchQuery, response: { 200: Type.Array(DiscoverySuggestionSchema) } } }, async (request) =>
     deps.service.search(request.query.q, request.query.limit),
   );
 }

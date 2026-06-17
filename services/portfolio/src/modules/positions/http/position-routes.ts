@@ -4,6 +4,18 @@ import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import { AppError } from '@portfolio/platform';
 import type { PositionService } from '../application/position-service.js';
 import type { NewTransaction } from '../application/ports.js';
+import {
+  PositionViewSchema,
+  PositionDetailSchema,
+  RealizationAllocationViewSchema,
+  SerializedTransferSchema,
+  TransferPositionResultSchema,
+  LotTransferResultSchema,
+  CreatePositionResultSchema,
+  TransactionResultSchema,
+  OkResponse,
+  OpenPositionCostBasisSchema,
+} from '../../../schemas.js';
 
 const Decimalish = Type.String({ pattern: '^[0-9]+(\\.[0-9]+)?$' });
 
@@ -78,31 +90,31 @@ export function registerPositionRoutes(app: FastifyInstance, deps: PositionRoute
   const read = [deps.authenticate, deps.requireScope('portfolio:read')];
   const write = [deps.authenticate, deps.requireScope('portfolio:write')];
 
-  r.get('/positions', { preHandler: read, schema: { querystring: ListPositionsQuery } }, async (request) =>
+  r.get('/positions', { preHandler: read, schema: { querystring: ListPositionsQuery, response: { 200: Type.Array(PositionViewSchema) } } }, async (request) =>
     deps.service.listPositions(userId(request.user?.sub), bearer(request.headers.authorization), request.query.portfolio_id),
   );
 
-  r.get('/positions/:id', { preHandler: read }, async (request) => {
+  r.get('/positions/:id', { preHandler: read, schema: { response: { 200: PositionDetailSchema } } }, async (request) => {
     const { id } = request.params as { id: string };
     return deps.service.getPosition(userId(request.user?.sub), bearer(request.headers.authorization), id);
   });
 
   // The persisted realization allocations (which buy lots each sell consumed),
   // for audit and tax export. Derived on every recalculation, not on read.
-  r.get('/positions/:id/allocations', { preHandler: read }, async (request) => {
+  r.get('/positions/:id/allocations', { preHandler: read, schema: { response: { 200: RealizationAllocationViewSchema } } }, async (request) => {
     const { id } = request.params as { id: string };
     return deps.service.getRealizationAllocations(userId(request.user?.sub), id);
   });
 
   // Recorded moves of this position between portfolios.
-  r.get('/positions/:id/transfers', { preHandler: read }, async (request) => {
+  r.get('/positions/:id/transfers', { preHandler: read, schema: { response: { 200: Type.Array(SerializedTransferSchema) } } }, async (request) => {
     const { id } = request.params as { id: string };
     return deps.service.listTransfers(userId(request.user?.sub), id);
   });
 
   // Move a position (with its full ledger) to another portfolio the user owns,
   // merging into an existing position for the same listing when one exists.
-  r.post('/positions/:id/transfer', { preHandler: write, schema: { body: TransferBody } }, async (request) => {
+  r.post('/positions/:id/transfer', { preHandler: write, schema: { body: TransferBody, response: { 200: TransferPositionResultSchema } } }, async (request) => {
     const { id } = request.params as { id: string };
     return deps.service.transferPosition(userId(request.user?.sub), bearer(request.headers.authorization), id, {
       destinationPortfolioId: request.body.destination_portfolio_id,
@@ -112,7 +124,7 @@ export function registerPositionRoutes(app: FastifyInstance, deps: PositionRoute
 
   // Move a subset of the position's fully-open buy lots to a same-listing
   // position in another owned portfolio (the source position survives).
-  r.post('/positions/:id/transfer-lots', { preHandler: write, schema: { body: TransferLotsBody } }, async (request) => {
+  r.post('/positions/:id/transfer-lots', { preHandler: write, schema: { body: TransferLotsBody, response: { 200: LotTransferResultSchema } } }, async (request) => {
     const { id } = request.params as { id: string };
     return deps.service.transferLots(userId(request.user?.sub), bearer(request.headers.authorization), id, {
       destinationPortfolioId: request.body.destination_portfolio_id,
@@ -121,7 +133,7 @@ export function registerPositionRoutes(app: FastifyInstance, deps: PositionRoute
     });
   });
 
-  r.post('/positions', { preHandler: write, schema: { body: CreatePositionBody } }, async (request, reply) => {
+  r.post('/positions', { preHandler: write, schema: { body: CreatePositionBody, response: { 201: CreatePositionResultSchema } } }, async (request, reply) => {
     const result = await deps.service.createPosition(userId(request.user?.sub), bearer(request.headers.authorization), {
       portfolioId: request.body.portfolio_id,
       listingId: request.body.listing_id,
@@ -133,7 +145,7 @@ export function registerPositionRoutes(app: FastifyInstance, deps: PositionRoute
 
   r.post(
     '/positions/:id/transactions',
-    { preHandler: write, schema: { body: TransactionBody } },
+    { preHandler: write, schema: { body: TransactionBody, response: { 201: TransactionResultSchema } } },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const result = await deps.service.addTransaction(
@@ -149,7 +161,7 @@ export function registerPositionRoutes(app: FastifyInstance, deps: PositionRoute
 
   r.patch(
     '/positions/:id/transactions/:txId',
-    { preHandler: write, schema: { body: TransactionBody } },
+    { preHandler: write, schema: { body: TransactionBody, response: { 200: TransactionResultSchema } } },
     async (request) => {
       const { id, txId } = request.params as { id: string; txId: string };
       return deps.service.updateTransaction(
@@ -162,7 +174,7 @@ export function registerPositionRoutes(app: FastifyInstance, deps: PositionRoute
     },
   );
 
-  r.delete('/positions/:id/transactions/:txId', { preHandler: write }, async (request) => {
+  r.delete('/positions/:id/transactions/:txId', { preHandler: write, schema: { response: { 200: OkResponse } } }, async (request) => {
     const { id, txId } = request.params as { id: string; txId: string };
     await deps.service.deleteTransaction(
       userId(request.user?.sub),
@@ -170,19 +182,19 @@ export function registerPositionRoutes(app: FastifyInstance, deps: PositionRoute
       id,
       txId,
     );
-    return { ok: true };
+    return { ok: true as const };
   });
 
-  r.delete('/positions/:id', { preHandler: write }, async (request) => {
+  r.delete('/positions/:id', { preHandler: write, schema: { response: { 200: OkResponse } } }, async (request) => {
     const { id } = request.params as { id: string };
     await deps.service.deletePosition(userId(request.user?.sub), id);
-    return { ok: true };
+    return { ok: true as const };
   });
 
   // Internal: per-user open-position average cost (native currency) for the
   // notifications cost-basis alert evaluator (no user token). Network/gateway
   // restricted; no quotes/cross-service reads involved.
-  r.get('/internal/positions', { schema: { querystring: InternalPositionsQuery } }, async (request) =>
+  r.get('/internal/positions', { schema: { querystring: InternalPositionsQuery, response: { 200: Type.Array(OpenPositionCostBasisSchema) } } }, async (request) =>
     deps.service.getOpenPositionCostBases(request.query.user_id),
   );
 }

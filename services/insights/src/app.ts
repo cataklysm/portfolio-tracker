@@ -1,4 +1,4 @@
-import { sql } from 'kysely';
+﻿import { sql } from 'kysely';
 import type { FastifyInstance } from 'fastify';
 import {
   connectRedis,
@@ -45,7 +45,7 @@ export async function buildApp(config: InsightsConfig): Promise<BuiltService> {
   const verifier = new UserTokenVerifier(config.auth);
   const assessmentService = new AssessmentService(new KyselyAssessmentRepository(db));
 
-  const app = createService({
+  const app = await createService({
     name: 'insights',
     logger,
     health: {

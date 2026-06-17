@@ -1,4 +1,4 @@
-import { sql } from 'kysely';
+﻿import { sql } from 'kysely';
 import type { FastifyInstance } from 'fastify';
 import {
   connectRedis,
@@ -79,7 +79,7 @@ export async function buildApp(config: MarketConfig): Promise<BuiltService> {
     closeCaptureGraceMs: config.refresh.closeCaptureGraceMs,
   });
 
-  const app = createService({
+  const app = await createService({
     name: 'market',
     logger,
     health: {

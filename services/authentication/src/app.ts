@@ -1,4 +1,4 @@
-import { sql } from 'kysely';
+﻿import { sql } from 'kysely';
 import type { FastifyInstance } from 'fastify';
 import {
   createDatabase,
@@ -93,7 +93,7 @@ export async function buildApp(config: AuthConfig): Promise<BuiltService> {
     audience: config.jwt.audience,
   });
 
-  const app = createService({
+  const app = await createService({
     name: 'authentication',
     logger,
     health: {

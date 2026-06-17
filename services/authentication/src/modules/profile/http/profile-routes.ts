@@ -22,6 +22,28 @@ const UpdateProfileBody = Type.Object({
   timezone: Type.Optional(Type.Union([Type.String({ maxLength: 64 }), Type.Null()])),
 });
 
+const Ns = Type.Union([Type.String(), Type.Null()]);
+
+const UserProfileSchema = Type.Object({
+  id: Type.String(),
+  email: Type.String(),
+  display_name: Ns,
+  role: Type.Union([Type.Literal('user'), Type.Literal('admin')]),
+  preferences: Type.Object({
+    reporting_currency: Type.String(),
+    realization_accounting_method: AccountingMethod,
+    combined_headline_metric: Type.String(),
+    combined_benchmark: Ns,
+    avatar_color: Type.String(),
+    locale: Ns,
+    timezone: Ns,
+  }),
+  tax_residence: Type.Union([
+    Type.Object({ country_code: Type.String(), valid_from: Type.String() }),
+    Type.Null(),
+  ]),
+});
+
 export interface ProfileRouteDeps {
   service: ProfileService;
   authenticate: preHandlerHookHandler;
@@ -37,7 +59,7 @@ export function registerProfileRoutes(app: FastifyInstance, deps: ProfileRouteDe
 
   r.get(
     '/me',
-    { preHandler: [deps.authenticate, deps.requireScope('profile:read')] },
+    { preHandler: [deps.authenticate, deps.requireScope('profile:read')], schema: { response: { 200: UserProfileSchema } } },
     async (request) => deps.service.getProfile(requireUserId(request.user?.sub)),
   );
 
@@ -45,7 +67,7 @@ export function registerProfileRoutes(app: FastifyInstance, deps: ProfileRouteDe
     '/me/preferences',
     {
       preHandler: [deps.authenticate, deps.requireScope('profile:write')],
-      schema: { body: UpdateProfileBody },
+      schema: { body: UpdateProfileBody, response: { 200: UserProfileSchema } },
     },
     async (request) => deps.service.updateProfile(requireUserId(request.user?.sub), request.body),
   );

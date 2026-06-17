@@ -8,6 +8,11 @@ import type { AuthDatabase } from '../../../platform/database/schema.js';
 import type { PasswordHasher } from '../../../platform/security/password-hasher.js';
 import { BootstrapValidationError, runBootstrap } from '../application/run-bootstrap.js';
 
+const SetupSuccessResponse = Type.Object({
+  status: Type.Literal('initialized'),
+  adminUserId: Type.String(),
+});
+
 const SetupBody = Type.Object({
   auth: Type.Object({ local: Type.Boolean(), oidc: Type.Boolean() }),
   oidc: Type.Optional(Type.Object({ issuerUrl: Type.String(), clientId: Type.String() })),
@@ -38,7 +43,7 @@ export interface SetupRouteDeps {
 export function registerSetupRoutes(app: FastifyInstance, deps: SetupRouteDeps): void {
   const r = app.withTypeProvider<TypeBoxTypeProvider>();
 
-  r.post('/auth/setup', { schema: { body: SetupBody } }, async (request, reply) => {
+  r.post('/auth/setup', { schema: { body: SetupBody, response: { 201: SetupSuccessResponse } } }, async (request, reply) => {
     if (!deps.setupSecret) {
       throw new AppError({
         status: 501,

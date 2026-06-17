@@ -12,6 +12,30 @@ const RefreshBody = Type.Object({
   listing_ids: Type.Array(Type.String({ format: 'uuid' }), { minItems: 1, maxItems: 100 }),
 });
 
+const Ns = Type.Union([Type.String(), Type.Null()]);
+
+const FundamentalsViewSchema = Type.Object({
+  instrument_id: Type.String(),
+  effective_date: Type.String(),
+  provider: Type.String(),
+  currency: Ns,
+  pe_ratio: Ns,
+  pb_ratio: Ns,
+  ps_ratio: Ns,
+  dividend_yield: Ns,
+  eps: Ns,
+  market_cap: Ns,
+  revenue: Ns,
+  revenue_growth: Ns,
+  earnings_growth: Ns,
+  shares_outstanding: Ns,
+  net_debt: Ns,
+  extra: Type.Union([Type.Record(Type.String(), Type.Unknown()), Type.Null()]),
+  as_of: Type.String(),
+});
+
+const RefreshedResponse = Type.Object({ refreshed: Type.Integer() });
+
 export interface FundamentalsRouteDeps {
   service: FundamentalsService;
   authenticate: preHandlerHookHandler;
@@ -27,7 +51,7 @@ export function registerFundamentalsRoutes(app: FastifyInstance, deps: Fundament
   const r = app.withTypeProvider<TypeBoxTypeProvider>();
   const read = [deps.authenticate, deps.requireScope('fundamentals:read')];
 
-  r.get('/fundamentals', { preHandler: read, schema: { querystring: ListQuery } }, async (request) => {
+  r.get('/fundamentals', { preHandler: read, schema: { querystring: ListQuery, response: { 200: Type.Array(FundamentalsViewSchema) } } }, async (request) => {
     const ids = request.query.instrument_ids
       .split(',')
       .map((id) => id.trim())
@@ -35,7 +59,7 @@ export function registerFundamentalsRoutes(app: FastifyInstance, deps: Fundament
     return deps.service.getForInstruments(ids);
   });
 
-  r.post('/fundamentals/refresh', { preHandler: read, schema: { body: RefreshBody } }, async (request) => {
+  r.post('/fundamentals/refresh', { preHandler: read, schema: { body: RefreshBody, response: { 200: RefreshedResponse } } }, async (request) => {
     const refreshed = await deps.service.refreshListings(request.body.listing_ids, true);
     return { refreshed };
   });

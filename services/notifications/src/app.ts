@@ -1,4 +1,4 @@
-import { sql } from 'kysely';
+﻿import { sql } from 'kysely';
 import type { FastifyInstance } from 'fastify';
 import {
   connectRedis,
@@ -43,7 +43,7 @@ export interface BuiltService {
 /**
  * Composition root for the notifications service. Owns `notifications.*`,
  * consumes the `portfolio` stream into a per-user interest projection, evaluates
- * §2.7 alerts on a schedule, and serves each user's inbox over HTTP.
+ * Â§2.7 alerts on a schedule, and serves each user's inbox over HTTP.
  */
 export async function buildApp(config: NotificationsConfig): Promise<BuiltService> {
   const logger = createLogger({
@@ -82,7 +82,7 @@ export async function buildApp(config: NotificationsConfig): Promise<BuiltServic
     logger,
   });
 
-  const app = createService({
+  const app = await createService({
     name: 'notifications',
     logger,
     health: {

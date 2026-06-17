@@ -1,0 +1,793 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "notifications API",
+    "description": "Internal HTTP API for the notifications service.",
+    "version": "0.1.0"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {}
+  },
+  "paths": {
+    "/notifications": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "type": "integer"
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "unread_count",
+                    "notifications"
+                  ],
+                  "properties": {
+                    "unread_count": {
+                      "type": "integer"
+                    },
+                    "notifications": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "type",
+                          "severity",
+                          "title",
+                          "body",
+                          "instrument_id",
+                          "listing_id",
+                          "data",
+                          "read_at",
+                          "created_at"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "daily_move"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "earnings_upcoming"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "target_zone"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "price_threshold"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "cost_basis_move"
+                                ]
+                              }
+                            ]
+                          },
+                          "severity": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "info"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "warning"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "critical"
+                                ]
+                              }
+                            ]
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "body": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "instrument_id": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "listing_id": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "data": {},
+                          "read_at": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "created_at": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notifications/{id}/read": {
+      "post": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notifications/read-all": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "marked"
+                  ],
+                  "properties": {
+                    "marked": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notifications/rules": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "user_id",
+                      "kind",
+                      "scope",
+                      "instrument_id",
+                      "listing_id",
+                      "params",
+                      "label",
+                      "enabled",
+                      "created_at",
+                      "updated_at"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "user_id": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "price_threshold"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "daily_move"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "earnings_lead"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "cost_basis_move"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "target_zone"
+                            ]
+                          }
+                        ]
+                      },
+                      "scope": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "instrument"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "all_holdings"
+                            ]
+                          }
+                        ]
+                      },
+                      "instrument_id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "listing_id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "params": {
+                        "type": "object",
+                        "additionalProperties": {}
+                      },
+                      "label": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "enabled": {
+                        "type": "boolean"
+                      },
+                      "created_at": {
+                        "type": "string"
+                      },
+                      "updated_at": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "kind",
+                  "scope",
+                  "params"
+                ],
+                "properties": {
+                  "kind": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "price_threshold"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "daily_move"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "earnings_lead"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "cost_basis_move"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "target_zone"
+                        ]
+                      }
+                    ]
+                  },
+                  "scope": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "instrument"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "all_holdings"
+                        ]
+                      }
+                    ]
+                  },
+                  "instrument_id": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "listing_id": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "params": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  },
+                  "label": {
+                    "maxLength": 100,
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "user_id",
+                    "kind",
+                    "scope",
+                    "instrument_id",
+                    "listing_id",
+                    "params",
+                    "label",
+                    "enabled",
+                    "created_at",
+                    "updated_at"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "user_id": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "price_threshold"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "daily_move"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "earnings_lead"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "cost_basis_move"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "target_zone"
+                          ]
+                        }
+                      ]
+                    },
+                    "scope": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "instrument"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "all_holdings"
+                          ]
+                        }
+                      ]
+                    },
+                    "instrument_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "listing_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "params": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    },
+                    "label": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notifications/rules/{id}": {
+      "patch": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "params": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  },
+                  "label": {
+                    "anyOf": [
+                      {
+                        "maxLength": 100,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "user_id",
+                    "kind",
+                    "scope",
+                    "instrument_id",
+                    "listing_id",
+                    "params",
+                    "label",
+                    "enabled",
+                    "created_at",
+                    "updated_at"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "user_id": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "price_threshold"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "daily_move"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "earnings_lead"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "cost_basis_move"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "target_zone"
+                          ]
+                        }
+                      ]
+                    },
+                    "scope": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "instrument"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "all_holdings"
+                          ]
+                        }
+                      ]
+                    },
+                    "instrument_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "listing_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "params": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    },
+                    "label": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

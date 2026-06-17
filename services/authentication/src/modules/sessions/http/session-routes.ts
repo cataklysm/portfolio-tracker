@@ -17,6 +17,7 @@ const LoginBody = Type.Object({
 
 const RefreshBody = Type.Object({ refresh_token: Type.String({ minLength: 1 }) });
 const LogoutBody = Type.Object({ refresh_token: Type.Optional(Type.String()) });
+const OkResponse = Type.Object({ ok: Type.Literal(true) });
 
 /**
  * Public authentication endpoints: local login, refresh-token rotation, and
@@ -40,10 +41,10 @@ export function registerSessionRoutes(app: FastifyInstance, service: SessionServ
 
   r.post(
     '/auth/logout',
-    { schema: { body: LogoutBody } },
+    { schema: { body: LogoutBody, response: { 200: OkResponse } } },
     async (request) => {
       if (request.body.refresh_token) await service.logout(request.body.refresh_token);
-      return { ok: true };
+      return { ok: true as const };
     },
   );
 }

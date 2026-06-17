@@ -16,7 +16,8 @@ export interface HealthChecks {
  *   GET /health/startup  — slow-startup / migration orchestration support
  */
 export function registerHealth(app: FastifyInstance, serviceName: string, checks: HealthChecks): void {
-  const opts = { logLevel: 'warn' as const };
+  // Operational probes are excluded from the OpenAPI document (schema.hide).
+  const opts = { logLevel: 'warn' as const, schema: { hide: true } };
 
   app.get('/health/live', opts, async () => ({ status: 'ok', service: serviceName }));
 

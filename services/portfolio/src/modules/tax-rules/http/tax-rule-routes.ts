@@ -2,6 +2,7 @@ import type { FastifyInstance, preHandlerHookHandler } from 'fastify';
 import { Type } from '@sinclair/typebox';
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { TaxRuleService } from '../application/tax-rule-service.js';
+import { TaxRuleSchema } from '../../../schemas.js';
 
 const ListQuery = Type.Object({
   country: Type.Optional(Type.String({ minLength: 2, maxLength: 2 })),
@@ -25,7 +26,7 @@ export function registerTaxRuleRoutes(app: FastifyInstance, deps: TaxRuleRouteDe
   const r = app.withTypeProvider<TypeBoxTypeProvider>();
   const read = [deps.authenticate, deps.requireScope('portfolio:read')];
 
-  r.get('/tax-rules', { preHandler: read, schema: { querystring: ListQuery } }, async (request) =>
+  r.get('/tax-rules', { preHandler: read, schema: { querystring: ListQuery, response: { 200: Type.Array(TaxRuleSchema) } } }, async (request) =>
     deps.service.find({
       countryCode: request.query.country,
       assetClass: request.query.asset_class,

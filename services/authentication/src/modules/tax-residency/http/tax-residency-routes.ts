@@ -10,6 +10,20 @@ const SetBody = Type.Object({
   is_primary: Type.Optional(Type.Boolean()),
 });
 
+const TaxResidencySchema = Type.Object({
+  id: Type.String(),
+  country_code: Type.String(),
+  valid_from: Type.String(),
+  valid_until: Type.Union([Type.String(), Type.Null()]),
+  is_primary: Type.Boolean(),
+  confirmed_at: Type.String(),
+});
+
+const TaxResidencyViewSchema = Type.Object({
+  current: Type.Union([TaxResidencySchema, Type.Null()]),
+  history: Type.Array(TaxResidencySchema),
+});
+
 export interface TaxResidencyRouteDeps {
   service: TaxResidencyService;
   authenticate: preHandlerHookHandler;
@@ -25,13 +39,13 @@ export function registerTaxResidencyRoutes(app: FastifyInstance, deps: TaxReside
 
   r.get(
     '/tax-residency',
-    { preHandler: [deps.authenticate, deps.requireScope('profile:read')] },
+    { preHandler: [deps.authenticate, deps.requireScope('profile:read')], schema: { response: { 200: TaxResidencyViewSchema } } },
     async (request) => deps.service.get(uid(request.user?.sub)),
   );
 
   r.post(
     '/tax-residency',
-    { preHandler: [deps.authenticate, deps.requireScope('profile:write')], schema: { body: SetBody } },
+    { preHandler: [deps.authenticate, deps.requireScope('profile:write')], schema: { body: SetBody, response: { 201: TaxResidencyViewSchema } } },
     async (request, reply) => {
       const view = await deps.service.set(uid(request.user?.sub), {
         countryCode: request.body.country_code,

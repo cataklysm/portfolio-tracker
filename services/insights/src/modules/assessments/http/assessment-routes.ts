@@ -48,6 +48,52 @@ const UpdatePriceTargetBody = Type.Object({
   note: Type.Optional(Type.Union([Type.String({ maxLength: 1000 }), Type.Null()])),
 });
 
+const Ns = Type.Union([Type.String(), Type.Null()]);
+
+const FairValueRecordSchema = Type.Object({
+  id: Type.String(),
+  instrument_id: Type.String(),
+  user_id: Ns,
+  method: Type.Union([Type.Literal('dcf'), Type.Literal('analyst')]),
+  value: Type.String(),
+  currency: Type.String(),
+  assumptions: Type.Unknown(),
+  effective_date: Type.String(),
+  source: Ns,
+  created_at: Type.String(),
+});
+
+const DcfResultSchema = Type.Object({
+  intrinsic_value_per_share: Type.Number(),
+  enterprise_value: Type.Number(),
+  equity_value: Type.Number(),
+  present_value_of_cash_flows: Type.Number(),
+  present_value_of_terminal: Type.Number(),
+});
+
+const FairValueWithBreakdownSchema = Type.Intersect([
+  FairValueRecordSchema,
+  Type.Object({ breakdown: DcfResultSchema }),
+]);
+
+const PriceTargetRecordSchema = Type.Object({
+  id: Type.String(),
+  instrument_id: Type.String(),
+  listing_id: Ns,
+  user_id: Ns,
+  horizon: Horizon,
+  source: Type.Union([Type.Literal('own'), Type.Literal('analyst'), Type.Literal('technical')]),
+  zone_low: Ns,
+  zone_high: Ns,
+  currency: Type.String(),
+  effective_date: Type.String(),
+  note: Ns,
+  created_at: Type.String(),
+  updated_at: Type.String(),
+});
+
+const OkResponse = Type.Object({ ok: Type.Literal(true) });
+
 export interface AssessmentRouteDeps {
   service: AssessmentService;
   authenticate: preHandlerHookHandler;
@@ -66,11 +112,11 @@ export function registerAssessmentRoutes(app: FastifyInstance, deps: AssessmentR
 
   // ---- Fair values --------------------------------------------------------
 
-  r.get('/fair-values', { preHandler: read, schema: { querystring: InstrumentQuery } }, async (request) =>
+  r.get('/fair-values', { preHandler: read, schema: { querystring: InstrumentQuery, response: { 200: Type.Array(FairValueRecordSchema) } } }, async (request) =>
     deps.service.listFairValues(uid(request.user?.sub), request.query.instrument_id),
   );
 
-  r.post('/fair-values', { preHandler: write, schema: { body: CreateFairValueBody } }, async (request, reply) => {
+  r.post('/fair-values', { preHandler: write, schema: { body: CreateFairValueBody, response: { 201: FairValueWithBreakdownSchema } } }, async (request, reply) => {
     const { record, breakdown } = await deps.service.createDcfFairValue(uid(request.user?.sub), {
       instrumentId: request.body.instrument_id,
       currency: request.body.currency,
@@ -82,18 +128,18 @@ export function registerAssessmentRoutes(app: FastifyInstance, deps: AssessmentR
     return { ...record, breakdown };
   });
 
-  r.delete('/fair-values/:id', { preHandler: write }, async (request) => {
+  r.delete('/fair-values/:id', { preHandler: write, schema: { response: { 200: OkResponse } } }, async (request) => {
     await deps.service.deleteFairValue(uid(request.user?.sub), (request.params as { id: string }).id);
-    return { ok: true };
+    return { ok: true as const };
   });
 
   // ---- Price targets ------------------------------------------------------
 
-  r.get('/price-targets', { preHandler: read, schema: { querystring: InstrumentQuery } }, async (request) =>
+  r.get('/price-targets', { preHandler: read, schema: { querystring: InstrumentQuery, response: { 200: Type.Array(PriceTargetRecordSchema) } } }, async (request) =>
     deps.service.listPriceTargets(uid(request.user?.sub), request.query.instrument_id),
   );
 
-  r.post('/price-targets', { preHandler: write, schema: { body: CreatePriceTargetBody } }, async (request, reply) => {
+  r.post('/price-targets', { preHandler: write, schema: { body: CreatePriceTargetBody, response: { 201: PriceTargetRecordSchema } } }, async (request, reply) => {
     const result = await deps.service.createPriceTarget(uid(request.user?.sub), {
       instrumentId: request.body.instrument_id,
       listingId: request.body.listing_id ?? null,
@@ -108,7 +154,7 @@ export function registerAssessmentRoutes(app: FastifyInstance, deps: AssessmentR
     return result;
   });
 
-  r.patch('/price-targets/:id', { preHandler: write, schema: { body: UpdatePriceTargetBody } }, async (request) =>
+  r.patch('/price-targets/:id', { preHandler: write, schema: { body: UpdatePriceTargetBody, response: { 200: PriceTargetRecordSchema } } }, async (request) =>
     deps.service.updatePriceTarget(uid(request.user?.sub), (request.params as { id: string }).id, {
       horizon: request.body.horizon,
       zoneLow: request.body.zone_low,
@@ -117,15 +163,15 @@ export function registerAssessmentRoutes(app: FastifyInstance, deps: AssessmentR
     }),
   );
 
-  r.delete('/price-targets/:id', { preHandler: write }, async (request) => {
+  r.delete('/price-targets/:id', { preHandler: write, schema: { response: { 200: OkResponse } } }, async (request) => {
     await deps.service.deletePriceTarget(uid(request.user?.sub), (request.params as { id: string }).id);
-    return { ok: true };
+    return { ok: true as const };
   });
 
   // Internal: a user's own target zones across instruments, for background
   // workers (no user token) like the notifications evaluator. Network/gateway
   // restricted.
-  r.get('/internal/price-targets', { schema: { querystring: InternalTargetsQuery } }, async (request) => {
+  r.get('/internal/price-targets', { schema: { querystring: InternalTargetsQuery, response: { 200: Type.Array(PriceTargetRecordSchema) } } }, async (request) => {
     const ids = request.query.instrument_ids.split(',').map((s) => s.trim()).filter((s) => s.length > 0);
     return deps.service.listOwnTargetsForInstruments(request.query.user_id, ids);
   });

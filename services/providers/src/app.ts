@@ -1,4 +1,4 @@
-import { sql } from 'kysely';
+﻿import { sql } from 'kysely';
 import type { FastifyInstance } from 'fastify';
 import { createDatabase, createLogger, createService, UserTokenVerifier } from '@portfolio/platform';
 import type { ProvidersConfig } from './config/config.js';
@@ -14,7 +14,7 @@ export interface BuiltService {
 }
 
 /**
- * Composition root for the providers service — the platform's single egress to
+ * Composition root for the providers service â€” the platform's single egress to
  * external market-data sources. It owns only `providers.provider_settings`
  * (admin-editable provider config); all market data is fetched live, never
  * stored here. Readiness gates on the DB; upstream provider availability is
@@ -35,7 +35,7 @@ export async function buildApp(config: ProvidersConfig): Promise<BuiltService> {
 
   const registry = await buildRegistry(config, settingsRepo, logger);
 
-  const app = createService({
+  const app = await createService({
     name: 'providers',
     logger,
     health: {

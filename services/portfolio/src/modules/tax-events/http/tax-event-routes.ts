@@ -4,6 +4,7 @@ import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import { AppError } from '@portfolio/platform';
 import type { TaxEventService } from '../application/tax-event-service.js';
 import type { TaxComponent, TaxDirection } from '../application/ports.js';
+import { TaxEventRecordSchema, OkResponse } from '../../../schemas.js';
 
 const Component = Type.Union([
   Type.Literal('capital_income'),
@@ -58,7 +59,7 @@ export function registerTaxEventRoutes(app: FastifyInstance, deps: TaxEventRoute
   const read = [deps.authenticate, deps.requireScope('portfolio:read')];
   const write = [deps.authenticate, deps.requireScope('portfolio:write')];
 
-  r.get('/tax-events', { preHandler: read, schema: { querystring: ListQuery } }, async (request) =>
+  r.get('/tax-events', { preHandler: read, schema: { querystring: ListQuery, response: { 200: Type.Array(TaxEventRecordSchema) } } }, async (request) =>
     deps.service.list(uid(request.user?.sub), {
       portfolioId: request.query.portfolio_id,
       positionId: request.query.position_id,
@@ -67,7 +68,7 @@ export function registerTaxEventRoutes(app: FastifyInstance, deps: TaxEventRoute
     }),
   );
 
-  r.post('/tax-events', { preHandler: write, schema: { body: CreateBody } }, async (request, reply) => {
+  r.post('/tax-events', { preHandler: write, schema: { body: CreateBody, response: { 201: TaxEventRecordSchema } } }, async (request, reply) => {
     const created = await deps.service.create(uid(request.user?.sub), {
       component: request.body.component as TaxComponent,
       direction: request.body.direction as TaxDirection,
@@ -84,7 +85,7 @@ export function registerTaxEventRoutes(app: FastifyInstance, deps: TaxEventRoute
     return created;
   });
 
-  r.patch('/tax-events/:id', { preHandler: write, schema: { body: UpdateBody } }, async (request) =>
+  r.patch('/tax-events/:id', { preHandler: write, schema: { body: UpdateBody, response: { 200: TaxEventRecordSchema } } }, async (request) =>
     deps.service.update(uid(request.user?.sub), (request.params as { id: string }).id, {
       component: request.body.component as TaxComponent | undefined,
       direction: request.body.direction as TaxDirection | undefined,
@@ -95,9 +96,9 @@ export function registerTaxEventRoutes(app: FastifyInstance, deps: TaxEventRoute
     }),
   );
 
-  r.delete('/tax-events/:id', { preHandler: write }, async (request) => {
+  r.delete('/tax-events/:id', { preHandler: write, schema: { response: { 200: OkResponse } } }, async (request) => {
     await deps.service.delete(uid(request.user?.sub), (request.params as { id: string }).id);
-    return { ok: true };
+    return { ok: true as const };
   });
 }
 

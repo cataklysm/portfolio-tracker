@@ -15,6 +15,7 @@ export {
   type UserTokenVerifierOptions,
 } from './http/authentication.js';
 export { createService, CURRENT_API_VERSION, type ServiceOptions } from './http/server.js';
+export { registerOpenApi, HIDE_FROM_OPENAPI, type OpenApiOptions } from './http/openapi.js';
 export { registerHealth, type HealthChecks } from './http/health.js';
 export { registerMetrics } from './http/metrics.js';
 export {

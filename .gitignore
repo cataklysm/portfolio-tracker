@@ -11,6 +11,8 @@ documentation/stock3-api-har-analysis.md
 # Claude Code config (machine-specific; settings.local.json contains secrets)
 .claude/
 
+.ai/
+
 # Node
 node_modules/
 dist/

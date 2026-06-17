@@ -1,4 +1,4 @@
-import { sql } from 'kysely';
+﻿import { sql } from 'kysely';
 import type { FastifyInstance } from 'fastify';
 import {
   connectRedis,
@@ -39,7 +39,7 @@ export async function buildApp(config: InstrumentsConfig): Promise<BuiltService>
   const catalogService = new CatalogService(new KyselyCatalogRepository(db));
   const selectionService = new SelectionService(new KyselySelectionRepository(db));
 
-  const app = createService({
+  const app = await createService({
     name: 'instruments',
     logger,
     health: {

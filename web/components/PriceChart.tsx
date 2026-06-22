@@ -24,7 +24,7 @@ function formatPrice(locale: string, value: number, currency: string): string {
 }
 
 const W = 700
-const H = 160
+const H = 220
 
 export function PriceChart({ data, currency, positive, locale }: PriceChartProps) {
   if (data.length < 2) return null
@@ -53,8 +53,8 @@ export function PriceChart({ data, currency, positive, locale }: PriceChartProps
   const gridYs = [0.25, 0.5, 0.75].map((f) => 6 + (H - 12) * f)
 
   return (
-    <div>
-      <div className="relative">
+    <div className="flex h-full min-h-[300px] flex-col">
+      <div className="relative min-h-0 flex-1">
         <span className="absolute right-2 top-1 text-xs tabular-nums text-[var(--app-text-faint)]">
           {formatPrice(locale, max, currency)}
         </span>
@@ -66,7 +66,7 @@ export function PriceChart({ data, currency, positive, locale }: PriceChartProps
           viewBox={`0 0 ${W} ${H}`}
           preserveAspectRatio="none"
           aria-hidden="true"
-          className="h-40 w-full"
+          className="h-full min-h-[280px] w-full"
         >
           <defs>
             <linearGradient id="price-chart-fill" x1="0" y1="0" x2="0" y2="1">
@@ -102,7 +102,7 @@ export function PriceChart({ data, currency, positive, locale }: PriceChartProps
         </svg>
       </div>
 
-      <div className="mt-1.5 flex justify-between text-xs text-[var(--app-text-faint)]">
+      <div className="mt-2 flex shrink-0 justify-between text-xs text-[var(--app-text-faint)]">
         <span>{formatDate(locale, data[0]!.time)}</span>
         <span>{formatDate(locale, data[Math.floor(data.length / 2)]!.time)}</span>
         <span>{formatDate(locale, data[data.length - 1]!.time)}</span>

@@ -2,8 +2,28 @@ import type { FastifyInstance, preHandlerHookHandler } from 'fastify';
 import { Type } from '@sinclair/typebox';
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { EventsService } from '../application/events-service.js';
+import type { CorporateActionType } from '../application/ports.js';
 
-const InstrumentQuery = Type.Object({ instrument_id: Type.String({ format: 'uuid' }) });
+const CORPORATE_ACTION_TYPES = new Set<CorporateActionType>(['split', 'reverse_split', 'dividend', 'buyback', 'spinoff', 'capital_increase']);
+
+const EarningsQuery = Type.Object({
+  instrument_id: Type.Optional(Type.String({ format: 'uuid' })),
+  instrument_ids: Type.Optional(Type.String({ minLength: 1, maxLength: 16000 })),
+  is_upcoming: Type.Optional(Type.Boolean()),
+  date_from: Type.Optional(Type.String({ minLength: 10, maxLength: 10 })),
+  date_to: Type.Optional(Type.String({ minLength: 10, maxLength: 10 })),
+  limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 500 })),
+  offset: Type.Optional(Type.Integer({ minimum: 0, maximum: 100000 })),
+});
+const CorporateActionsQuery = Type.Object({
+  instrument_id: Type.Optional(Type.String({ format: 'uuid' })),
+  instrument_ids: Type.Optional(Type.String({ minLength: 1, maxLength: 16000 })),
+  types: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
+  date_from: Type.Optional(Type.String({ minLength: 10, maxLength: 10 })),
+  date_to: Type.Optional(Type.String({ minLength: 10, maxLength: 10 })),
+  limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 500 })),
+  offset: Type.Optional(Type.Integer({ minimum: 0, maximum: 100000 })),
+});
 const NewsQuery = Type.Object({
   instrument_id: Type.String({ format: 'uuid' }),
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 50 })),
@@ -43,6 +63,20 @@ const StoredCorporateActionSchema = Type.Object({
   provider: Type.String(),
 });
 
+const EarningsPageSchema = Type.Object({
+  items: Type.Array(StoredEarningsSchema),
+  total: Type.Integer(),
+  limit: Type.Integer(),
+  offset: Type.Integer(),
+});
+
+const CorporateActionsPageSchema = Type.Object({
+  items: Type.Array(StoredCorporateActionSchema),
+  total: Type.Integer(),
+  limit: Type.Integer(),
+  offset: Type.Integer(),
+});
+
 const StoredNewsSchema = Type.Object({
   id: Type.String(),
   instrument_id: Ns,
@@ -75,12 +109,26 @@ export function registerEventsRoutes(app: FastifyInstance, deps: EventsRouteDeps
   const r = app.withTypeProvider<TypeBoxTypeProvider>();
   const read = [deps.authenticate, deps.requireScope('events:read')];
 
-  r.get('/events/earnings', { preHandler: read, schema: { querystring: InstrumentQuery, response: { 200: Type.Array(StoredEarningsSchema) } } }, async (request) =>
-    deps.service.getEarnings(request.query.instrument_id),
+  r.get('/events/earnings', { preHandler: read, schema: { querystring: EarningsQuery, response: { 200: EarningsPageSchema } } }, async (request) =>
+    deps.service.queryEarnings({
+      instrumentIds: parseInstrumentIds(request.query.instrument_id, request.query.instrument_ids),
+      isUpcoming: request.query.is_upcoming,
+      dateFrom: request.query.date_from,
+      dateTo: request.query.date_to,
+      limit: request.query.limit ?? 100,
+      offset: request.query.offset ?? 0,
+    }),
   );
 
-  r.get('/events/corporate-actions', { preHandler: read, schema: { querystring: InstrumentQuery, response: { 200: Type.Array(StoredCorporateActionSchema) } } }, async (request) =>
-    deps.service.getCorporateActions(request.query.instrument_id),
+  r.get('/events/corporate-actions', { preHandler: read, schema: { querystring: CorporateActionsQuery, response: { 200: CorporateActionsPageSchema } } }, async (request) =>
+    deps.service.queryCorporateActions({
+      instrumentIds: parseInstrumentIds(request.query.instrument_id, request.query.instrument_ids),
+      types: request.query.types ? parseCorporateActionTypes(request.query.types) : undefined,
+      dateFrom: request.query.date_from,
+      dateTo: request.query.date_to,
+      limit: request.query.limit ?? 100,
+      offset: request.query.offset ?? 0,
+    }),
   );
 
   r.get('/events/news', { preHandler: read, schema: { querystring: NewsQuery, response: { 200: Type.Array(StoredNewsSchema) } } }, async (request) =>
@@ -98,4 +146,16 @@ export function registerEventsRoutes(app: FastifyInstance, deps: EventsRouteDeps
     const ids = request.query.instrument_ids.split(',').map((s) => s.trim()).filter((s) => s.length > 0);
     return deps.service.getUpcomingEarnings(ids);
   });
+}
+
+function parseCsv(value: string): string[] {
+  return value.split(',').map((entry) => entry.trim()).filter((entry) => entry.length > 0);
+}
+
+function parseInstrumentIds(instrumentId: string | undefined, instrumentIds: string | undefined): string[] {
+  return [...(instrumentId ? [instrumentId] : []), ...(instrumentIds ? parseCsv(instrumentIds) : [])];
+}
+
+function parseCorporateActionTypes(value: string): CorporateActionType[] {
+  return parseCsv(value).filter((entry): entry is CorporateActionType => CORPORATE_ACTION_TYPES.has(entry as CorporateActionType));
 }

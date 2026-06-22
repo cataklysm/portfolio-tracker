@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type { Kysely, Transaction } from 'kysely';
 import type { InstrumentsDatabase } from '../../../platform/database/schema.js';
 import type {
+  AdminSymbolsPage,
+  AdminSymbolsQuery,
   AdminSymbolView,
   BenchmarkCatalogEntry,
   CatalogRepository,
@@ -22,11 +24,13 @@ import type {
 export class KyselyCatalogRepository implements CatalogRepository {
   constructor(private readonly db: Kysely<InstrumentsDatabase>) {}
 
-  async listExchanges(): Promise<ExchangeView[]> {
-    return this.db
+  async listExchanges(includeInactive = false): Promise<ExchangeView[]> {
+    let query = this.db
       .selectFrom('instruments.exchanges')
-      .select(['id', 'mic', 'name', 'timezone', 'regular_open_local', 'regular_close_local'])
-      .where('active', '=', true)
+      .select(['id', 'mic', 'name', 'timezone', 'regular_open_local', 'regular_close_local', 'active']);
+    if (!includeInactive) query = query.where('active', '=', true);
+    return query
+      .orderBy('active', 'desc')
       .orderBy('mic')
       .execute();
   }
@@ -34,7 +38,7 @@ export class KyselyCatalogRepository implements CatalogRepository {
   async getExchange(id: string): Promise<ExchangeView | null> {
     const row = await this.db
       .selectFrom('instruments.exchanges')
-      .select(['id', 'mic', 'name', 'timezone', 'regular_open_local', 'regular_close_local'])
+      .select(['id', 'mic', 'name', 'timezone', 'regular_open_local', 'regular_close_local', 'active'])
       .where('id', '=', id)
       .executeTakeFirst();
     return row ?? null;
@@ -77,19 +81,41 @@ export class KyselyCatalogRepository implements CatalogRepository {
 
   async updateExchange(id: string, patch: UpdateExchangeInput): Promise<void> {
     const values: {
+      mic?: string;
       name?: string;
       timezone?: string;
       regular_open_local?: string | null;
       regular_close_local?: string | null;
+      active?: boolean;
       holiday_calendar?: string;
       updated_at: Date;
     } = { updated_at: new Date() };
+    if (patch.mic !== undefined) values.mic = patch.mic;
     if (patch.name !== undefined) values.name = patch.name;
     if (patch.timezone !== undefined) values.timezone = patch.timezone;
     if (patch.regularOpenLocal !== undefined) values.regular_open_local = patch.regularOpenLocal;
     if (patch.regularCloseLocal !== undefined) values.regular_close_local = patch.regularCloseLocal;
+    if (patch.active !== undefined) values.active = patch.active;
     if (patch.holidays !== undefined) values.holiday_calendar = JSON.stringify(patch.holidays);
     await this.db.updateTable('instruments.exchanges').set(values).where('id', '=', id).execute();
+  }
+
+  async exchangeInUse(id: string): Promise<boolean> {
+    const row = await this.db
+      .selectFrom('instruments.listings')
+      .select('id')
+      .where('exchange_id', '=', id)
+      .where('active', '=', true)
+      .executeTakeFirst();
+    return row !== undefined;
+  }
+
+  async deactivateExchange(id: string): Promise<void> {
+    await this.db
+      .updateTable('instruments.exchanges')
+      .set({ active: false, updated_at: new Date() })
+      .where('id', '=', id)
+      .execute();
   }
 
   async currencyExists(code: string): Promise<boolean> {
@@ -259,49 +285,101 @@ export class KyselyCatalogRepository implements CatalogRepository {
     return { ...row, provider_identifiers: identifiers };
   }
 
-  async listAdminSymbols(): Promise<AdminSymbolView[]> {
-    const [rows, identifiers, selections, positions, watchlistItems] = await Promise.all([
-      this.db
-        .selectFrom('instruments.listings as l')
-        .innerJoin('instruments.instruments as i', 'i.id', 'l.instrument_id')
-        .leftJoin('instruments.exchanges as e', 'e.id', 'l.exchange_id')
-        .select([
-          'l.id as id',
-          'l.instrument_id as instrument_id',
-          'l.symbol as symbol',
-          'l.currency as currency',
-          'l.exchange_id as exchange_id',
-          'l.active as active',
-          'e.mic as exchange_mic',
-          'i.name as instrument_name',
-          'i.asset_type as asset_type',
-          'i.isin as isin',
-          'i.underlying_identifier as underlying_identifier',
-        ])
-        .where('l.active', '=', true)
+  async listAdminSymbols(input: AdminSymbolsQuery): Promise<AdminSymbolsPage> {
+    const search = input.q ? `%${input.q}%` : null;
+    let rowsQuery = this.db
+      .selectFrom('instruments.listings as l')
+      .innerJoin('instruments.instruments as i', 'i.id', 'l.instrument_id')
+      .leftJoin('instruments.exchanges as e', 'e.id', 'l.exchange_id')
+      .select([
+        'l.id as id',
+        'l.instrument_id as instrument_id',
+        'l.symbol as symbol',
+        'l.currency as currency',
+        'l.exchange_id as exchange_id',
+        'l.active as active',
+        'e.mic as exchange_mic',
+        'i.name as instrument_name',
+        'i.asset_type as asset_type',
+        'i.isin as isin',
+      ])
+      .where('l.active', '=', true)
+      .where('i.active', '=', true);
+    if (input.assetType) rowsQuery = rowsQuery.where('i.asset_type', '=', input.assetType);
+    if (search) {
+      rowsQuery = rowsQuery.where((eb) =>
+        eb.or([
+          eb('i.name', 'ilike', search),
+          eb('i.isin', 'ilike', search),
+          eb('l.symbol', 'ilike', search),
+          eb('e.mic', 'ilike', search),
+        ]),
+      );
+    }
+
+    let countQuery = this.db
+      .selectFrom('instruments.listings as l')
+      .innerJoin('instruments.instruments as i', 'i.id', 'l.instrument_id')
+      .leftJoin('instruments.exchanges as e', 'e.id', 'l.exchange_id')
+      .select(({ fn }) => ['i.asset_type as asset_type', fn.count<number>('l.id').as('count')])
+      .where('l.active', '=', true)
+      .where('i.active', '=', true)
+      .groupBy('i.asset_type');
+    if (search) {
+      countQuery = countQuery.where((eb) =>
+        eb.or([
+          eb('i.name', 'ilike', search),
+          eb('i.isin', 'ilike', search),
+          eb('l.symbol', 'ilike', search),
+          eb('e.mic', 'ilike', search),
+        ]),
+      );
+    }
+
+    const [rows, countRows] = await Promise.all([
+      rowsQuery
         .orderBy('i.name')
         .orderBy('l.symbol')
+        .limit(input.limit)
+        .offset(input.offset)
         .execute(),
-      this.db
-        .selectFrom('instruments.listing_provider_identifiers')
-        .select(['listing_id', 'provider', 'provider_identifier'])
-        .orderBy('provider')
-        .execute(),
-      this.db
-        .selectFrom('instruments.provider_selection')
-        .select(['instrument_id', 'capability', 'provider'])
-        .orderBy('capability')
-        .execute(),
-      this.db
-        .selectFrom('portfolio.positions')
-        .select('listing_id')
-        .distinct()
-        .execute(),
-      this.db
-        .selectFrom('portfolio.watchlist_items')
-        .select('listing_id')
-        .distinct()
-        .execute(),
+      countQuery.execute(),
+    ]);
+    const listingIds = rows.map((row) => row.id);
+    const instrumentIds = [...new Set(rows.map((row) => row.instrument_id))];
+    const [identifiers, selections, positions, watchlistItems] = await Promise.all([
+      listingIds.length === 0
+        ? Promise.resolve([])
+        : this.db
+          .selectFrom('instruments.listing_provider_identifiers')
+          .select(['listing_id', 'provider', 'provider_identifier'])
+          .where('listing_id', 'in', listingIds)
+          .orderBy('provider')
+          .execute(),
+      instrumentIds.length === 0
+        ? Promise.resolve([])
+        : this.db
+          .selectFrom('instruments.provider_selection')
+          .select(['instrument_id', 'capability', 'provider'])
+          .where('instrument_id', 'in', instrumentIds)
+          .orderBy('capability')
+          .execute(),
+      listingIds.length === 0
+        ? Promise.resolve([])
+        : this.db
+          .selectFrom('portfolio.positions')
+          .select('listing_id')
+          .where('listing_id', 'in', listingIds)
+          .distinct()
+          .execute(),
+      listingIds.length === 0
+        ? Promise.resolve([])
+        : this.db
+          .selectFrom('portfolio.watchlist_items')
+          .select('listing_id')
+          .where('listing_id', 'in', listingIds)
+          .distinct()
+          .execute(),
     ]);
     const identifiersByListing = new Map<string, { provider: string; provider_identifier: string }[]>();
     for (const identifier of identifiers) {
@@ -316,12 +394,23 @@ export class KyselyCatalogRepository implements CatalogRepository {
       selectionsByInstrument.set(selection.instrument_id, list);
     }
     const used = new Set([...positions, ...watchlistItems].map((reference) => reference.listing_id));
-    return rows.map((row) => ({
+    const counts = { equity: 0, crypto: 0, fund: 0, index: 0 };
+    for (const row of countRows) counts[row.asset_type] = Number(row.count);
+    const total = input.assetType
+      ? counts[input.assetType]
+      : counts.equity + counts.crypto + counts.fund + counts.index;
+    return {
+      items: rows.map((row) => ({
       ...row,
       provider_identifiers: identifiersByListing.get(row.id) ?? [],
       provider_selections: selectionsByInstrument.get(row.instrument_id) ?? [],
       in_use: used.has(row.id),
-    }));
+      })),
+      total,
+      limit: input.limit,
+      offset: input.offset,
+      counts,
+    };
   }
 
   async listingInUse(id: string): Promise<boolean> {
@@ -458,15 +547,37 @@ export class KyselyCatalogRepository implements CatalogRepository {
         .where('primary_listing_id', 'is', null)
         .execute();
 
-      if (input.providerIdentifier) {
+      if (input.providerIdentifiers && input.providerIdentifiers.length > 0) {
         await trx
           .insertInto('instruments.listing_provider_identifiers')
-          .values({
+          .values(input.providerIdentifiers.map((identifier) => ({
             listing_id: listingId,
-            provider: input.providerIdentifier.provider,
-            provider_identifier: input.providerIdentifier.providerIdentifier,
-          })
-          .onConflict((oc) => oc.doNothing())
+            provider: identifier.provider,
+            provider_identifier: identifier.providerIdentifier,
+          })))
+          .onConflict((oc) =>
+            oc.columns(['listing_id', 'provider']).doUpdateSet((eb) => ({
+              provider_identifier: eb.ref('excluded.provider_identifier'),
+              updated_at: new Date(),
+            })),
+          )
+          .execute();
+      }
+
+      if (input.providerSelections && input.providerSelections.length > 0) {
+        await trx
+          .insertInto('instruments.provider_selection')
+          .values(input.providerSelections.map((selection) => ({
+            instrument_id: instrumentId,
+            capability: selection.capability,
+            provider: selection.provider,
+          })))
+          .onConflict((oc) =>
+            oc.columns(['instrument_id', 'capability']).doUpdateSet((eb) => ({
+              provider: eb.ref('excluded.provider'),
+              updated_at: new Date(),
+            })),
+          )
           .execute();
       }
 
@@ -514,7 +625,6 @@ export class KyselyCatalogRepository implements CatalogRepository {
         name: input.instrument.name,
         asset_type: input.instrument.assetType,
         isin: input.instrument.isin,
-        underlying_identifier: input.instrument.underlyingIdentifier,
       })
       .returning('id')
       .executeTakeFirstOrThrow();

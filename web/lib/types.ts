@@ -28,6 +28,8 @@ export interface Portfolio {
 
 // ---- Positions (portfolio service) ------------------------------------------
 
+export type InstrumentAssetType = "equity" | "crypto" | "fund" | "index"
+
 export interface PerformanceData {
   open_quantity: string
   listing_currency: string
@@ -49,7 +51,7 @@ export interface ListingSummary {
   instrument_id: string
   symbol: string
   name: string
-  asset_type: "equity" | "crypto" | "fund"
+  asset_type: InstrumentAssetType
   currency: string
 }
 
@@ -547,6 +549,7 @@ export interface ExchangeView {
   timezone: string
   regular_open_local: string | null
   regular_close_local: string | null
+  active: boolean
 }
 
 export interface InstrumentListing {
@@ -562,7 +565,7 @@ export interface InstrumentListing {
 export interface InstrumentWithListings {
   id: string
   name: string
-  asset_type: "equity" | "crypto" | "fund"
+  asset_type: InstrumentAssetType
   isin: string | null
   primary_listing_id: string | null
   listings: InstrumentListing[]
@@ -581,11 +584,18 @@ export interface ListingDetail {
 
 export interface AdminSymbolView extends ListingDetail {
   instrument_name: string
-  asset_type: "equity" | "crypto" | "fund"
+  asset_type: InstrumentAssetType
   isin: string | null
-  underlying_identifier: string | null
   in_use: boolean
   provider_selections: { capability: string; provider: string }[]
+}
+
+export interface AdminSymbolsPage {
+  items: AdminSymbolView[]
+  total: number
+  limit: number
+  offset: number
+  counts: Record<InstrumentAssetType, number>
 }
 
 export type ProviderCapability =
@@ -718,6 +728,7 @@ export interface NotificationItem {
   body: string | null
   instrument_id: string | null
   listing_id: string | null
+  rule_id: string | null
   data: unknown
   read_at: string | null
   created_at: string
@@ -800,7 +811,7 @@ export interface WatchlistItemView {
     instrument_id: string
     symbol: string
     name: string
-    asset_type: "equity" | "crypto" | "fund"
+    asset_type: InstrumentAssetType
     currency: string
   } | null
   current_price: string | null

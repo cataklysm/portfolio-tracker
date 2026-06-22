@@ -58,6 +58,7 @@ export interface ProviderSettings {
 export interface ProviderSettingsUpdate {
   enabled?: boolean;
   dataQuality?: DataQuality;
+  capabilityQuality?: Partial<Record<Capability, DataQuality>>;
   maxBatchSize?: number | null;
   rateLimitPerMin?: number | null;
   maxConcurrency?: number;

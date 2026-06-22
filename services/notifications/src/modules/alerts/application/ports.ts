@@ -17,6 +17,7 @@ export interface NewNotification {
   body: string | null;
   instrumentId: string | null;
   listingId: string | null;
+  ruleId: string | null;
   data: Record<string, unknown>;
 }
 
@@ -29,6 +30,7 @@ export interface StoredNotification {
   body: string | null;
   instrument_id: string | null;
   listing_id: string | null;
+  rule_id: string | null;
   data: unknown;
   read_at: string | null;
   created_at: string;
@@ -36,10 +38,12 @@ export interface StoredNotification {
 
 export interface NotificationRepository {
   insert(notification: NewNotification): Promise<string>;
+  getForUser(userId: string, id: string): Promise<StoredNotification | null>;
   listForUser(userId: string, limit: number): Promise<StoredNotification[]>;
   unreadCount(userId: string): Promise<number>;
   markRead(userId: string, id: string): Promise<boolean>;
   markAllRead(userId: string): Promise<number>;
+  deleteReadBefore(cutoff: Date): Promise<number>;
 }
 
 export interface AlertStateRepository {

@@ -27,6 +27,12 @@ const RebuildBody = Type.Object({
   confirm: Type.Boolean(),
 });
 
+const PurgeBody = Type.Object({
+  listing_ids: Type.Array(Type.String({ format: 'uuid' }), { minItems: 1 }),
+  // Explicit confirmation — this deletes the listings' entire stored price history.
+  confirm: Type.Boolean(),
+});
+
 const Ns = Type.Union([Type.String(), Type.Null()]);
 
 const QuoteViewSchema = Type.Object({
@@ -41,6 +47,7 @@ const QuoteViewSchema = Type.Object({
 const SeriesPointSchema = Type.Object({ time: Type.String(), price: Type.String() });
 const DailyCloseSchema = Type.Object({ date: Type.String(), price: Type.String() });
 const RebuildResponse = Type.Object({ purged: Type.Integer(), rebuilt: Type.Integer() });
+const PurgeResponse = Type.Object({ purged: Type.Integer() });
 const RefreshedResponse = Type.Object({ refreshed: Type.Integer() });
 
 export interface QuoteRouteDeps {
@@ -92,6 +99,20 @@ export function registerQuoteRoutes(app: FastifyInstance, deps: QuoteRouteDeps):
     return deps.service.purgeAndRebuild(request.body.listing_ids, from);
   });
 
+  // Admin: purge a listing's stored price history without refetching it. Useful
+  // when a bad provider mapping polluted the cache and the rebuild should happen
+  // separately (for example with a provider that can backfill a deeper history).
+  r.post('/quotes/purge', { preHandler: admin, schema: { body: PurgeBody, response: { 200: PurgeResponse } } }, async (request) => {
+    if (!request.body.confirm) {
+      throw AppError.badRequest(
+        'confirmation_required',
+        "Purge deletes the listings' stored price history; set confirm=true to proceed",
+      );
+    }
+    const purged = await deps.service.purgeListings(request.body.listing_ids);
+    return { purged };
+  });
+
   // User-facing on-demand refresh: pull fresh quotes for specific listings now
   // (e.g. right after a Yahoo symbol was corrected) rather than waiting for the
   // scheduler. The one read-scope endpoint that may call the provider.
@@ -129,6 +150,19 @@ export function registerQuoteRoutes(app: FastifyInstance, deps: QuoteRouteDeps):
     }
     const from = request.body.from ? new Date(request.body.from) : undefined;
     return deps.service.purgeAndRebuild(request.body.listing_ids, from);
+  });
+
+  // Internal: purge stored price history without refetching. Network/gateway
+  // restricted.
+  r.post('/internal/quotes/purge', { schema: { body: PurgeBody, response: { 200: PurgeResponse } } }, async (request) => {
+    if (!request.body.confirm) {
+      throw AppError.badRequest(
+        'confirmation_required',
+        "Purge deletes the listings' stored price history; set confirm=true to proceed",
+      );
+    }
+    const purged = await deps.service.purgeListings(request.body.listing_ids);
+    return { purged };
   });
 }
 

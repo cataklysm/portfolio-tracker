@@ -7,6 +7,7 @@ export interface ExchangeView {
   timezone: string;
   regular_open_local: string | null;
   regular_close_local: string | null;
+  active: boolean;
 }
 
 export interface ListingView {
@@ -33,10 +34,24 @@ export interface AdminSymbolView extends ListingDetail {
   instrument_name: string;
   asset_type: AssetType;
   isin: string | null;
-  underlying_identifier: string | null;
   in_use: boolean;
   /** Per-capability provider selections for the owning instrument. */
   provider_selections: { capability: string; provider: string }[];
+}
+
+export interface AdminSymbolsQuery {
+  assetType?: AssetType;
+  q?: string;
+  limit: number;
+  offset: number;
+}
+
+export interface AdminSymbolsPage {
+  items: AdminSymbolView[];
+  total: number;
+  limit: number;
+  offset: number;
+  counts: Record<AssetType, number>;
 }
 
 export interface UpdateListingInput {
@@ -108,10 +123,12 @@ export interface CreateExchangeInput {
 }
 
 export interface UpdateExchangeInput {
+  mic?: string;
   name?: string;
   timezone?: string;
   regularOpenLocal?: string | null;
   regularCloseLocal?: string | null;
+  active?: boolean;
   /** Full-closure dates (YYYY-MM-DD) in the exchange's local calendar. */
   holidays?: string[];
 }
@@ -121,14 +138,14 @@ export interface RegisterListingInput {
     name: string;
     assetType: AssetType;
     isin: string | null;
-    underlyingIdentifier: string | null;
   };
   listing: {
     exchangeId: string;
     symbol: string;
     currency: string;
   };
-  providerIdentifier?: { provider: string; providerIdentifier: string };
+  providerIdentifiers?: { provider: string; providerIdentifier: string }[];
+  providerSelections?: { capability: string; provider: string }[];
 }
 
 export interface RegisterListingResult {
@@ -138,11 +155,13 @@ export interface RegisterListingResult {
 }
 
 export interface CatalogRepository {
-  listExchanges(): Promise<ExchangeView[]>;
+  listExchanges(includeInactive?: boolean): Promise<ExchangeView[]>;
   getExchange(id: string): Promise<ExchangeView | null>;
   findExchangeId(idOrMic: { id?: string; mic?: string }): Promise<string | null>;
   createExchange(input: CreateExchangeInput): Promise<{ id: string }>;
   updateExchange(id: string, patch: UpdateExchangeInput): Promise<void>;
+  exchangeInUse(id: string): Promise<boolean>;
+  deactivateExchange(id: string): Promise<void>;
   currencyExists(code: string): Promise<boolean>;
   searchInstruments(query: string, limit: number): Promise<InstrumentWithListings[]>;
   getInstrument(id: string): Promise<InstrumentWithListings | null>;
@@ -154,7 +173,7 @@ export interface CatalogRepository {
   getListingSessionCalendars(ids: string[]): Promise<ListingSessionCalendar[]>;
   getProviderListings(ids: string[], provider: string): Promise<ProviderListing[]>;
   getListing(id: string): Promise<ListingDetail | null>;
-  listAdminSymbols(): Promise<AdminSymbolView[]>;
+  listAdminSymbols(query: AdminSymbolsQuery): Promise<AdminSymbolsPage>;
   listingInUse(id: string): Promise<boolean>;
   deactivateListing(id: string): Promise<void>;
   /** True if another listing already uses (symbol, exchange) — for edit conflicts. */

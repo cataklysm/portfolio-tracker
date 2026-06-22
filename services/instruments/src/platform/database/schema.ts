@@ -34,7 +34,6 @@ export interface InstrumentsTable {
   name: string;
   asset_type: 'equity' | 'crypto' | 'fund' | 'index';
   isin: string | null;
-  underlying_identifier: string | null;
   primary_listing_id: string | null;
   active: ColumnType<boolean, boolean | undefined, boolean>;
   created_at: Generated<Date>;

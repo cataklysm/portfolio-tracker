@@ -159,6 +159,12 @@ export class QuoteService {
     return { purged, rebuilt };
   }
 
+  /** Deletes the stored price history for the given listings without refetching. */
+  purgeListings(listingIds: string[]): Promise<number> {
+    if (listingIds.length === 0) return Promise.resolve(0);
+    return this.deps.repo.purgeListings(listingIds);
+  }
+
   /**
    * Persists a fetched quote. `sampling` is set only on the scheduled sweep: when
    * the provider returned an intraday series it is downsampled to the configured

@@ -8,6 +8,17 @@ const SearchQuery = Type.Object({
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 50 })),
 });
 
+const ExchangesQuery = Type.Object({
+  include_inactive: Type.Optional(Type.Boolean()),
+});
+
+const AdminSymbolsQuery = Type.Object({
+  asset_type: Type.Optional(Type.Union([Type.Literal('equity'), Type.Literal('crypto'), Type.Literal('fund'), Type.Literal('index')])),
+  q: Type.Optional(Type.String({ minLength: 1, maxLength: 120 })),
+  limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })),
+  offset: Type.Optional(Type.Integer({ minimum: 0 })),
+});
+
 const BatchListingsQuery = Type.Object({
   ids: Type.String({ minLength: 1, description: 'Comma-separated listing UUIDs' }),
 });
@@ -22,12 +33,16 @@ const ProviderIdentifier = Type.Object({
   provider_identifier: Type.String({ minLength: 1, maxLength: 128 }),
 });
 
+const ProviderSelectionInput = Type.Object({
+  capability: Type.String({ minLength: 1, maxLength: 32 }),
+  provider: Type.String({ minLength: 1, maxLength: 64 }),
+});
+
 const CreateInstrumentBody = Type.Object({
   instrument: Type.Object({
     name: Type.String({ minLength: 1, maxLength: 200 }),
     asset_type: Type.String(),
     isin: Type.Optional(Type.String({ maxLength: 12 })),
-    underlying_identifier: Type.Optional(Type.String({ maxLength: 64 })),
   }),
   listing: Type.Object({
     exchange_id: Type.Optional(Type.String({ format: 'uuid' })),
@@ -36,6 +51,8 @@ const CreateInstrumentBody = Type.Object({
     currency: Type.String({ minLength: 3, maxLength: 3 }),
   }),
   provider_identifier: Type.Optional(ProviderIdentifier),
+  provider_identifiers: Type.Optional(Type.Array(ProviderIdentifier, { maxItems: 16 })),
+  provider_selections: Type.Optional(Type.Array(ProviderSelectionInput, { maxItems: 16 })),
 });
 
 const UpdateInstrumentBody = Type.Object({
@@ -59,10 +76,12 @@ const CreateExchangeBody = Type.Object({
 });
 
 const UpdateExchangeBody = Type.Object({
+  mic: Type.Optional(Type.String({ minLength: 1, maxLength: 8 })),
   name: Type.Optional(Type.String({ minLength: 1, maxLength: 120 })),
   timezone: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
   regular_open_local: Type.Optional(Type.Union([Type.String({ maxLength: 8 }), Type.Null()])),
   regular_close_local: Type.Optional(Type.Union([Type.String({ maxLength: 8 }), Type.Null()])),
+  active: Type.Optional(Type.Boolean()),
   holidays: Type.Optional(Type.Array(Type.String({ minLength: 10, maxLength: 10 }))),
 });
 
@@ -79,6 +98,7 @@ const ExchangeViewSchema = Type.Object({
   timezone: Type.String(),
   regular_open_local: Ns,
   regular_close_local: Ns,
+  active: Type.Boolean(),
 });
 
 const ListingViewSchema = Type.Object({
@@ -107,11 +127,25 @@ const AdminSymbolViewSchema = Type.Intersect([
     instrument_name: Type.String(),
     asset_type: AssetTypeSchema,
     isin: Ns,
-    underlying_identifier: Ns,
     in_use: Type.Boolean(),
     provider_selections: Type.Array(Type.Object({ capability: Type.String(), provider: Type.String() })),
   }),
 ]);
+
+const AdminSymbolCountsSchema = Type.Object({
+  equity: Type.Integer(),
+  crypto: Type.Integer(),
+  fund: Type.Integer(),
+  index: Type.Integer(),
+});
+
+const AdminSymbolsPageSchema = Type.Object({
+  items: Type.Array(AdminSymbolViewSchema),
+  total: Type.Integer(),
+  limit: Type.Integer(),
+  offset: Type.Integer(),
+  counts: AdminSymbolCountsSchema,
+});
 
 const InstrumentViewSchema = Type.Object({
   id: Type.String(),
@@ -186,7 +220,9 @@ export function registerCatalogRoutes(app: FastifyInstance, deps: CatalogRouteDe
   const write = [deps.authenticate, deps.requireScope('instruments:write')];
   const admin = [deps.authenticate, deps.requireScope('system:admin')];
 
-  r.get('/exchanges', { preHandler: read, schema: { response: { 200: Type.Array(ExchangeViewSchema) } } }, async () => deps.service.listExchanges());
+  r.get('/exchanges', { preHandler: read, schema: { querystring: ExchangesQuery, response: { 200: Type.Array(ExchangeViewSchema) } } }, async (request) =>
+    deps.service.listExchanges(request.query.include_inactive ?? false),
+  );
 
   // Curated benchmark catalog: stable keys resolving to seeded index listings.
   r.get('/benchmarks', { preHandler: read, schema: { response: { 200: Type.Array(BenchmarkCatalogEntrySchema) } } }, async () => deps.service.listBenchmarkCatalog());
@@ -206,12 +242,19 @@ export function registerCatalogRoutes(app: FastifyInstance, deps: CatalogRouteDe
   r.patch('/exchanges/:id', { preHandler: write, schema: { body: UpdateExchangeBody, response: { 200: ExchangeViewSchema } } }, async (request) => {
     const { id } = request.params as { id: string };
     return deps.service.updateExchange(id, {
+      mic: request.body.mic,
       name: request.body.name,
       timezone: request.body.timezone,
       regularOpenLocal: request.body.regular_open_local,
       regularCloseLocal: request.body.regular_close_local,
+      active: request.body.active,
       holidays: request.body.holidays,
     });
+  });
+
+  r.delete('/exchanges/:id', { preHandler: write }, async (request, reply) => {
+    await deps.service.deactivateExchange((request.params as { id: string }).id);
+    reply.code(204);
   });
 
   r.get('/instruments/search', { preHandler: read, schema: { querystring: SearchQuery, response: { 200: Type.Array(InstrumentWithListingsSchema) } } }, async (request) =>
@@ -233,7 +276,11 @@ export function registerCatalogRoutes(app: FastifyInstance, deps: CatalogRouteDe
     return result;
   });
 
-  r.get('/instruments/admin/symbols', { preHandler: admin, schema: { response: { 200: Type.Array(AdminSymbolViewSchema) } } }, async () => deps.service.listAdminSymbols());
+  r.get(
+    '/instruments/admin/symbols',
+    { preHandler: admin, schema: { querystring: AdminSymbolsQuery, response: { 200: AdminSymbolsPageSchema } } },
+    async (request) => deps.service.listAdminSymbols(request.query),
+  );
 
   r.delete('/instruments/admin/symbols/:id', { preHandler: admin }, async (request, reply) => {
     await deps.service.deactivateListing((request.params as { id: string }).id);

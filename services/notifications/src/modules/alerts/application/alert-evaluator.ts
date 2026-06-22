@@ -140,8 +140,12 @@ export class AlertEvaluator {
           currency: r.currency,
           today: todayIso,
         };
-        await this.maybeFire(userId, listingId, r.instrumentId, RULE_TO_TYPE[rule.kind], `rule:${rule.id}`,
+        const fired = await this.maybeFire(userId, listingId, r.instrumentId, rule.id, RULE_TO_TYPE[rule.kind], `rule:${rule.id}`,
           evaluateRule(rule, ctx), RULE_CLEARS_ON_EMPTY[rule.kind]);
+        if (fired) {
+          await this.deps.rules.update(userId, rule.id, { enabled: false });
+          break;
+        }
       }
     }
   }
@@ -155,17 +159,18 @@ export class AlertEvaluator {
     userId: string,
     listingId: string,
     instrumentId: string,
+    ruleId: string,
     notificationType: NotificationType,
     alertType: string,
     candidate: AlertCandidate | null,
     clearOnEmpty: boolean,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const previous = await this.deps.alertState.get(userId, listingId, alertType);
     if (candidate === null) {
       if (clearOnEmpty && previous !== null) await this.deps.alertState.clear(userId, listingId, alertType);
-      return;
+      return false;
     }
-    if (previous === candidate.signature) return;
+    if (previous === candidate.signature) return false;
 
     const id = await this.deps.notifications.insert({
       userId,
@@ -175,10 +180,12 @@ export class AlertEvaluator {
       body: candidate.body,
       instrumentId,
       listingId,
+      ruleId,
       data: candidate.data,
     });
     await this.deps.alertState.set(userId, listingId, alertType, candidate.signature);
     await this.deps.events.enqueueCreated({ notificationId: id, userId, type: notificationType });
+    return true;
   }
 }
 

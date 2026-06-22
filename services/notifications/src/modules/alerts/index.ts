@@ -17,3 +17,4 @@ export { KyselySeedRepository } from './infrastructure/seed-repository.js';
 export { KyselyNotificationEventStore } from './infrastructure/event-store.js';
 export { registerNotificationRoutes, type NotificationRouteDeps } from './http/notification-routes.js';
 export { EvaluationScheduler } from './scheduler.js';
+export { LiveNotificationHub, LiveNotificationStream, NotificationRetentionScheduler } from './live-notifications.js';

@@ -21,6 +21,10 @@ export class NotificationService {
     return { unread_count, notifications };
   }
 
+  async getNotification(userId: string, id: string): Promise<StoredNotification | null> {
+    return this.repo.getForUser(userId, id);
+  }
+
   async markRead(userId: string, id: string): Promise<void> {
     if (!(await this.repo.markRead(userId, id))) {
       throw AppError.notFound('notification_not_found', 'Notification not found');
@@ -29,5 +33,10 @@ export class NotificationService {
 
   markAllRead(userId: string): Promise<number> {
     return this.repo.markAllRead(userId);
+  }
+
+  deleteReadOlderThan(days: number): Promise<number> {
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    return this.repo.deleteReadBefore(cutoff);
   }
 }

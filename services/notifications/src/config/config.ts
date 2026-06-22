@@ -26,6 +26,10 @@ export interface NotificationsConfig {
     /** Upcoming-earnings horizon, in days. */
     earningsWithinDays: number;
   };
+  retention: {
+    readDays: number;
+    cleanupIntervalMs: number;
+  };
   consumeInterestStream: boolean;
 }
 
@@ -52,6 +56,10 @@ export function loadConfig(): NotificationsConfig {
       intervalMs: intEnv('NOTIFICATIONS_EVAL_INTERVAL_MS', 15 * 60 * 1000),
       dailyMovePct: Number(optionalEnv('NOTIFICATIONS_DAILY_MOVE_PCT') ?? '5'),
       earningsWithinDays: intEnv('NOTIFICATIONS_EARNINGS_WITHIN_DAYS', 7),
+    },
+    retention: {
+      readDays: intEnv('NOTIFICATIONS_READ_RETENTION_DAYS', 14),
+      cleanupIntervalMs: intEnv('NOTIFICATIONS_RETENTION_CLEANUP_INTERVAL_MS', 24 * 60 * 60 * 1000),
     },
     consumeInterestStream: boolEnv('NOTIFICATIONS_CONSUME_INTEREST_STREAM', true),
   };

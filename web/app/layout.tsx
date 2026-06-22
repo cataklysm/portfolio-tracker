@@ -1,7 +1,10 @@
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
-import { AppShell } from "@/components/AppShell"
+import { NotificationSnackbarProvider } from "@/application/notifications/NotificationSnackbarProvider"
+import { MuiThemeProvider } from "@/application/providers/MuiThemeProvider"
+import { AppShell } from "@/application/shell/AppShell"
+import { ToastProvider } from "@/application/toast/ToastProvider"
 import { apiFetch, fetchMe } from "@/lib/api"
 import { getLocale } from "@/lib/locale"
 import { LocaleProvider } from "@/lib/locale-context"
@@ -66,9 +69,15 @@ export default async function RootLayout({
       <body
         className={`${inter.variable} h-screen font-sans antialiased`}
       >
-        <LocaleProvider locale={locale}>
-          <AppShell me={me} unreadCount={unreadCount} positions={positions} portfolios={portfolios}>{children}</AppShell>
-        </LocaleProvider>
+        <MuiThemeProvider>
+          <LocaleProvider locale={locale}>
+            <ToastProvider>
+              <NotificationSnackbarProvider>
+                <AppShell me={me} unreadCount={unreadCount} positions={positions} portfolios={portfolios}>{children}</AppShell>
+              </NotificationSnackbarProvider>
+            </ToastProvider>
+          </LocaleProvider>
+        </MuiThemeProvider>
       </body>
     </html>
   )

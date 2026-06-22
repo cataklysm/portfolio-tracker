@@ -178,7 +178,6 @@ CREATE TABLE instruments.instruments (
     asset_type              text NOT NULL
                             CHECK (asset_type IN ('equity', 'fund', 'crypto')),
     isin                    text,
-    underlying_identifier   text,
     primary_listing_id      uuid,
     active                  boolean NOT NULL DEFAULT true,
     created_at              timestamptz NOT NULL DEFAULT now(),
@@ -186,9 +185,6 @@ CREATE TABLE instruments.instruments (
 );
 CREATE UNIQUE INDEX instruments_isin_uq
     ON instruments.instruments (isin) WHERE isin IS NOT NULL;
-CREATE UNIQUE INDEX instruments_underlying_identifier_uq
-    ON instruments.instruments (underlying_identifier)
-    WHERE underlying_identifier IS NOT NULL;
 
 CREATE TABLE instruments.listings (
     id                      uuid PRIMARY KEY DEFAULT gen_random_uuid(),

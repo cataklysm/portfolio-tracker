@@ -1,9 +1,10 @@
 import type { FastifyInstance, FastifyRequest, preHandlerHookHandler } from 'fastify';
 import { Type } from '@sinclair/typebox';
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
-import { AppError } from '@portfolio/platform';
+import { AppError, HIDE_FROM_OPENAPI } from '@portfolio/platform';
 import type { NotificationService } from '../application/notification-service.js';
 import type { RuleService } from '../application/rule-service.js';
+import type { LiveNotificationHub } from '../live-notifications.js';
 
 const ListQuery = Type.Object({ limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })) });
 
@@ -44,6 +45,7 @@ const StoredNotificationSchema = Type.Object({
   body: Type.Union([Type.String(), Type.Null()]),
   instrument_id: Type.Union([Type.String(), Type.Null()]),
   listing_id: Type.Union([Type.String(), Type.Null()]),
+  rule_id: Type.Union([Type.String(), Type.Null()]),
   data: Type.Unknown(),
   read_at: Type.Union([Type.String(), Type.Null()]),
   created_at: Type.String(),
@@ -74,6 +76,7 @@ const MarkedResponse = Type.Object({ marked: Type.Integer() });
 export interface NotificationRouteDeps {
   service: NotificationService;
   rules: RuleService;
+  live?: LiveNotificationHub;
   authenticate: preHandlerHookHandler;
   requireScope: (scope: string) => preHandlerHookHandler;
 }
@@ -97,6 +100,38 @@ export function registerNotificationRoutes(app: FastifyInstance, deps: Notificat
   r.get('/notifications', { preHandler: read, schema: { querystring: ListQuery, response: { 200: InboxSchema } } }, async (request) =>
     deps.service.getInbox(uid(request), request.query.limit),
   );
+  r.get('/notifications/stream', { preHandler: read, schema: HIDE_FROM_OPENAPI }, async (request, reply) => {
+    if (!deps.live) {
+      throw new AppError({
+        status: 503,
+        code: 'live_notifications_unavailable',
+        title: 'Service Unavailable',
+        detail: 'Live notifications are unavailable',
+      });
+    }
+    const userId = uid(request);
+    reply.hijack();
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+    reply.raw.write(': connected\n\n');
+
+    const unsubscribe = deps.live.subscribe(userId, (notification) => {
+      reply.raw.write(`id: ${notification.id}\n`);
+      reply.raw.write('event: notification.created\n');
+      reply.raw.write(`data: ${JSON.stringify(notification)}\n\n`);
+    });
+    const heartbeat = setInterval(() => reply.raw.write(': heartbeat\n\n'), 25_000);
+    if (typeof heartbeat.unref === 'function') heartbeat.unref();
+
+    request.raw.on('close', () => {
+      clearInterval(heartbeat);
+      unsubscribe();
+    });
+  });
   r.post('/notifications/:id/read', { preHandler: read, schema: { response: { 200: OkResponse } } }, async (request) => {
     await deps.service.markRead(uid(request), (request.params as { id: string }).id);
     return { ok: true as const };

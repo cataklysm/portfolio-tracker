@@ -16,6 +16,7 @@ async function send(path: string, method: string, body?: unknown): Promise<Resul
     return { error: "Cannot reach the gateway." }
   }
   if (!resp.ok) return { error: await problemDetail(resp, "Request failed.") }
+  revalidatePath("/notifications")
   revalidatePath("/notifications/settings")
   revalidatePath("/", "layout")
   return null

@@ -39,7 +39,7 @@ function Icon({ icon }: { icon: IconKey }) {
   )
 }
 
-export function Sidebar({ collapsed, onToggle, animate, me, unreadCount = 0, portfolios = [] }: { collapsed: boolean; onToggle: () => void; animate: boolean; me: MeData | null; unreadCount?: number; portfolios?: Portfolio[] }) {
+export function SidebarNavigation({ collapsed, onToggle, animate, me, unreadCount = 0, portfolios = [] }: { collapsed: boolean; onToggle: () => void; animate: boolean; me: MeData | null; unreadCount?: number; portfolios?: Portfolio[] }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const t = useTranslations()
@@ -70,7 +70,7 @@ export function Sidebar({ collapsed, onToggle, animate, me, unreadCount = 0, por
         {me?.role === "admin" ? (
           <>
             <div className="my-2 h-px bg-[var(--app-border)]" />
-            <NavRow item={{ labelKey: "nav.administration", icon: "administration", href: "/administration/symbols" }} active={pathname.startsWith("/administration")} collapsed={collapsed} />
+            <NavRow item={{ labelKey: "nav.administration", icon: "administration", href: "/administration" }} active={pathname.startsWith("/administration")} collapsed={collapsed} />
             {!collapsed ? (
               <div className="ml-4 border-l border-[var(--app-border)] pl-2">
                 <SubNavRow href="/administration/symbols" label={t("nav.symbols")} active={pathname === "/administration/symbols"} />

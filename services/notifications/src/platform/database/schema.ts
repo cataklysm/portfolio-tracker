@@ -26,6 +26,7 @@ export interface NotificationsTable {
   body: string | null;
   instrument_id: string | null;
   listing_id: string | null;
+  rule_id: string | null;
   data: Json | null;
   read_at: ColumnType<Date | null, Date | string | null, Date | string | null>;
   created_at: Generated<Date>;

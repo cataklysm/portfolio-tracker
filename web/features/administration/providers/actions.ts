@@ -1,9 +1,38 @@
 "use server"
 import { revalidatePath } from "next/cache"
 import { apiFetch, problemDetail } from "@/lib/api"
-import type { ProviderCapability, ProviderUsageView } from "@/lib/types"
+import type { CapabilityRefreshView, ProviderCapability, ProviderSettingsView, ProviderUsageView } from "@/lib/types"
 
 type ProviderIdentifierInput = { provider: string; provider_identifier: string }
+
+export async function listAdminProviderConfigurationAction(): Promise<{
+  providers: ProviderSettingsView[]
+  capabilityRefresh: CapabilityRefreshView[]
+  error: string | null
+}> {
+  try {
+    const providersResp = await apiFetch("/admin/providers", { cache: "no-store" })
+    if (!providersResp.ok) return { providers: [], capabilityRefresh: [], error: await problemDetail(providersResp, "Failed to load providers.") }
+    const providerBody = (await providersResp.json()) as { providers: ProviderSettingsView[] }
+    return { providers: providerBody.providers, capabilityRefresh: [], error: null }
+  } catch {
+    return { providers: [], capabilityRefresh: [], error: "Cannot reach the gateway." }
+  }
+}
+
+export async function listAdminProviderCadenceAction(provider: string): Promise<{
+  capabilityRefresh: CapabilityRefreshView[]
+  error: string | null
+}> {
+  try {
+    const resp = await apiFetch(`/admin/providers/${encodeURIComponent(provider)}/capability-refresh`, { cache: "no-store" })
+    if (!resp.ok) return { capabilityRefresh: [], error: await problemDetail(resp, "Failed to load provider cadence.") }
+    const body = (await resp.json()) as { settings: CapabilityRefreshView[] }
+    return { capabilityRefresh: body.settings, error: null }
+  } catch {
+    return { capabilityRefresh: [], error: "Cannot reach the gateway." }
+  }
+}
 
 export async function updateListingProviderIdentifiersAction(
   listingId: string,
@@ -69,6 +98,7 @@ export async function updateAdminProviderAction(input: {
   provider: string
   enabled?: boolean
   dataQuality?: string
+  capabilityQuality?: Record<string, string>
   maxBatchSize?: number | null
   rateLimitPerMin?: number | null
   maxConcurrency?: number
@@ -80,6 +110,7 @@ export async function updateAdminProviderAction(input: {
       body: JSON.stringify({
         enabled: input.enabled,
         data_quality: input.dataQuality,
+        capability_quality: input.capabilityQuality,
         max_batch_size: input.maxBatchSize,
         rate_limit_per_min: input.rateLimitPerMin,
         max_concurrency: input.maxConcurrency,

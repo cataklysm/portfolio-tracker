@@ -73,6 +73,7 @@ const UpdateProviderBody = Type.Object({
   data_quality: Type.Optional(
     Type.Union([Type.Literal('high'), Type.Literal('medium'), Type.Literal('low'), Type.Literal('unknown')]),
   ),
+  capability_quality: Type.Optional(Type.Record(Type.String(), DataQualitySchema)),
   max_batch_size: Type.Optional(Type.Union([Type.Integer({ minimum: 1 }), Type.Null()])),
   rate_limit_per_min: Type.Optional(Type.Union([Type.Integer({ minimum: 1 }), Type.Null()])),
   max_concurrency: Type.Optional(Type.Integer({ minimum: 1 })),
@@ -136,7 +137,7 @@ export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRoute
   const admin = [deps.authenticate, deps.requireScope('system:admin')];
 
   // What the platform can currently source, and from which provider.
-  r.get('/internal/capabilities', { schema: { response: { 200: Type.Record(Type.String(), Type.String()) } } }, async () => registry.capabilityMap());
+  r.get('/internal/capabilities', { schema: { response: { 200: Type.Record(Type.String(), Type.Array(Type.String())) } } }, async () => registry.capabilityMap());
 
   // Provider settings (class, static data-quality, refresh pacing). Read live from
   // the DB so the market scheduler picks up pacing/enable edits without a restart.
@@ -155,6 +156,15 @@ export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRoute
   r.get('/admin/providers/capability-refresh', { preHandler: admin, schema: { response: { 200: CapabilityRefreshListResponse } } }, async () => ({
     settings: await capabilityRefresh.listAll(),
   }));
+
+  r.get(
+    '/admin/providers/:provider/capability-refresh',
+    { preHandler: admin, schema: { response: { 200: CapabilityRefreshListResponse } } },
+    async (request) => {
+      const { provider } = request.params as { provider: string };
+      return { settings: await capabilityRefresh.listForProvider(provider) };
+    },
+  );
 
   // Admin: upsert one (provider, capability) cadence row.
   r.put(
@@ -198,6 +208,7 @@ export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRoute
     const updated = await settings.update(provider, {
       enabled: request.body.enabled,
       dataQuality: request.body.data_quality,
+      capabilityQuality: request.body.capability_quality,
       maxBatchSize: request.body.max_batch_size,
       rateLimitPerMin: request.body.rate_limit_per_min,
       maxConcurrency: request.body.max_concurrency,

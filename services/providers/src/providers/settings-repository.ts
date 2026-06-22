@@ -35,6 +35,7 @@ export class ProviderSettingsRepository {
     const values: Record<string, unknown> = { updated_at: new Date() };
     if (patch.enabled !== undefined) values.enabled = patch.enabled;
     if (patch.dataQuality !== undefined) values.data_quality = patch.dataQuality;
+    if (patch.capabilityQuality !== undefined) values.capability_quality = JSON.stringify(patch.capabilityQuality);
     if (patch.maxBatchSize !== undefined) values.max_batch_size = patch.maxBatchSize;
     if (patch.rateLimitPerMin !== undefined) values.rate_limit_per_min = patch.rateLimitPerMin;
     if (patch.maxConcurrency !== undefined) values.max_concurrency = patch.maxConcurrency;

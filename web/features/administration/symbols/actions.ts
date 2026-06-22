@@ -1,13 +1,64 @@
 "use server"
 import { revalidatePath } from "next/cache"
 import { apiFetch, problemDetail } from "@/lib/api"
-import type { ProviderSelectionView } from "@/lib/types"
+import type { AdminSymbolsPage, ExchangeView, InstrumentAssetType, ProviderSelectionView, ProviderSettingsView } from "@/lib/types"
 
 export interface ProviderSymbolHit {
   symbol: string
   name: string
   exchange: string | null
   currency: string | null
+}
+
+export async function listAdminSymbolsAction(input: {
+  assetType: InstrumentAssetType
+  query?: string
+  limit: number
+  offset: number
+}): Promise<AdminSymbolsPage> {
+  const params = new URLSearchParams({
+    asset_type: input.assetType,
+    limit: String(input.limit),
+    offset: String(input.offset),
+  })
+  const query = input.query?.trim()
+  if (query) params.set("q", query)
+  try {
+    const resp = await apiFetch(`/instruments/admin/symbols?${params.toString()}`, { cache: "no-store" })
+    if (resp.ok) return (await resp.json()) as AdminSymbolsPage
+  } catch {
+    // Fall through to an empty page so the UI can keep rendering its shell.
+  }
+  return {
+    items: [],
+    total: 0,
+    limit: input.limit,
+    offset: input.offset,
+    counts: { equity: 0, crypto: 0, fund: 0, index: 0 },
+  }
+}
+
+export async function listAdminSymbolEditMetadataAction(): Promise<{
+  exchanges: ExchangeView[]
+  providers: ProviderSettingsView[]
+  error: string | null
+}> {
+  try {
+    const [exchangesResp, providersResp] = await Promise.all([
+      apiFetch("/exchanges", { cache: "no-store" }),
+      apiFetch("/admin/providers", { cache: "no-store" }),
+    ])
+    if (!exchangesResp.ok) return { exchanges: [], providers: [], error: await problemDetail(exchangesResp, "Failed to load exchanges.") }
+    if (!providersResp.ok) return { exchanges: [], providers: [], error: await problemDetail(providersResp, "Failed to load providers.") }
+    const providersBody = (await providersResp.json()) as { providers: ProviderSettingsView[] }
+    return {
+      exchanges: (await exchangesResp.json()) as ExchangeView[],
+      providers: providersBody.providers,
+      error: null,
+    }
+  } catch {
+    return { exchanges: [], providers: [], error: "Cannot reach the gateway." }
+  }
 }
 
 /** Current per-capability provider selections for an instrument (for the edit dialog). */
@@ -21,7 +72,7 @@ export async function getInstrumentSelectionsAction(instrumentId: string): Promi
   }
 }
 
-/** Search a specific provider's symbols (ISIN/WKN/name) for the identifier lookup. */
+/** Search a specific provider's symbols (ISIN/name) for the identifier lookup. */
 export async function searchProviderSymbolsAction(provider: string, query: string): Promise<ProviderSymbolHit[]> {
   const q = query.trim()
   if (!provider || q.length === 0) return []
@@ -39,6 +90,12 @@ export async function searchProviderSymbolsAction(provider: string, query: strin
 
 export async function createAdminSymbolAction(formData: FormData): Promise<string | null> {
   try {
+    const providerIdentifiers = parseJsonField<{ provider: string; provider_identifier: string }[]>(
+      formData.get("provider_identifiers"),
+    )?.filter((p) => p.provider && p.provider_identifier.trim().length > 0)
+    const providerSelections = parseJsonField<{ capability: string; provider: string }[]>(
+      formData.get("provider_selections"),
+    )?.filter((s) => s.capability && s.provider)
     const resp = await apiFetch("/instruments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -47,13 +104,14 @@ export async function createAdminSymbolAction(formData: FormData): Promise<strin
           name: String(formData.get("name") ?? "").trim(),
           asset_type: String(formData.get("asset_type") ?? "equity"),
           isin: String(formData.get("isin") ?? "").trim() || undefined,
-          underlying_identifier: String(formData.get("underlying_identifier") ?? "").trim() || undefined,
         },
         listing: {
           exchange_id: String(formData.get("exchange_id") ?? ""),
           symbol: String(formData.get("symbol") ?? "").trim(),
           currency: String(formData.get("currency") ?? "").trim(),
         },
+        provider_identifiers: providerIdentifiers,
+        provider_selections: providerSelections,
       }),
     })
     if (!resp.ok) return problemDetail(resp, "Failed to add the symbol.")
@@ -79,7 +137,7 @@ export async function updateAdminSymbolAction(formData: FormData): Promise<strin
     })
     if (!instrumentResp.ok) return problemDetail(instrumentResp, "Failed to update the instrument.")
 
-    // Per-provider symbols (provider → identifier) and per-capability provider
+    // Per-provider symbols (provider -> identifier) and per-capability provider
     // selections are carried as JSON in hidden fields from the dialog's matrix.
     const providerIdentifiers = parseJsonField<{ provider: string; provider_identifier: string }[]>(
       formData.get("provider_identifiers"),
@@ -135,5 +193,41 @@ export async function deactivateAdminSymbolAction(listingId: string): Promise<st
   }
   revalidatePath("/administration/symbols")
   revalidatePath("/administration/providers")
+  return null
+}
+
+export async function purgeAdminSymbolQuotesAction(listingId: string): Promise<string | null> {
+  try {
+    const resp = await apiFetch("/quotes/purge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ listing_ids: [listingId], confirm: true }),
+    })
+    if (!resp.ok) return problemDetail(resp, "Failed to purge quote history.")
+  } catch {
+    return "Cannot reach the gateway."
+  }
+  revalidatePath("/administration/symbols")
+  return null
+}
+
+export async function rebuildAdminSymbolQuotesAction(listingId: string, quoteProvider: string | null): Promise<string | null> {
+  const normalizedProvider = quoteProvider?.toLowerCase() ?? ""
+  const from = normalizedProvider === "lstc" || normalizedProvider === "lssi" ? undefined : "2000-01-01"
+  try {
+    const resp = await apiFetch("/quotes/rebuild", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        listing_ids: [listingId],
+        ...(from ? { from } : {}),
+        confirm: true,
+      }),
+    })
+    if (!resp.ok) return problemDetail(resp, "Failed to rebuild quote history.")
+  } catch {
+    return "Cannot reach the gateway."
+  }
+  revalidatePath("/administration/symbols")
   return null
 }

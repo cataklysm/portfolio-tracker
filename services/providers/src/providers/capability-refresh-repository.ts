@@ -21,6 +21,16 @@ export class CapabilityRefreshRepository {
     return rows.map(toRefresh);
   }
 
+  async listForProvider(provider: string): Promise<CapabilityRefresh[]> {
+    const rows = await this.db
+      .selectFrom('providers.provider_capability_refresh')
+      .selectAll()
+      .where('provider', '=', provider)
+      .orderBy('capability')
+      .execute();
+    return rows.map(toRefresh);
+  }
+
   /**
    * Upserts one (provider, capability) row. A first edit for a pair inserts it;
    * later edits patch only the provided fields. `refreshIntervalMs` is required on

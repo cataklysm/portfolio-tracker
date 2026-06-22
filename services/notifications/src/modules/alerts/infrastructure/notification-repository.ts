@@ -18,6 +18,7 @@ export class KyselyNotificationRepository implements NotificationRepository {
         body: n.body,
         instrument_id: n.instrumentId,
         listing_id: n.listingId,
+        rule_id: n.ruleId,
         data: JSON.stringify(n.data),
       })
       .returning('id')
@@ -25,10 +26,34 @@ export class KyselyNotificationRepository implements NotificationRepository {
     return row.id;
   }
 
+  async getForUser(userId: string, id: string): Promise<StoredNotification | null> {
+    const row = await this.db
+      .selectFrom('notifications.notifications')
+      .select(['id', 'type', 'severity', 'title', 'body', 'instrument_id', 'listing_id', 'rule_id', 'data', 'read_at', 'created_at'])
+      .where('user_id', '=', userId)
+      .where('id', '=', id)
+      .executeTakeFirst();
+    return row
+      ? {
+          id: row.id,
+          type: row.type,
+          severity: row.severity,
+          title: row.title,
+          body: row.body,
+          instrument_id: row.instrument_id,
+          listing_id: row.listing_id,
+          rule_id: row.rule_id,
+          data: row.data,
+          read_at: toIso(row.read_at),
+          created_at: toIso(row.created_at) ?? new Date(0).toISOString(),
+        }
+      : null;
+  }
+
   async listForUser(userId: string, limit: number): Promise<StoredNotification[]> {
     const rows = await this.db
       .selectFrom('notifications.notifications')
-      .select(['id', 'type', 'severity', 'title', 'body', 'instrument_id', 'listing_id', 'data', 'read_at', 'created_at'])
+      .select(['id', 'type', 'severity', 'title', 'body', 'instrument_id', 'listing_id', 'rule_id', 'data', 'read_at', 'created_at'])
       .where('user_id', '=', userId)
       .orderBy('created_at', 'desc')
       .limit(limit)
@@ -41,6 +66,7 @@ export class KyselyNotificationRepository implements NotificationRepository {
       body: row.body,
       instrument_id: row.instrument_id,
       listing_id: row.listing_id,
+      rule_id: row.rule_id,
       data: row.data,
       read_at: toIso(row.read_at),
       created_at: toIso(row.created_at) ?? new Date(0).toISOString(),
@@ -60,10 +86,9 @@ export class KyselyNotificationRepository implements NotificationRepository {
   async markRead(userId: string, id: string): Promise<boolean> {
     const result = await this.db
       .updateTable('notifications.notifications')
-      .set({ read_at: sql`now()` })
+      .set({ read_at: sql`coalesce(read_at, now())` })
       .where('id', '=', id)
       .where('user_id', '=', userId)
-      .where('read_at', 'is', null)
       .executeTakeFirst();
     return (result.numUpdatedRows ?? 0n) > 0n;
   }
@@ -76,6 +101,15 @@ export class KyselyNotificationRepository implements NotificationRepository {
       .where('read_at', 'is', null)
       .executeTakeFirst();
     return Number(result.numUpdatedRows ?? 0n);
+  }
+
+  async deleteReadBefore(cutoff: Date): Promise<number> {
+    const result = await this.db
+      .deleteFrom('notifications.notifications')
+      .where('read_at', 'is not', null)
+      .where('read_at', '<', cutoff)
+      .executeTakeFirst();
+    return Number(result.numDeletedRows ?? 0n);
   }
 }
 

@@ -9977,6 +9977,16 @@
     },
     "/exchanges": {
       "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "boolean"
+            },
+            "in": "query",
+            "name": "include_inactive",
+            "required": false
+          }
+        ],
         "responses": {
           "200": {
             "description": "Default Response",
@@ -9992,7 +10002,8 @@
                       "name",
                       "timezone",
                       "regular_open_local",
-                      "regular_close_local"
+                      "regular_close_local",
+                      "active"
                     ],
                     "properties": {
                       "id": {
@@ -10026,6 +10037,9 @@
                             "type": "null"
                           }
                         ]
+                      },
+                      "active": {
+                        "type": "boolean"
                       }
                     }
                   }
@@ -10117,6 +10131,11 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "mic": {
+                    "minLength": 1,
+                    "maxLength": 8,
+                    "type": "string"
+                  },
                   "name": {
                     "minLength": 1,
                     "maxLength": 120,
@@ -10148,6 +10167,9 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "active": {
+                    "type": "boolean"
                   },
                   "holidays": {
                     "type": "array",
@@ -10185,7 +10207,8 @@
                     "name",
                     "timezone",
                     "regular_open_local",
-                    "regular_close_local"
+                    "regular_close_local",
+                    "active"
                   ],
                   "properties": {
                     "id": {
@@ -10219,11 +10242,36 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "active": {
+                      "type": "boolean"
                     }
                   }
                 }
               }
             }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
           }
         },
         "security": [
@@ -12562,7 +12610,65 @@
             },
             "in": "query",
             "name": "instrument_id",
-            "required": true
+            "required": false
+          },
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 16000,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "instrument_ids",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "boolean"
+            },
+            "in": "query",
+            "name": "is_upcoming",
+            "required": false
+          },
+          {
+            "schema": {
+              "minLength": 10,
+              "maxLength": 10,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "date_from",
+            "required": false
+          },
+          {
+            "schema": {
+              "minLength": 10,
+              "maxLength": 10,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "date_to",
+            "required": false
+          },
+          {
+            "schema": {
+              "minimum": 1,
+              "maximum": 500,
+              "type": "integer"
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "minimum": 0,
+              "maximum": 100000,
+              "type": "integer"
+            },
+            "in": "query",
+            "name": "offset",
+            "required": false
           }
         ],
         "responses": {
@@ -12571,116 +12677,136 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "required": [
-                      "instrument_id",
-                      "fiscal_year",
-                      "fiscal_quarter",
-                      "period_end_date",
-                      "report_date",
-                      "eps_estimate",
-                      "eps_actual",
-                      "revenue_estimate",
-                      "revenue_actual",
-                      "surprise_pct",
-                      "provider",
-                      "is_upcoming"
-                    ],
-                    "properties": {
-                      "instrument_id": {
-                        "type": "string"
-                      },
-                      "fiscal_year": {
-                        "type": "number"
-                      },
-                      "fiscal_quarter": {
-                        "anyOf": [
-                          {
-                            "type": "integer"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ]
-                      },
-                      "period_end_date": {
-                        "anyOf": [
-                          {
+                  "type": "object",
+                  "required": [
+                    "items",
+                    "total",
+                    "limit",
+                    "offset"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "instrument_id",
+                          "fiscal_year",
+                          "fiscal_quarter",
+                          "period_end_date",
+                          "report_date",
+                          "eps_estimate",
+                          "eps_actual",
+                          "revenue_estimate",
+                          "revenue_actual",
+                          "surprise_pct",
+                          "provider",
+                          "is_upcoming"
+                        ],
+                        "properties": {
+                          "instrument_id": {
                             "type": "string"
                           },
-                          {
-                            "type": "null"
-                          }
-                        ]
-                      },
-                      "report_date": {
-                        "anyOf": [
-                          {
+                          "fiscal_year": {
+                            "type": "number"
+                          },
+                          "fiscal_quarter": {
+                            "anyOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "period_end_date": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "report_date": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "eps_estimate": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "eps_actual": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "revenue_estimate": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "revenue_actual": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "surprise_pct": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "provider": {
                             "type": "string"
                           },
-                          {
-                            "type": "null"
+                          "is_upcoming": {
+                            "type": "boolean"
                           }
-                        ]
-                      },
-                      "eps_estimate": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ]
-                      },
-                      "eps_actual": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ]
-                      },
-                      "revenue_estimate": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ]
-                      },
-                      "revenue_actual": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ]
-                      },
-                      "surprise_pct": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ]
-                      },
-                      "provider": {
-                        "type": "string"
-                      },
-                      "is_upcoming": {
-                        "type": "boolean"
+                        }
                       }
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "offset": {
+                      "type": "integer"
                     }
                   }
                 }
@@ -12705,7 +12831,67 @@
             },
             "in": "query",
             "name": "instrument_id",
-            "required": true
+            "required": false
+          },
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 16000,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "instrument_ids",
+            "required": false
+          },
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 200,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "types",
+            "required": false
+          },
+          {
+            "schema": {
+              "minLength": 10,
+              "maxLength": 10,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "date_from",
+            "required": false
+          },
+          {
+            "schema": {
+              "minLength": 10,
+              "maxLength": 10,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "date_to",
+            "required": false
+          },
+          {
+            "schema": {
+              "minimum": 1,
+              "maximum": 500,
+              "type": "integer"
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "minimum": 0,
+              "maximum": 100000,
+              "type": "integer"
+            },
+            "in": "query",
+            "name": "offset",
+            "required": false
           }
         ],
         "responses": {
@@ -12714,80 +12900,100 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "required": [
-                      "stable_action_id",
-                      "version",
-                      "instrument_id",
-                      "type",
-                      "ex_date",
-                      "ratio_numerator",
-                      "ratio_denominator",
-                      "dividend_amount",
-                      "dividend_currency",
-                      "provider"
-                    ],
-                    "properties": {
-                      "stable_action_id": {
-                        "type": "string"
-                      },
-                      "version": {
-                        "type": "integer"
-                      },
-                      "instrument_id": {
-                        "type": "string"
-                      },
-                      "type": {
-                        "type": "string"
-                      },
-                      "ex_date": {
-                        "type": "string"
-                      },
-                      "ratio_numerator": {
-                        "anyOf": [
-                          {
+                  "type": "object",
+                  "required": [
+                    "items",
+                    "total",
+                    "limit",
+                    "offset"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "stable_action_id",
+                          "version",
+                          "instrument_id",
+                          "type",
+                          "ex_date",
+                          "ratio_numerator",
+                          "ratio_denominator",
+                          "dividend_amount",
+                          "dividend_currency",
+                          "provider"
+                        ],
+                        "properties": {
+                          "stable_action_id": {
                             "type": "string"
                           },
-                          {
-                            "type": "null"
-                          }
-                        ]
-                      },
-                      "ratio_denominator": {
-                        "anyOf": [
-                          {
+                          "version": {
+                            "type": "integer"
+                          },
+                          "instrument_id": {
                             "type": "string"
                           },
-                          {
-                            "type": "null"
-                          }
-                        ]
-                      },
-                      "dividend_amount": {
-                        "anyOf": [
-                          {
+                          "type": {
                             "type": "string"
                           },
-                          {
-                            "type": "null"
-                          }
-                        ]
-                      },
-                      "dividend_currency": {
-                        "anyOf": [
-                          {
+                          "ex_date": {
                             "type": "string"
                           },
-                          {
-                            "type": "null"
+                          "ratio_numerator": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "ratio_denominator": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "dividend_amount": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "dividend_currency": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "provider": {
+                            "type": "string"
                           }
-                        ]
-                      },
-                      "provider": {
-                        "type": "string"
+                        }
                       }
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "offset": {
+                      "type": "integer"
                     }
                   }
                 }

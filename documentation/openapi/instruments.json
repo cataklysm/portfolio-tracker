@@ -18,6 +18,16 @@
   "paths": {
     "/exchanges": {
       "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "boolean"
+            },
+            "in": "query",
+            "name": "include_inactive",
+            "required": false
+          }
+        ],
         "responses": {
           "200": {
             "description": "Default Response",
@@ -33,7 +43,8 @@
                       "name",
                       "timezone",
                       "regular_open_local",
-                      "regular_close_local"
+                      "regular_close_local",
+                      "active"
                     ],
                     "properties": {
                       "id": {
@@ -67,6 +78,9 @@
                             "type": "null"
                           }
                         ]
+                      },
+                      "active": {
+                        "type": "boolean"
                       }
                     }
                   }
@@ -206,6 +220,11 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "mic": {
+                    "minLength": 1,
+                    "maxLength": 8,
+                    "type": "string"
+                  },
                   "name": {
                     "minLength": 1,
                     "maxLength": 120,
@@ -237,6 +256,9 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "active": {
+                    "type": "boolean"
                   },
                   "holidays": {
                     "type": "array",
@@ -274,7 +296,8 @@
                     "name",
                     "timezone",
                     "regular_open_local",
-                    "regular_close_local"
+                    "regular_close_local",
+                    "active"
                   ],
                   "properties": {
                     "id": {
@@ -308,11 +331,31 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "active": {
+                      "type": "boolean"
                     }
                   }
                 }
               }
             }
+          }
+        }
+      },
+      "delete": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
           }
         }
       }

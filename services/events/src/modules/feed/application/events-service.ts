@@ -2,6 +2,8 @@ import type { Logger } from '@portfolio/platform';
 import { toCorporateActionRows, toEarningsRows, toNewsRows } from '../domain/mapping.js';
 import type {
   CorporateActionsRepository,
+  CorporateActionsQuery,
+  EarningsQuery,
   EarningsRepository,
   EventsEventStore,
   EventsProvider,
@@ -12,6 +14,7 @@ import type {
   StoredEarnings,
   StoredNews,
   UpcomingEarnings,
+  Page,
 } from './ports.js';
 
 /** Admin-configured per-provider refresh cadence for the `earnings` events feed. */
@@ -54,8 +57,16 @@ export class EventsService {
     return this.deps.earnings.listByInstrument(instrumentId);
   }
 
+  queryEarnings(input: EarningsQuery): Promise<Page<StoredEarnings>> {
+    return this.deps.earnings.query(input);
+  }
+
   getCorporateActions(instrumentId: string): Promise<StoredCorporateAction[]> {
     return this.deps.corporateActions.listByInstrument(instrumentId);
+  }
+
+  queryCorporateActions(input: CorporateActionsQuery): Promise<Page<StoredCorporateAction>> {
+    return this.deps.corporateActions.query(input);
   }
 
   getNews(instrumentId: string, limit?: number): Promise<StoredNews[]> {

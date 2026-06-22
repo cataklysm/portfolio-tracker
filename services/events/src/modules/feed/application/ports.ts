@@ -146,9 +146,37 @@ export interface UpcomingEarnings {
   report_date: string;
 }
 
+export interface Page<T> {
+  items: T[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface EarningsQuery {
+  instrumentIds: string[];
+  isUpcoming?: boolean;
+  dateFrom?: string;
+  dateTo?: string;
+  limit: number;
+  offset: number;
+}
+
+export interface CorporateActionsQuery {
+  instrumentIds: string[];
+  types?: CorporateActionType[];
+  dateFrom?: string;
+  dateTo?: string;
+  limit: number;
+  offset: number;
+}
+
+export type CorporateActionType = 'split' | 'reverse_split' | 'dividend' | 'buyback' | 'spinoff' | 'capital_increase';
+
 export interface EarningsRepository {
   upsert(rows: EarningsRow[]): Promise<void>;
   listByInstrument(instrumentId: string): Promise<StoredEarnings[]>;
+  query(input: EarningsQuery): Promise<Page<StoredEarnings>>;
   /** Earliest not-yet-reported earnings (report_date >= today) per instrument. */
   listUpcomingForInstruments(instrumentIds: string[]): Promise<UpcomingEarnings[]>;
 }
@@ -156,6 +184,7 @@ export interface EarningsRepository {
 export interface CorporateActionsRepository {
   upsert(rows: CorporateActionRow[]): Promise<void>;
   listByInstrument(instrumentId: string): Promise<StoredCorporateAction[]>;
+  query(input: CorporateActionsQuery): Promise<Page<StoredCorporateAction>>;
 }
 
 export interface NewsRepository {

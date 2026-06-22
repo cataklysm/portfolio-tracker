@@ -8,7 +8,7 @@ import {
 } from '../domain/identifiers.js';
 import { computeMarketSession, type MarketStatus } from '../domain/session.js';
 import type {
-  AdminSymbolView,
+  AdminSymbolsPage,
   BenchmarkCatalogEntry,
   CatalogRepository,
   CreateExchangeInput,
@@ -38,7 +38,6 @@ export interface CreateInstrumentInput {
     name: string;
     asset_type: string;
     isin?: string;
-    underlying_identifier?: string;
   };
   listing: {
     exchange_id?: string;
@@ -47,9 +46,24 @@ export interface CreateInstrumentInput {
     currency: string;
   };
   provider_identifier?: { provider: string; provider_identifier: string };
+  provider_identifiers?: { provider: string; provider_identifier: string }[];
+  provider_selections?: { capability: string; provider: string }[];
 }
 
 const MAX_SEARCH_LIMIT = 50;
+const DEFAULT_ADMIN_SYMBOLS_LIMIT = 25;
+const MAX_ADMIN_SYMBOLS_LIMIT = 100;
+const SELECTABLE_CAPABILITIES = ['quotes', 'chart', 'analyst', 'fundamentals', 'earnings', 'corporate_actions', 'news'] as const;
+type SelectableCapability = (typeof SELECTABLE_CAPABILITIES)[number];
+const EVENTS_SELECTION_GROUP: SelectableCapability[] = ['earnings', 'corporate_actions', 'news'];
+const PRICE_SELECTION_GROUP: SelectableCapability[] = ['quotes', 'chart'];
+const SELECTION_GROUPS: Partial<Record<SelectableCapability, SelectableCapability[]>> = {
+  quotes: PRICE_SELECTION_GROUP,
+  chart: PRICE_SELECTION_GROUP,
+  earnings: EVENTS_SELECTION_GROUP,
+  corporate_actions: EVENTS_SELECTION_GROUP,
+  news: EVENTS_SELECTION_GROUP,
+};
 
 /**
  * Use cases for the shared instrument catalog. Search and read are open to any
@@ -59,8 +73,8 @@ const MAX_SEARCH_LIMIT = 50;
 export class CatalogService {
   constructor(private readonly repo: CatalogRepository) {}
 
-  listExchanges(): Promise<ExchangeView[]> {
-    return this.repo.listExchanges();
+  listExchanges(includeInactive = false): Promise<ExchangeView[]> {
+    return this.repo.listExchanges(includeInactive);
   }
 
   async createExchange(input: CreateExchangeInput): Promise<{ id: string }> {
@@ -77,6 +91,12 @@ export class CatalogService {
     if (!(await this.repo.getExchange(id))) {
       throw AppError.notFound('exchange_not_found', 'Exchange not found');
     }
+    const mic = input.mic !== undefined ? normalizeMic(input.mic) : undefined;
+    if (mic !== undefined) {
+      if (mic.length === 0) throw AppError.badRequest('invalid_mic', 'A MIC is required');
+      const existing = await this.repo.findExchangeId({ mic });
+      if (existing && existing !== id) throw AppError.conflict('exchange_exists', `Exchange ${mic} already exists`);
+    }
     const name = input.name !== undefined ? input.name.trim() : undefined;
     if (name !== undefined && name.length === 0) throw AppError.badRequest('invalid_name', 'A name is required');
     const timezone = input.timezone !== undefined ? input.timezone.trim() : undefined;
@@ -84,15 +104,27 @@ export class CatalogService {
       throw AppError.badRequest('invalid_timezone', 'A timezone is required');
     }
     await this.repo.updateExchange(id, {
+      mic,
       name,
       timezone,
       regularOpenLocal: input.regularOpenLocal,
       regularCloseLocal: input.regularCloseLocal,
+      active: input.active,
       holidays: input.holidays,
     });
     const updated = await this.repo.getExchange(id);
     if (!updated) throw AppError.notFound('exchange_not_found', 'Exchange not found');
     return updated;
+  }
+
+  async deactivateExchange(id: string): Promise<void> {
+    if (!(await this.repo.getExchange(id))) {
+      throw AppError.notFound('exchange_not_found', 'Exchange not found');
+    }
+    if (await this.repo.exchangeInUse(id)) {
+      throw AppError.conflict('exchange_in_use', 'This exchange is still used by active listings');
+    }
+    await this.repo.deactivateExchange(id);
   }
 
   async searchInstruments(query: string, limit?: number): Promise<InstrumentWithListings[]> {
@@ -172,8 +204,12 @@ export class CatalogService {
     return listing;
   }
 
-  listAdminSymbols(): Promise<AdminSymbolView[]> {
-    return this.repo.listAdminSymbols();
+  listAdminSymbols(input: { asset_type?: string; q?: string; limit?: number; offset?: number }): Promise<AdminSymbolsPage> {
+    const assetType = input.asset_type === undefined || input.asset_type === '' ? undefined : assertAssetType(input.asset_type);
+    const q = input.q?.trim() || undefined;
+    const limit = Math.min(Math.max(input.limit ?? DEFAULT_ADMIN_SYMBOLS_LIMIT, 1), MAX_ADMIN_SYMBOLS_LIMIT);
+    const offset = Math.max(input.offset ?? 0, 0);
+    return this.repo.listAdminSymbols({ assetType, q, limit, offset });
   }
 
   async deactivateListing(id: string): Promise<void> {
@@ -257,20 +293,27 @@ export class CatalogService {
     });
     if (!exchangeId) throw AppError.badRequest('exchange_not_found', 'The exchange must exist before adding a listing');
 
+    const providerIdentifiers = [
+      ...(input.provider_identifiers ?? []),
+      ...(input.provider_identifier ? [input.provider_identifier] : []),
+    ]
+      .map((identifier) => ({
+        provider: identifier.provider.trim(),
+        providerIdentifier: identifier.provider_identifier.trim().toUpperCase(),
+      }))
+      .filter((identifier) => identifier.provider.length > 0 && identifier.providerIdentifier.length > 0);
+
+    const providerSelections = normalizeProviderSelections(input.provider_selections ?? []);
+
     return this.repo.registerListing({
       instrument: {
         name,
         assetType,
         isin: input.instrument.isin ? normalizeIsin(input.instrument.isin) : null,
-        underlyingIdentifier: input.instrument.underlying_identifier?.trim() || null,
       },
       listing: { exchangeId, symbol, currency },
-      providerIdentifier: input.provider_identifier
-        ? {
-            provider: input.provider_identifier.provider.trim(),
-            providerIdentifier: input.provider_identifier.provider_identifier.trim(),
-          }
-        : undefined,
+      providerIdentifiers,
+      providerSelections,
     });
   }
 }
@@ -278,4 +321,23 @@ export class CatalogService {
 function assertAssetType(value: string): AssetType {
   if ((ASSET_TYPES as readonly string[]).includes(value)) return value as AssetType;
   throw AppError.badRequest('invalid_asset_type', `asset_type must be one of: ${ASSET_TYPES.join(', ')}`);
+}
+
+function assertSelectableCapability(value: string): SelectableCapability {
+  if ((SELECTABLE_CAPABILITIES as readonly string[]).includes(value)) return value as SelectableCapability;
+  throw AppError.badRequest(
+    'invalid_capability',
+    `capability must be one of: ${SELECTABLE_CAPABILITIES.join(', ')}`,
+  );
+}
+
+function normalizeProviderSelections(selections: { capability: string; provider: string }[]): { capability: string; provider: string }[] {
+  const byCapability = new Map<SelectableCapability, string>();
+  for (const selection of selections) {
+    const capability = assertSelectableCapability(selection.capability);
+    const provider = selection.provider.trim();
+    if (provider.length === 0) throw AppError.badRequest('invalid_provider', 'A provider is required');
+    for (const member of SELECTION_GROUPS[capability] ?? [capability]) byCapability.set(member, provider);
+  }
+  return [...byCapability].map(([capability, provider]) => ({ capability, provider }));
 }

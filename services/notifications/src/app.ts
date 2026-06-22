@@ -29,7 +29,10 @@ import {
   KyselyNotificationEventStore,
   KyselyNotificationRepository,
   KyselySeedRepository,
+  LiveNotificationHub,
+  LiveNotificationStream,
   NotificationService,
+  NotificationRetentionScheduler,
   RuleService,
   registerNotificationRoutes,
 } from './modules/alerts/index.js';
@@ -65,6 +68,7 @@ export async function buildApp(config: NotificationsConfig): Promise<BuiltServic
 
   const notificationService = new NotificationService(notificationRepo);
   const ruleService = new RuleService(ruleRepo, alertState);
+  const liveHub = new LiveNotificationHub();
   const seeder = new DefaultRuleSeeder(ruleRepo, seedRepo, logger);
   const interestService = new InterestService(interests, seeder, logger);
 
@@ -96,6 +100,7 @@ export async function buildApp(config: NotificationsConfig): Promise<BuiltServic
   registerNotificationRoutes(app, {
     service: notificationService,
     rules: ruleService,
+    live: liveHub,
     authenticate: verifier.authenticate,
     requireScope: (scope) => verifier.requireScope(scope),
   });
@@ -112,6 +117,20 @@ export async function buildApp(config: NotificationsConfig): Promise<BuiltServic
   publisher.start();
 
   const scheduler = new EvaluationScheduler(evaluator, config.evaluation.intervalMs, logger);
+  const retentionScheduler = new NotificationRetentionScheduler(
+    notificationService,
+    config.retention.readDays,
+    config.retention.cleanupIntervalMs,
+    logger,
+  );
+  const liveStream = new LiveNotificationStream({
+    redis,
+    hub: liveHub,
+    service: notificationService,
+    logger,
+  });
+  await liveStream.start();
+  retentionScheduler.start();
   let consumer: StreamConsumer | undefined;
   if (config.consumeInterestStream) {
     consumer = new StreamConsumer({
@@ -130,7 +149,9 @@ export async function buildApp(config: NotificationsConfig): Promise<BuiltServic
     app,
     shutdown: async () => {
       scheduler.stop();
+      retentionScheduler.stop();
       publisher.stop();
+      await liveStream.stop();
       if (consumer) await consumer.stop();
       await app.close();
       await redis.quit();

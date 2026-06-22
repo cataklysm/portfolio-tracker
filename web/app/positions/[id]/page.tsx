@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
+import { Box, Card, Chip, Stack, Typography } from "@mui/material"
 import type { AlertRule, CorporateAction, EarningsRow, FairValueEstimate, Fundamentals, ListingDetail, ListingSession, NewsItem, NotificationInbox, NotificationItem, Portfolio, PositionDetail, PriceTarget, RealizationAllocationView, SparklinePoint, TaxEvent, TransactionTaxEvent } from "@/lib/types"
 import { apiFetch } from "@/lib/api"
 import { getLocale } from "@/lib/locale"
@@ -39,6 +40,10 @@ interface EventsData {
   news: NewsItem[]
 }
 
+interface Page<T> {
+  items: T[]
+}
+
 /** Earnings, corporate actions, and news for an instrument; each degrades to []. */
 async function fetchEventsData(instrumentId: string | null): Promise<EventsData> {
   if (!instrumentId) return { earnings: [], corporateActions: [], news: [] }
@@ -48,8 +53,8 @@ async function fetchEventsData(instrumentId: string | null): Promise<EventsData>
     apiFetch(`/events/news?instrument_id=${instrumentId}&limit=8`, { cache: "no-store" }),
   ])
   return {
-    earnings: e.ok ? ((await e.json()) as EarningsRow[]) : [],
-    corporateActions: c.ok ? ((await c.json()) as CorporateAction[]) : [],
+    earnings: e.ok ? ((await e.json()) as Page<EarningsRow>).items : [],
+    corporateActions: c.ok ? ((await c.json()) as Page<CorporateAction>).items : [],
     news: n.ok ? ((await n.json()) as NewsItem[]) : [],
   }
 }
@@ -146,35 +151,43 @@ const MARKET_BADGE = {
 function MarketStatusBadge({ status, t }: { status: import("@/lib/types").MarketStatus; t: ReturnType<typeof getTranslations> }) {
   if (status === "unknown") return null
   const config = MARKET_BADGE[status]
-  return <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase ${config.className}`}>{t(config.key)}</span>
+  const color = status === "open" ? "success" : status === "holiday" ? "warning" : "default"
+  return <Chip label={t(config.key)} color={color} variant="outlined" size="small" />
 }
 
 function Section({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="app-panel overflow-hidden rounded-xl">
-      <div className="flex items-center justify-between gap-4 border-b border-[var(--app-border)] px-4 py-3">
-        <h2 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--app-text-faint)]">{title}</h2>
+    <Card variant="outlined" sx={{ overflow: "hidden", borderColor: "var(--app-border)", bgcolor: "color-mix(in srgb, var(--app-surface) 94%, transparent)", boxShadow: "var(--app-shadow)" }}>
+      <Stack direction="row" sx={{ alignItems: "center", borderBottom: "1px solid var(--app-border)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
+        <Typography component="h2" sx={{ color: "var(--app-text)", fontSize: 13, fontWeight: 700 }}>
+          {title}
+        </Typography>
         {action}
-      </div>
-      <div className="p-4">{children}</div>
-    </section>
+      </Stack>
+      <Box sx={{ p: 1.5 }}>{children}</Box>
+    </Card>
   )
 }
 
 function Metric({ label, value, tone = "default", sub }: { label: string; value: string; tone?: "default" | "positive" | "negative"; sub?: string }) {
-  const toneClass = tone === "positive" ? "text-[var(--app-positive)]" : tone === "negative" ? "text-[var(--app-negative)]" : "text-[var(--app-text)]"
+  const color = tone === "positive" ? "var(--app-positive)" : tone === "negative" ? "var(--app-negative)" : "var(--app-text)"
   return (
-    <div className="border-b border-[var(--app-border)] px-4 py-3 last:border-b-0">
-      <p className="text-[9px] font-medium uppercase tracking-[0.1em] text-[var(--app-text-faint)]">{label}</p>
-      <p className={`mt-1 text-sm font-semibold tabular-nums ${toneClass}`}>{value}</p>
-      {sub ? <p className="mt-0.5 text-[9px] tabular-nums text-[var(--app-text-faint)]">{sub}</p> : null}
-    </div>
+    <Box sx={{ borderBottom: "1px solid var(--app-border)", px: 1.5, py: 1.25, "&:last-of-type": { borderBottom: 0 } }}>
+      <Typography sx={{ color: "var(--app-text-faint)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>{label}</Typography>
+      <Typography sx={{ color, fontSize: 14, fontWeight: 700, mt: 0.5 }} className="tabular-nums">{value}</Typography>
+      {sub ? <Typography sx={{ color: "var(--app-text-faint)", fontSize: 10, mt: 0.25 }} className="tabular-nums">{sub}</Typography> : null}
+    </Box>
   )
 }
 
 function FactRow({ label, value, tone }: { label: string; value: string; tone?: "positive" | "negative" | "warning" }) {
-  const toneClass = tone === "positive" ? "text-[var(--app-positive)]" : tone === "negative" ? "text-[var(--app-negative)]" : tone === "warning" ? "text-[var(--app-warning)]" : "text-[var(--app-text)]"
-  return <div className="flex items-center justify-between gap-4 border-b border-[var(--app-border)] py-2 text-[10px] last:border-0"><span className="text-[var(--app-text-muted)]">{label}</span><span className={`text-right font-medium tabular-nums ${toneClass}`}>{value}</span></div>
+  const color = tone === "positive" ? "var(--app-positive)" : tone === "negative" ? "var(--app-negative)" : tone === "warning" ? "var(--app-warning)" : "var(--app-text)"
+  return (
+    <Stack direction="row" spacing={2} sx={{ alignItems: "center", borderBottom: "1px solid var(--app-border)", justifyContent: "space-between", py: 1, "&:last-of-type": { borderBottom: 0 } }}>
+      <Typography sx={{ color: "var(--app-text-muted)", fontSize: 11 }}>{label}</Typography>
+      <Typography sx={{ color, fontSize: 11, fontWeight: 700, textAlign: "right" }} className="tabular-nums">{value}</Typography>
+    </Stack>
+  )
 }
 
 interface Props {
@@ -189,9 +202,11 @@ export default async function PositionDetailPage({ params }: Props) {
 
   const pos = (await resp.json()) as PositionDetail
   const instrumentId = pos.listing?.instrument_id ?? null
-  const [listingResp, seriesResp, allocationResp, portfoliosResp, sessionsResp, appliedCaResp, fairValues, priceTargets, fundamentals, events, notificationData] = await Promise.all([
+  const chartHistoryTo = new Date().toISOString().slice(0, 10)
+  const [listingResp, seriesResp, dailySeriesResp, allocationResp, portfoliosResp, sessionsResp, appliedCaResp, fairValues, priceTargets, fundamentals, events, notificationData] = await Promise.all([
     apiFetch(`/listings/${pos.listing_id}`, { cache: "no-store" }),
     apiFetch(`/quotes/${pos.listing_id}/series?limit=365`, { cache: "no-store" }),
+    apiFetch(`/quotes/${pos.listing_id}/history?from=2000-01-01&to=${chartHistoryTo}`, { cache: "no-store" }),
     apiFetch(`/positions/${pos.id}/allocations`, { cache: "no-store" }),
     apiFetch("/portfolios", { cache: "no-store" }),
     apiFetch(`/listings/sessions?ids=${pos.listing_id}`, { cache: "no-store" }),
@@ -208,6 +223,9 @@ export default async function PositionDetailPage({ params }: Props) {
   const session = sessionsResp.ok ? ((await sessionsResp.json()) as ListingSession[])[0] ?? null : null
   const appliedCorporateActions = appliedCaResp.ok ? ((await appliedCaResp.json()) as AppliedCorporateAction[]) : []
   const chartSeries = seriesResp.ok ? ((await seriesResp.json()) as SparklinePoint[]) : pos.sparkline
+  const dailyChartSeries = dailySeriesResp.ok
+    ? ((await dailySeriesResp.json()) as { date: string; price: string }[]).map((point) => ({ time: `${point.date}T00:00:00.000Z`, price: point.price }))
+    : []
   const allocations = allocationResp.ok ? ((await allocationResp.json()) as RealizationAllocationView) : null
   const p = pos.performance
   const reporting = p.reporting_currency
@@ -235,9 +253,9 @@ export default async function PositionDetailPage({ params }: Props) {
 
   return (
     <div className="mx-auto max-w-[1500px] space-y-3 px-4 py-5 lg:px-6">
-      <header className="app-panel flex flex-wrap items-start justify-between gap-5 rounded-xl p-4">
+      <Card variant="outlined" component="header" className="flex flex-wrap items-start justify-between gap-5" sx={{ borderColor: "var(--app-border)", bgcolor: "color-mix(in srgb, var(--app-surface) 94%, transparent)", boxShadow: "var(--app-shadow)", p: 2 }}>
         <div className="flex min-w-0 items-start gap-3">
-          <Link href="/dashboard" aria-label={t("common.backToPortfolio")} className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--app-border)] text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text)]">←</Link>
+          <Link href="/dashboard" aria-label={t("common.backToPortfolio")} className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--app-border)] text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text)]">&lt;</Link>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="truncate text-xl font-semibold tracking-tight text-[var(--app-text)]">{pos.listing?.name ?? pos.listing_id}</h1>
@@ -245,33 +263,33 @@ export default async function PositionDetailPage({ params }: Props) {
               {pos.state !== "open" ? <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase ${pos.state === "invalid" ? "bg-[color-mix(in_srgb,var(--app-negative)_14%,transparent)] text-[var(--app-negative)]" : "bg-[var(--app-surface-raised)] text-[var(--app-text-muted)]"}`}>{pos.state}</span> : null}
               <MarketStatusBadge status={session?.status ?? "unknown"} t={t} />
             </div>
-            <p className="mt-1 text-xs font-medium text-[var(--app-text-muted)]">{pos.listing?.symbol ?? "—"} · {listingCurrency}{listing?.exchange_mic ? ` · ${listing.exchange_mic}` : ""}</p>
+            <p className="mt-1 text-xs font-medium text-[var(--app-text-muted)]">{pos.listing?.symbol ?? "-"} - {listingCurrency}{listing?.exchange_mic ? ` - ${listing.exchange_mic}` : ""}</p>
           </div>
         </div>
         <div className="text-right">
-          <p className="text-2xl font-semibold tabular-nums tracking-tight text-[var(--app-text)]">{price !== null ? fmtPrice(locale, price, listingCurrency, assetType) : "—"}</p>
+          <p className="text-2xl font-semibold tabular-nums tracking-tight text-[var(--app-text)]">{price !== null ? fmtPrice(locale, price, listingCurrency, assetType) : "-"}</p>
           <p className={`mt-1 text-xs font-semibold tabular-nums ${daily === null ? "text-[var(--app-text-faint)]" : isDailyUp ? "text-[var(--app-positive)]" : "text-[var(--app-negative)]"}`}>{daily === null ? "Daily movement unavailable" : `${fmtPct(daily)} ${t("position.todaySuffix")}`}</p>
         </div>
-      </header>
+      </Card>
 
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
-        <section className="app-panel min-w-0 overflow-hidden rounded-xl">
-          <PositionPriceChart data={chartSeries} currency={listingCurrency} locale={locale} dailyPositive={isDailyUp} />
-        </section>
+        <Card variant="outlined" component="section" sx={{ borderColor: "var(--app-border)", bgcolor: "color-mix(in srgb, var(--app-surface) 94%, transparent)", boxShadow: "var(--app-shadow)", minWidth: 0, overflow: "hidden" }}>
+          <PositionPriceChart data={chartSeries} dailyData={dailyChartSeries} currency={listingCurrency} locale={locale} dailyPositive={isDailyUp} />
+        </Card>
 
-        <aside className="app-panel overflow-hidden rounded-xl">
+        <Card variant="outlined" component="aside" sx={{ borderColor: "var(--app-border)", bgcolor: "color-mix(in srgb, var(--app-surface) 94%, transparent)", boxShadow: "var(--app-shadow)", overflow: "hidden" }}>
           <div className="border-b border-[var(--app-border)] px-4 py-3"><h2 className="text-xs font-semibold text-[var(--app-text)]">Position snapshot</h2><p className="mt-0.5 text-[9px] text-[var(--app-text-faint)]">Values in {reporting}</p></div>
-          <Metric label={t("position.currentValue")} value={value !== null ? fmtCurrency(locale, value, reporting) : "—"} tone={!isClosed && unrealized !== null ? (isUnrealUp ? "positive" : "negative") : "default"} />
-          <Metric label={t("position.unrealizedPnl")} value={isClosed ? fmtCurrency(locale, 0, reporting) : unrealized !== null ? `${unrealized >= 0 ? "+" : ""}${fmtCurrency(locale, unrealized, reporting)}` : "—"} tone={isClosed || unrealized === null ? "default" : isUnrealUp ? "positive" : "negative"} sub={unrealizedReturn !== null && !isClosed ? fmtPct(unrealizedReturn) : undefined} />
-          <Metric label={t("position.realizedPnl")} value={realized !== null ? `${realized >= 0 ? "+" : ""}${fmtCurrency(locale, realized, reporting)}` : "—"} tone={realized === null || realized === 0 ? "default" : realized > 0 ? "positive" : "negative"} sub={realizedReturn !== null ? fmtPct(realizedReturn) : undefined} />
+          <Metric label={t("position.currentValue")} value={value !== null ? fmtCurrency(locale, value, reporting) : "-"} tone={!isClosed && unrealized !== null ? (isUnrealUp ? "positive" : "negative") : "default"} />
+          <Metric label={t("position.unrealizedPnl")} value={isClosed ? fmtCurrency(locale, 0, reporting) : unrealized !== null ? `${unrealized >= 0 ? "+" : ""}${fmtCurrency(locale, unrealized, reporting)}` : "-"} tone={isClosed || unrealized === null ? "default" : isUnrealUp ? "positive" : "negative"} sub={unrealizedReturn !== null && !isClosed ? fmtPct(unrealizedReturn) : undefined} />
+          <Metric label={t("position.realizedPnl")} value={realized !== null ? `${realized >= 0 ? "+" : ""}${fmtCurrency(locale, realized, reporting)}` : "-"} tone={realized === null || realized === 0 ? "default" : realized > 0 ? "positive" : "negative"} sub={realizedReturn !== null ? fmtPct(realizedReturn) : undefined} />
           <Metric
             label="Recorded net tax"
             value={`${tax.net > 0 ? "+" : ""}${fmtCurrency(locale, tax.net, reporting)}`}
             tone={tax.net > 0 ? "negative" : tax.net < 0 ? "positive" : "default"}
-            sub={tax.eventCount === 0 ? "No tax events recorded" : `${tax.eventCount} event${tax.eventCount === 1 ? "" : "s"}${tax.complete ? "" : " · partial FX conversion"}`}
+            sub={tax.eventCount === 0 ? "No tax events recorded" : `${tax.eventCount} event${tax.eventCount === 1 ? "" : "s"}${tax.complete ? "" : " - partial FX conversion"}`}
           />
-          <Metric label="Total return" value={totalReturn !== null ? fmtPct(totalReturn) : "—"} tone={totalReturn === null ? "default" : totalReturn >= 0 ? "positive" : "negative"} />
-        </aside>
+          <Metric label="Total return" value={totalReturn !== null ? fmtPct(totalReturn) : "-"} tone={totalReturn === null ? "default" : totalReturn >= 0 ? "positive" : "negative"} />
+        </Card>
       </div>
 
       <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
@@ -296,17 +314,17 @@ export default async function PositionDetailPage({ params }: Props) {
         <aside className="space-y-3">
           <Section title="Position facts">
             <FactRow label={t("position.quantity")} value={fmtQty(locale, qty, assetType)} />
-            <FactRow label={t("position.costBasis")} value={cost !== null ? fmtCurrency(locale, cost, reporting) : "—"} />
-            <FactRow label="Average cost" value={averageCost !== null ? fmtPrice(locale, averageCost, reporting, assetType) : "—"} />
-            <FactRow label="Total fees" value={fees !== null ? fmtCurrency(locale, fees, reporting) : "—"} />
+            <FactRow label={t("position.costBasis")} value={cost !== null ? fmtCurrency(locale, cost, reporting) : "-"} />
+            <FactRow label="Average cost" value={averageCost !== null ? fmtPrice(locale, averageCost, reporting, assetType) : "-"} />
+            <FactRow label="Total fees" value={fees !== null ? fmtCurrency(locale, fees, reporting) : "-"} />
             <FactRow
               label="After-tax realized P&L"
-              value={tax.afterTaxRealized !== null ? `${tax.afterTaxRealized >= 0 ? "+" : ""}${fmtCurrency(locale, tax.afterTaxRealized, reporting)}` : "—"}
+              value={tax.afterTaxRealized !== null ? `${tax.afterTaxRealized >= 0 ? "+" : ""}${fmtCurrency(locale, tax.afterTaxRealized, reporting)}` : "-"}
               tone={tax.afterTaxRealized === null || tax.afterTaxRealized === 0 ? undefined : tax.afterTaxRealized > 0 ? "positive" : "negative"}
             />
             <FactRow label="Transactions" value={String(pos.transactions.length)} />
             <FactRow label="Quote status" value={pos.freshness_status ?? "unknown"} tone={pos.freshness_status === "fresh" ? "positive" : "warning"} />
-            <FactRow label="Quote as of" value={pos.quote_as_of ? new Date(pos.quote_as_of).toLocaleDateString(locale) : "—"} />
+            <FactRow label="Quote as of" value={pos.quote_as_of ? new Date(pos.quote_as_of).toLocaleDateString(locale) : "-"} />
           </Section>
 
           {instrumentId ? (

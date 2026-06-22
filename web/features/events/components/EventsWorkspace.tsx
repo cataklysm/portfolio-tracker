@@ -832,24 +832,32 @@ function ContextContent({ events, locale, selectedEvent, selection }: { events: 
 }
 
 function SelectedEventDetails({ event, locale }: { event: WorkbenchEvent; locale: string }) {
+  const color = eventColor(event.kind)
+  const details = [
+    { label: event.kind === "earnings" ? "Report date" : "Ex-date", value: formatDate(event.dateKey, locale) },
+    { label: "Amount", value: event.amountLabel },
+    { label: "Provider", value: event.provider },
+    { label: "Status", value: event.statusLabel },
+  ]
+
   return (
-    <Stack spacing={1.5}>
+    <Stack spacing={1.25}>
       <Stack direction="row" spacing={1.25} sx={{ alignItems: "center" }}>
-        <Box sx={{ alignItems: "center", bgcolor: `color-mix(in srgb, ${eventColor(event.kind)} 26%, transparent)`, borderRadius: "50%", color: "var(--app-text)", display: "flex", flexShrink: 0, fontSize: 13, fontWeight: 800, height: 42, justifyContent: "center", width: 42 }}>
+        <Box sx={{ alignItems: "center", bgcolor: `color-mix(in srgb, ${color} 24%, transparent)`, border: `1px solid color-mix(in srgb, ${color} 42%, transparent)`, borderRadius: "50%", color: "var(--app-text)", display: "flex", flexShrink: 0, fontSize: 13, fontWeight: 800, height: 46, justifyContent: "center", width: 46 }}>
           {event.symbol.slice(0, 3)}
         </Box>
         <Box sx={{ minWidth: 0 }}>
-          <Typography sx={{ color: "var(--app-text)", fontSize: 18, fontWeight: 800, lineHeight: 1.2 }}>{event.companyName} {event.detailLabel}</Typography>
+          <Typography sx={{ color: "var(--app-text)", fontSize: 18, fontWeight: 800, lineHeight: 1.15 }}>{event.companyName} {event.detailLabel}</Typography>
           <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12 }}>{event.companyName} · {event.symbol}</Typography>
         </Box>
       </Stack>
-      <Box sx={{ border: "1px solid var(--app-border)", borderRadius: 1, display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", overflow: "hidden" }}>
-        <DetailCell label="Type" value={event.detailLabel} />
-        <DetailCell label={event.kind === "earnings" ? "Report date" : "Ex-date"} value={formatDate(event.dateKey, locale)} />
-        <DetailCell label="Amount" value={event.amountLabel} />
-        <DetailCell label="Provider" value={event.provider} />
-        <DetailCell label="Status" value={event.statusLabel} />
-        {event.kind === "earnings" ? <DetailCell label="EPS" value={`${event.epsEstimate} / ${event.epsActual}`} /> : null}
+      <Box sx={{ bgcolor: "color-mix(in srgb, var(--app-surface-raised) 76%, transparent)", border: "1px solid color-mix(in srgb, var(--app-border) 72%, transparent)", borderRadius: 1.5, overflow: "hidden" }}>
+        <Box sx={{ display: "grid", gap: 0.75, gridTemplateColumns: "repeat(2, minmax(0, 1fr))", p: 0.75 }}>
+          {details.map((detail) => (
+            <EventDetailItem key={detail.label} label={detail.label} value={detail.value} />
+          ))}
+          {event.kind === "earnings" ? <EventDetailItem label="EPS" value={`${event.epsEstimate} / ${event.epsActual}`} /> : null}
+        </Box>
       </Box>
     </Stack>
   )
@@ -857,10 +865,10 @@ function SelectedEventDetails({ event, locale }: { event: WorkbenchEvent; locale
 
 function SelectedEventFooter({ event }: { event: WorkbenchEvent }) {
   return (
-    <Stack direction="row" spacing={1} sx={{ bgcolor: tableChromeBg, borderTop: "1px solid var(--app-border)", px: 1.5, py: 1.25 }}>
-      <Button component={Link} href={`/positions/${event.positionId}`} variant="outlined" size="small" sx={{ flex: 1, textTransform: "none" }}>Open asset</Button>
-      <Button variant="outlined" size="small" sx={{ flex: 1, textTransform: "none" }}>Add reminder</Button>
-      <Button variant="outlined" size="small" sx={{ flex: 1, textTransform: "none" }}>Mark reviewed</Button>
+    <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ bgcolor: tableChromeBg, borderTop: "1px solid var(--app-border)", px: 1.5, py: 1.25 }}>
+      <Button component={Link} href={`/positions/${event.positionId}`} variant="outlined" size="small" sx={selectedEventActionSx}>Open asset</Button>
+      <Button variant="outlined" size="small" sx={selectedEventActionSx}>Add reminder</Button>
+      <Button variant="outlined" size="small" sx={selectedEventActionSx}>Mark reviewed</Button>
     </Stack>
   )
 }
@@ -962,11 +970,11 @@ function MetricCard({ icon, label, value, sub, tone }: { icon: "calendar" | "rep
   )
 }
 
-function DetailCell({ label, value }: { label: string; value: string }) {
+function EventDetailItem({ label, value }: { label: string; value: string }) {
   return (
-    <Box sx={{ borderBottom: "1px solid var(--app-border)", borderRight: "1px solid var(--app-border)", p: 1 }}>
-      <Typography sx={{ color: "var(--app-text-muted)", fontSize: 10, fontWeight: 700 }}>{label}</Typography>
-      <Typography sx={{ color: "var(--app-text)", fontSize: 12, fontWeight: 700 }}>{value}</Typography>
+    <Box sx={{ bgcolor: "color-mix(in srgb, var(--app-surface) 48%, transparent)", borderRadius: 1, minWidth: 0, p: 1.1 }}>
+      <Typography sx={{ color: "var(--app-text-faint)", fontSize: 10, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase" }}>{label}</Typography>
+      <Typography noWrap sx={{ color: "var(--app-text)", fontSize: 13, fontWeight: 800, mt: 0.45 }} className="tabular-nums">{value}</Typography>
     </Box>
   )
 }
@@ -1240,6 +1248,20 @@ const iconButtonSx = {
   height: 34,
   width: 34,
   "&:hover": { bgcolor: "var(--app-surface-hover)", color: "var(--app-text)" },
+}
+
+const selectedEventActionSx = {
+  borderColor: "color-mix(in srgb, var(--app-accent) 34%, var(--app-border))",
+  borderRadius: 1.25,
+  color: "var(--app-accent)",
+  flex: 1,
+  fontWeight: 800,
+  minHeight: 36,
+  textTransform: "none",
+  "&:hover": {
+    bgcolor: "color-mix(in srgb, var(--app-accent) 10%, transparent)",
+    borderColor: "var(--app-accent)",
+  },
 }
 
 function TimelineRailDot({ color, first, last }: { color: string; first: boolean; last: boolean }) {

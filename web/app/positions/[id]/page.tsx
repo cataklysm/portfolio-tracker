@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
 import { Box, Card, Chip, Stack, Typography } from "@mui/material"
-import type { AlertRule, CorporateAction, EarningsRow, FairValueEstimate, Fundamentals, ListingDetail, ListingSession, NewsItem, NotificationInbox, NotificationItem, Portfolio, PositionDetail, PriceTarget, RealizationAllocationView, SparklinePoint, TaxEvent, TransactionTaxEvent } from "@/lib/types"
+import type { AlertRule, CorporateAction, EarningsRow, FairValueEstimate, Fundamentals, ListingSession, NewsItem, NotificationInbox, NotificationItem, Portfolio, PositionDetail, PriceTarget, RealizationAllocationView, SparklinePoint, TaxEvent, TransactionTaxEvent } from "@/lib/types"
 import { apiFetch } from "@/lib/api"
 import { getLocale } from "@/lib/locale"
 import { getTranslations } from "@/lib/i18n"
@@ -9,7 +9,6 @@ import { fmtCurrency, fmtPct, fmtPrice, fmtQty, num } from "@/lib/format"
 import { PositionPriceChart } from "@/components/PositionPriceChart"
 import { TransactionsTable } from "@/components/TransactionsTable"
 import { AddTransactionModal } from "@/components/AddTransactionModal"
-import { ListingSettings } from "@/components/ListingSettings"
 import { FairValueSection } from "@/components/FairValueSection"
 import { FundamentalsSection } from "@/components/FundamentalsSection"
 import { EventsSection, NewsSection } from "@/components/EventsSection"
@@ -203,8 +202,7 @@ export default async function PositionDetailPage({ params }: Props) {
   const pos = (await resp.json()) as PositionDetail
   const instrumentId = pos.listing?.instrument_id ?? null
   const chartHistoryTo = new Date().toISOString().slice(0, 10)
-  const [listingResp, seriesResp, dailySeriesResp, allocationResp, portfoliosResp, sessionsResp, appliedCaResp, fairValues, priceTargets, fundamentals, events, notificationData] = await Promise.all([
-    apiFetch(`/listings/${pos.listing_id}`, { cache: "no-store" }),
+  const [seriesResp, dailySeriesResp, allocationResp, portfoliosResp, sessionsResp, appliedCaResp, fairValues, priceTargets, fundamentals, events, notificationData] = await Promise.all([
     apiFetch(`/quotes/${pos.listing_id}/series?limit=365`, { cache: "no-store" }),
     apiFetch(`/quotes/${pos.listing_id}/history?from=2000-01-01&to=${chartHistoryTo}`, { cache: "no-store" }),
     apiFetch(`/positions/${pos.id}/allocations`, { cache: "no-store" }),
@@ -217,7 +215,6 @@ export default async function PositionDetailPage({ params }: Props) {
     fetchEventsData(instrumentId),
     fetchNotificationData(instrumentId),
   ])
-  const listing = listingResp.ok ? ((await listingResp.json()) as ListingDetail) : null
   const portfolios = portfoliosResp.ok ? ((await portfoliosResp.json()) as Portfolio[]) : []
   const otherPortfolios = portfolios.filter((p) => p.id !== pos.portfolio_id).map((p) => ({ id: p.id, name: p.name }))
   const session = sessionsResp.ok ? ((await sessionsResp.json()) as ListingSession[])[0] ?? null : null
@@ -231,7 +228,6 @@ export default async function PositionDetailPage({ params }: Props) {
   const reporting = p.reporting_currency
   const listingCurrency = pos.listing?.currency ?? reporting
   const assetType = pos.listing?.asset_type ?? "equity"
-  const firstTransactionDate = pos.transactions.map((transaction) => transaction.effective_at).sort()[0]?.slice(0, 10) ?? null
 
   const price = num(p.current_price)
   const daily = num(p.daily_change_pct)
@@ -263,7 +259,7 @@ export default async function PositionDetailPage({ params }: Props) {
               {pos.state !== "open" ? <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase ${pos.state === "invalid" ? "bg-[color-mix(in_srgb,var(--app-negative)_14%,transparent)] text-[var(--app-negative)]" : "bg-[var(--app-surface-raised)] text-[var(--app-text-muted)]"}`}>{pos.state}</span> : null}
               <MarketStatusBadge status={session?.status ?? "unknown"} t={t} />
             </div>
-            <p className="mt-1 text-xs font-medium text-[var(--app-text-muted)]">{pos.listing?.symbol ?? "-"} - {listingCurrency}{listing?.exchange_mic ? ` - ${listing.exchange_mic}` : ""}</p>
+            <p className="mt-1 text-xs font-medium text-[var(--app-text-muted)]">{pos.listing?.symbol ?? "-"} - {listingCurrency}</p>
           </div>
         </div>
         <div className="text-right">
@@ -342,8 +338,6 @@ export default async function PositionDetailPage({ params }: Props) {
               />
             </Section>
           ) : null}
-
-          {listing ? <Section title={t("positionDetail.instrumentAndData")}><ListingSettings positionId={pos.id} listing={listing} instrumentName={pos.listing?.name ?? ""} firstTransactionDate={firstTransactionDate} /></Section> : null}
 
           <Section title="Corporate actions">
             <p className="mb-3 text-[10px] leading-4 text-[var(--app-text-muted)]">Apply splits / reverse splits to restate this holding&apos;s share count (cost basis preserved), or reverse an applied one.</p>

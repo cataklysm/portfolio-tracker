@@ -1,6 +1,7 @@
 "use server"
 import { revalidatePath } from "next/cache"
 import { apiFetch, problemDetail } from "@/lib/api"
+import { parsePriceTargetForm } from "@/lib/price-target-validation"
 
 /** Computes + stores a DCF fair value for the instrument. */
 export async function createDcfFairValueAction(
@@ -55,17 +56,17 @@ export async function createPriceTargetAction(
   _prevState: string | null,
   formData: FormData,
 ): Promise<string | null> {
-  const low = formData.get("zone_low") as string
-  const high = formData.get("zone_high") as string
+  const parsed = parsePriceTargetForm(formData)
+  if (!parsed.ok) return parsed.error
+
   const body: Record<string, unknown> = {
     instrument_id: instrumentId,
     currency,
-    horizon: (formData.get("horizon") as string) || "medium",
+    horizon: parsed.value.horizon,
+    zone_low: parsed.value.zoneLow,
+    zone_high: parsed.value.zoneHigh,
   }
-  if (low) body.zone_low = Number(low)
-  if (high) body.zone_high = Number(high)
-  const note = (formData.get("note") as string)?.trim()
-  if (note) body.note = note
+  if (parsed.value.note) body.note = parsed.value.note
 
   let resp: Response
   try {
@@ -78,6 +79,29 @@ export async function createPriceTargetAction(
     return "Cannot reach the gateway."
   }
   if (!resp.ok) return problemDetail(resp, "Failed to add the price target.")
+  revalidatePath(`/positions/${positionId}`)
+  return null
+}
+
+export async function updatePriceTargetAction(positionId: string, id: string, _prevState: string | null, formData: FormData): Promise<string | null> {
+  const parsed = parsePriceTargetForm(formData)
+  if (!parsed.ok) return parsed.error
+
+  try {
+    const resp = await apiFetch(`/price-targets/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        horizon: parsed.value.horizon,
+        zone_low: parsed.value.zoneLow,
+        zone_high: parsed.value.zoneHigh,
+        note: parsed.value.note,
+      }),
+    })
+    if (!resp.ok) return problemDetail(resp, "Failed to update the price target.")
+  } catch {
+    return "Cannot reach the gateway."
+  }
   revalidatePath(`/positions/${positionId}`)
   return null
 }

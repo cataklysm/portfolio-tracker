@@ -1,6 +1,6 @@
 "use client"
-import { useActionState, useState, useTransition } from "react"
-import { createPriceTargetAction, deletePriceTargetAction } from "@/app/positions/[id]/insights-actions"
+import { useActionState, useEffect, useRef, useState, useTransition } from "react"
+import { createPriceTargetAction, deletePriceTargetAction, updatePriceTargetAction } from "@/app/positions/[id]/insights-actions"
 import { useLocale } from "@/lib/locale-context"
 import { useTranslations, type MessageKey } from "@/lib/i18n"
 import { fmtCurrency, num } from "@/lib/format"
@@ -40,14 +40,14 @@ export function PriceTargetsSection({ positionId, instrumentId, currency, curren
         <p className="text-sm text-[var(--app-text-faint)]">{t("priceTargets.empty")}</p>
       ) : (
         <div className="space-y-3">
-          {HORIZON_ORDER.filter((h) => items.some((t) => t.horizon === h)).map((h) => (
+          {HORIZON_ORDER.filter((h) => items.some((target) => target.horizon === h)).map((h) => (
             <div key={h}>
               <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-[var(--app-text-faint)]">{t(HORIZON_LABEL_KEY[h])}</p>
               <ul className="space-y-2">
                 {items
-                  .filter((t) => t.horizon === h)
-                  .map((t) => (
-                    <TargetRow key={t.id} t={t} positionId={positionId} currentPrice={currentPrice} locale={locale} />
+                  .filter((target) => target.horizon === h)
+                  .map((target) => (
+                    <TargetRow key={target.id} target={target} positionId={positionId} currentPrice={currentPrice} locale={locale} />
                   ))}
               </ul>
             </div>
@@ -57,6 +57,7 @@ export function PriceTargetsSection({ positionId, instrumentId, currency, curren
 
       {!open ? (
         <button
+          type="button"
           onClick={() => setOpen(true)}
           className="rounded-lg border border-[var(--app-border-strong)] bg-[var(--app-accent-soft)] px-3 py-1.5 text-sm font-medium text-[var(--app-accent)]"
         >
@@ -71,7 +72,7 @@ export function PriceTargetsSection({ positionId, instrumentId, currency, curren
             </button>
           </div>
           {error && <p className="mb-2 rounded-lg bg-rose-950/50 px-3 py-2 text-xs text-rose-400">{error}</p>}
-          <div className="grid grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
             <div>
               <label htmlFor="pt-horizon" className={labelClass}>{t("priceTargets.horizon")}</label>
               <select id="pt-horizon" name="horizon" defaultValue="medium" className={inputClass}>
@@ -82,11 +83,11 @@ export function PriceTargetsSection({ positionId, instrumentId, currency, curren
             </div>
             <div>
               <label htmlFor="pt-low" className={labelClass}>{t("priceTargets.zoneLow")}</label>
-              <input id="pt-low" name="zone_low" type="number" step="any" min="0" placeholder={t("priceTargets.zoneLowPlaceholder")} className={inputClass} />
+              <input id="pt-low" name="zone_low" type="number" step="any" min="0" required placeholder={t("priceTargets.zoneLowPlaceholder")} className={inputClass} />
             </div>
             <div>
               <label htmlFor="pt-high" className={labelClass}>{t("priceTargets.zoneHigh")}</label>
-              <input id="pt-high" name="zone_high" type="number" step="any" min="0" placeholder={t("priceTargets.zoneHighPlaceholder")} className={inputClass} />
+              <input id="pt-high" name="zone_high" type="number" step="any" min="0" required placeholder={t("priceTargets.zoneHighPlaceholder")} className={inputClass} />
             </div>
           </div>
           <div className="mt-2.5">
@@ -107,40 +108,43 @@ export function PriceTargetsSection({ positionId, instrumentId, currency, curren
 }
 
 function TargetRow({
-  t,
+  target,
   positionId,
   currentPrice,
   locale,
 }: {
-  t: PriceTarget
+  target: PriceTarget
   positionId: string
   currentPrice: number | null
   locale: string
 }) {
   const tr = useTranslations()
   const [isDeleting, startDelete] = useTransition()
-  const low = num(t.zone_low)
-  const high = num(t.zone_high)
-  const isOwn = t.user_id !== null && t.source === "own"
-  // Match the Fair Value badge's capitalization ("Analyst", "Own").
+  const [editing, setEditing] = useState(false)
+  const low = num(target.zone_low)
+  const high = num(target.zone_high)
+  const isOwn = target.user_id !== null && target.source === "own"
   const sourceLabel =
-    t.source === "analyst" ? tr("priceTargets.sourceAnalyst") : t.source === "own" ? tr("priceTargets.sourceOwn") : t.source
+    target.source === "analyst" ? tr("priceTargets.sourceAnalyst") : target.source === "own" ? tr("priceTargets.sourceOwn") : target.source
 
   const zone =
     low !== null && high !== null
-      ? `${fmtCurrency(locale, low, t.currency)} – ${fmtCurrency(locale, high, t.currency)}`
+      ? `${fmtCurrency(locale, low, target.currency)} - ${fmtCurrency(locale, high, target.currency)}`
       : low !== null
-        ? `≥ ${fmtCurrency(locale, low, t.currency)}`
+        ? `>= ${fmtCurrency(locale, low, target.currency)}`
         : high !== null
-          ? `≤ ${fmtCurrency(locale, high, t.currency)}`
-          : "—"
+          ? `<= ${fmtCurrency(locale, high, target.currency)}`
+          : "-"
 
-  // Where the current price sits relative to the zone.
   let marker: { text: string; cls: string } | null = null
   if (currentPrice !== null) {
     if (low !== null && currentPrice < low) marker = { text: tr("priceTargets.belowZone"), cls: "text-emerald-400" }
     else if (high !== null && currentPrice > high) marker = { text: tr("priceTargets.aboveZone"), cls: "text-rose-400" }
     else if (low !== null || high !== null) marker = { text: tr("priceTargets.inZone"), cls: "text-amber-400" }
+  }
+
+  if (isOwn && editing) {
+    return <TargetEditRow target={target} positionId={positionId} onCancel={() => setEditing(false)} />
   }
 
   return (
@@ -153,23 +157,93 @@ function TargetRow({
           {zone}
           {marker && <span className={`ml-2 text-xs font-medium ${marker.cls}`}>{marker.text}</span>}
         </p>
-        {(t.note || t.effective_date) && (
+        {(target.note || target.effective_date) && (
           <p className="truncate text-[11px] text-[var(--app-text-faint)]">
-            {t.effective_date}
-            {t.note && <> · {t.note}</>}
+            {target.effective_date}
+            {target.note && <> - {target.note}</>}
           </p>
         )}
       </div>
       {isOwn && (
-        <button
-          onClick={() => startDelete(async () => void (await deletePriceTargetAction(positionId, t.id)))}
-          disabled={isDeleting}
-          title={tr("priceTargets.deleteTitle")}
-          className="rounded-md border border-[var(--app-border)] px-2 py-1 text-xs text-[var(--app-text-muted)] hover:border-rose-500/40 hover:text-rose-300 disabled:opacity-50"
-        >
-          {isDeleting ? "…" : "✕"}
-        </button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="rounded-md border border-[var(--app-border)] px-2 py-1 text-xs text-[var(--app-text-muted)] hover:border-sky-500/40 hover:text-sky-300"
+          >
+            {tr("priceTargets.edit")}
+          </button>
+          <button
+            type="button"
+            onClick={() => startDelete(async () => void (await deletePriceTargetAction(positionId, target.id)))}
+            disabled={isDeleting}
+            title={tr("priceTargets.deleteTitle")}
+            className="rounded-md border border-[var(--app-border)] px-2 py-1 text-xs text-[var(--app-text-muted)] hover:border-rose-500/40 hover:text-rose-300 disabled:opacity-50"
+          >
+            {isDeleting ? tr("priceTargets.deleting") : tr("priceTargets.delete")}
+          </button>
+        </div>
       )}
+    </li>
+  )
+}
+
+function TargetEditRow({
+  target,
+  positionId,
+  onCancel,
+}: {
+  target: PriceTarget
+  positionId: string
+  onCancel: () => void
+}) {
+  const tr = useTranslations()
+  const submittedRef = useRef(false)
+  const [error, formAction, pending] = useActionState(
+    updatePriceTargetAction.bind(null, positionId, target.id),
+    null,
+  )
+
+  useEffect(() => {
+    if (submittedRef.current && !pending && error === null) onCancel()
+  }, [error, onCancel, pending])
+
+  return (
+    <li className="app-muted-panel rounded-lg px-3 py-3">
+      <form action={formAction} onSubmit={() => { submittedRef.current = true }} className="space-y-2.5">
+        <span className="text-xs font-medium text-[var(--app-text-muted)]">{tr("priceTargets.editTitle", { currency: target.currency })}</span>
+        {error && <p className="rounded-lg bg-rose-950/50 px-3 py-2 text-xs text-rose-400">{error}</p>}
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+          <div>
+            <label htmlFor={`pt-${target.id}-horizon`} className={labelClass}>{tr("priceTargets.horizon")}</label>
+            <select id={`pt-${target.id}-horizon`} name="horizon" defaultValue={target.horizon} className={inputClass}>
+              <option value="short">{tr("priceTargets.short")}</option>
+              <option value="medium">{tr("priceTargets.medium")}</option>
+              <option value="long">{tr("priceTargets.long")}</option>
+            </select>
+          </div>
+          <div>
+            <label htmlFor={`pt-${target.id}-low`} className={labelClass}>{tr("priceTargets.zoneLow")}</label>
+            <input id={`pt-${target.id}-low`} name="zone_low" type="number" step="any" min="0" required defaultValue={target.zone_low ?? ""} className={inputClass} />
+          </div>
+          <div>
+            <label htmlFor={`pt-${target.id}-high`} className={labelClass}>{tr("priceTargets.zoneHigh")}</label>
+            <input id={`pt-${target.id}-high`} name="zone_high" type="number" step="any" min="0" required defaultValue={target.zone_high ?? ""} className={inputClass} />
+          </div>
+        </div>
+        <div>
+          <label htmlFor={`pt-${target.id}-note`} className={labelClass}>{tr("priceTargets.note")}</label>
+          <input id={`pt-${target.id}-note`} name="note" defaultValue={target.note ?? ""} placeholder={tr("priceTargets.notePlaceholder")} className={inputClass} />
+        </div>
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onCancel} className="rounded-lg border border-[var(--app-border)] px-3 py-1.5 text-xs text-[var(--app-text-muted)] hover:text-[var(--app-text)]">
+            {tr("common.cancel")}
+          </button>
+          <button type="submit" disabled={pending} className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-500 disabled:opacity-50">
+            {pending ? tr("priceTargets.saving") : tr("priceTargets.save")}
+          </button>
+        </div>
+      </form>
     </li>
   )
 }

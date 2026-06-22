@@ -29,8 +29,8 @@
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui",
     "e2e:debug": "playwright test --debug",
-    "test": "node --import tsx --test \"services/**/*.test.ts\" \"packages/**/*.test.ts\"",
-    "test:watch": "node --import tsx --test --watch \"services/**/*.test.ts\" \"packages/**/*.test.ts\""
+    "test": "node --import tsx --test \"services/**/*.test.ts\" \"packages/**/*.test.ts\" \"web/**/*.test.ts\"",
+    "test:watch": "node --import tsx --test --watch \"services/**/*.test.ts\" \"packages/**/*.test.ts\" \"web/**/*.test.ts\""
   },
   "dependencies": {
     "pg": "^8.21.0"

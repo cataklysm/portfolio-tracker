@@ -29,6 +29,7 @@ import {
   Typography,
 } from "@mui/material"
 import { AppBadge, appIconButtonSx } from "@/application/shell/AppBadge"
+import { appTypography, tableHeadSx } from "@/application/shell/appTypography"
 import {
   createAdminSymbolAction,
   deactivateAdminSymbolAction,
@@ -191,10 +192,10 @@ export function SymbolsAdministration({
     <PageShell kind="admin" maxWidth={1640}>
       <Stack component="header" direction="row" spacing={2} sx={{ alignItems: "center", justifyContent: "space-between" }}>
         <Breadcrumbs aria-label="breadcrumb">
-          <Typography sx={{ color: "var(--app-text-faint)", fontSize: 12, fontWeight: 600 }}>
+          <Typography sx={appTypography.breadcrumbParent}>
             Administration
           </Typography>
-          <Typography sx={{ color: "var(--app-text)", fontSize: 12, fontWeight: 700 }}>
+          <Typography sx={appTypography.breadcrumbCurrent}>
             Symbols
           </Typography>
         </Breadcrumbs>
@@ -222,18 +223,18 @@ export function SymbolsAdministration({
       <Card variant="outlined" sx={{ overflow: "hidden", borderColor: "var(--app-border)", bgcolor: "var(--app-surface-panel)", boxShadow: "var(--app-shadow)" }}>
         <Stack direction="row" sx={{ alignItems: "center", bgcolor: "var(--app-surface-header)", borderBottom: "1px solid var(--app-divider)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
           <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
-            <Typography component="h2" sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 800 }}>Symbols</Typography>
+            <Typography component="h2" sx={appTypography.panelTitle}>Symbols</Typography>
             <AppBadge label={panelCountLabel} kind="count" />
             {loadingSymbols ? <CircularProgress size={14} /> : null}
           </Stack>
-          <Typography sx={{ color: "var(--app-text-faint)", fontSize: 11 }}>
+          <Typography sx={appTypography.panelMeta}>
             {symbolTabs.find((symbolTab) => symbolTab.key === activeTab)?.label}
           </Typography>
         </Stack>
 
         <TableContainer>
           <Table size="small" sx={{ minWidth: 900 }}>
-            <TableHead sx={{ bgcolor: "var(--app-surface-inset)", "& .MuiTableCell-root": { color: "var(--app-text-faint)", fontSize: 10, fontWeight: 600, px: 1.5, py: 1 } }}>
+            <TableHead sx={tableHeadSx}>
               <TableRow>
                 <TableCell>Instrument</TableCell>
                 <TableCell align="right" sx={{ width: 140 }}>Listing</TableCell>
@@ -269,16 +270,16 @@ export function SymbolsAdministration({
                     sx={{ ...selectableRowSx(editing?.id === symbol.id), cursor: "pointer" }}
                   >
                     <TableCell>
-            <Stack spacing={0.5}>
-              <Typography sx={{ color: "var(--app-text)", fontSize: 12, fontWeight: 700 }}>{symbol.instrument_name}</Typography>
+                      <Stack spacing={0.5}>
+                        <Typography sx={appTypography.tablePrimary}>{symbol.instrument_name}</Typography>
                         <Stack direction="row" spacing={0.75} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
-                          {symbol.isin ? <Typography sx={{ color: "var(--app-text-faint)", fontFamily: "monospace", fontSize: 10 }}>ISIN {symbol.isin}</Typography> : null}
+                          {symbol.isin ? <Typography sx={appTypography.monoMeta}>ISIN {symbol.isin}</Typography> : null}
                         </Stack>
                       </Stack>
                     </TableCell>
                     <TableCell align="right" sx={{ width: 140 }}>
-                      <Typography sx={{ color: "var(--app-text)", fontFamily: "monospace", fontSize: 12, fontWeight: 700 }}>{symbol.symbol}</Typography>
-                      <Typography sx={{ color: "var(--app-text-faint)", fontSize: 10 }}>
+                      <Typography sx={appTypography.tableMono}>{symbol.symbol}</Typography>
+                      <Typography sx={appTypography.tableMeta}>
                         {symbol.exchange_mic ?? "No exchange"} - {symbol.currency}
                       </Typography>
                     </TableCell>
@@ -357,7 +358,7 @@ export function SymbolsAdministration({
             </TableBody>
           </Table>
           {filteredSymbols.length === 0 ? (
-            <Typography sx={{ py: 8, textAlign: "center", color: "var(--app-text-faint)", fontSize: 12 }}>
+            <Typography sx={{ ...appTypography.tableSecondary, py: 8, textAlign: "center" }}>
               No symbols match this view.
             </Typography>
           ) : null}
@@ -425,9 +426,9 @@ function ProvidersCell({
         <Stack spacing={0.75} sx={{ py: 0.5, minWidth: 210 }}>
           {providerRows.map((providerRow) => (
             <Stack key={providerRow.key} direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: "space-between" }}>
-              <Typography sx={{ color: "inherit", fontSize: 11, fontWeight: 700 }}>{providerRow.short}</Typography>
+              <Typography sx={{ color: "inherit", fontSize: 11, fontWeight: 650 }}>{providerRow.short}</Typography>
               <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
-                <Typography sx={{ color: "inherit", fontSize: 11 }}>{providerRow.provider ?? "None"}</Typography>
+                <Typography sx={{ color: "inherit", fontSize: 11, fontWeight: 500 }}>{providerRow.provider ?? "None"}</Typography>
                 <AppBadge
                   label={providerRow.status === "active" ? "Active" : providerRow.status === "disabled" ? "Disabled" : providerRow.status === "configured" ? "Configured" : "Missing"}
                   kind="status"
@@ -483,7 +484,7 @@ function PaginationFooter({
         py: 1,
       }}
     >
-      <Typography sx={{ color: "var(--app-text-muted)", fontSize: 11 }}>{start}-{end} of {total}</Typography>
+      <Typography sx={appTypography.panelMeta}>{start}-{end} of {total}</Typography>
       <Pagination count={pageCount} page={page} size="small" onChange={(_, value) => onChange(value)} />
     </Stack>
   )
@@ -738,14 +739,14 @@ function ProviderMatrix({ symbol, providers, variant = "dialog" }: { symbol?: Ad
   const inline = variant === "inline"
 
   return (
-      <Box sx={adminInspectorSectionSx}>
+    <Box sx={adminInspectorSectionSx}>
       <input type="hidden" name="provider_selections" value={JSON.stringify(selectionsPayload)} />
       <input type="hidden" name="provider_identifiers" value={JSON.stringify(identifiersPayload)} />
 
       {loading ? (
         <Stack direction="row" spacing={1} sx={{ alignItems: "center", color: "var(--app-text-faint)" }}>
           <CircularProgress size={16} />
-          <Typography sx={{ fontSize: 11 }}>Loading current selections...</Typography>
+          <Typography sx={appTypography.panelMeta}>Loading current selections...</Typography>
         </Stack>
       ) : (
         <>
@@ -771,7 +772,7 @@ function ProviderMatrix({ symbol, providers, variant = "dialog" }: { symbol?: Ad
             <Stack spacing={1.25} sx={adminInspectorSectionSx}>
               <Stack spacing={0.35}>
                 <SectionLabel label="Provider symbols" />
-                <Typography sx={{ color: "var(--app-text-faint)", fontSize: 11 }}>
+                <Typography sx={appTypography.metadata}>
                   Search starts after 3 characters. One symbol is stored per provider.
                 </Typography>
               </Stack>
@@ -867,8 +868,8 @@ function ProviderSymbolRow({
           renderOption={(props, hit) => (
             <Box component="li" {...props} key={`${hit.symbol}-${hit.exchange ?? ""}`}>
               <Stack direction="row" spacing={1} sx={{ minWidth: 0, width: "100%", alignItems: "center", justifyContent: "space-between" }}>
-                <Typography sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", color: "var(--app-text)", fontSize: 12 }}>{hit.name}</Typography>
-                <Typography sx={{ flexShrink: 0, color: "var(--app-text-faint)", fontFamily: "monospace", fontSize: 10 }}>
+                <Typography sx={{ ...appTypography.tablePrimary, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{hit.name}</Typography>
+                <Typography sx={{ ...appTypography.monoMeta, flexShrink: 0 }}>
                   {hit.symbol}{hit.currency ? ` - ${hit.currency}` : ""}
                 </Typography>
               </Stack>
@@ -901,15 +902,15 @@ function RemoveSymbolDialog({
       <DialogTitle sx={dialogTitleSx}>Remove {symbol?.symbol}?</DialogTitle>
       <DialogContent sx={{ bgcolor: "var(--app-surface-raised)", p: 0 }}>
         <Box sx={{ px: 2, py: 2 }}>
-          <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12 }}>
+          <Typography sx={appTypography.tableSecondary}>
             This removes the listing from the active symbol catalog. Removal is blocked while positions or watchlist entries still use it.
           </Typography>
           {symbol ? (
             <Card variant="outlined" sx={{ mt: 1.5, borderColor: "var(--app-border)", bgcolor: "var(--app-surface)", p: 1.5 }}>
-              <Typography sx={{ color: "var(--app-text)", fontSize: 12, fontWeight: 700 }}>
+              <Typography sx={appTypography.tablePrimary}>
                 {symbol.instrument_name}
               </Typography>
-              <Typography sx={{ color: "var(--app-text-faint)", fontFamily: "monospace", fontSize: 10 }}>
+              <Typography sx={appTypography.monoMeta}>
                 {symbol.symbol} - {symbol.exchange_mic ?? "No exchange"} - {symbol.currency}
               </Typography>
             </Card>

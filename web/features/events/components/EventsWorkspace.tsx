@@ -20,6 +20,7 @@ import {
   Typography,
 } from "@mui/material"
 import { AppBadge } from "@/application/shell/AppBadge"
+import { appTypography } from "@/application/shell/appTypography"
 import { ControlBar } from "@/application/shell/ControlBar"
 import { PageMetricGrid, PageShell } from "@/application/shell/PageShell"
 import { useToast } from "@/application/toast/ToastProvider"
@@ -194,10 +195,10 @@ export function EventsWorkspace({ earnings, corporateActions, locale }: EventsWo
   return (
     <PageShell kind="reporting">
       <Breadcrumbs aria-label="breadcrumb">
-        <Typography sx={{ color: "var(--app-text-faint)", fontSize: 12, fontWeight: 600 }}>
+        <Typography sx={appTypography.breadcrumbParent}>
           Portfolio
         </Typography>
-        <Typography sx={{ color: "var(--app-text)", fontSize: 12, fontWeight: 700 }}>
+        <Typography sx={appTypography.breadcrumbCurrent}>
           Events
         </Typography>
       </Breadcrumbs>
@@ -302,7 +303,7 @@ function MainEventsCard({
       <Stack direction="row" sx={{ alignItems: "center", bgcolor: tableChromeBg, borderBottom: "1px solid var(--app-divider)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
         {view === "calendar" ? (
           <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
-            <Typography component="h2" sx={{ color: "var(--app-text)", fontSize: 15, fontWeight: 800, minWidth: 116 }}>{monthLabel(calendarMonth, locale)}</Typography>
+            <Typography component="h2" sx={{ ...appTypography.panelTitle, fontSize: 15, minWidth: 116 }}>{monthLabel(calendarMonth, locale)}</Typography>
             <IconButton size="small" aria-label="Previous month" onClick={() => onChangeMonth(addMonths(calendarMonth, -1))} sx={iconButtonSx}>
               <ChevronLeftIcon />
             </IconButton>
@@ -312,7 +313,7 @@ function MainEventsCard({
             <Button size="small" variant="outlined" onClick={() => { onChangeMonth(startOfMonth(today)); onSelectDay(dateKey(today)) }} sx={calendarTextButtonSx}>Today</Button>
           </Stack>
         ) : (
-          <Typography component="h2" sx={{ color: "var(--app-text)", fontSize: 15, fontWeight: 800 }}>Event timeline</Typography>
+          <Typography component="h2" sx={{ ...appTypography.panelTitle, fontSize: 15 }}>Event timeline</Typography>
         )}
         <ViewToggle value={view} onChange={onChangeView} />
       </Stack>
@@ -702,7 +703,7 @@ function TimelineView({
                   "&:focus-visible": { boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--app-accent) 42%, transparent)" },
                 }}
               >
-                <Typography sx={{ color: "var(--app-text)", fontSize: 14.25, fontWeight: 750 }}>{week.label}</Typography>
+                <Typography sx={{ ...appTypography.panelTitle, fontSize: 14.25 }}>{week.label}</Typography>
                 <AppBadge label={week.events.length} kind="count" />
               </Box>
             </Box>
@@ -723,7 +724,7 @@ function TimelineView({
       </Box>
       {timelinePageCount > 1 ? (
         <Stack direction="row" sx={{ alignItems: "center", bgcolor: tableChromeBg, borderTop: "1px solid var(--app-divider)", justifyContent: "space-between", px: 1.5, py: 0.75 }}>
-          <Typography sx={{ color: "var(--app-text-muted)", fontSize: 11 }}>
+          <Typography sx={appTypography.panelMeta}>
             Weeks {(timelinePage - 1) * TIMELINE_WEEK_PAGE_SIZE + 1}-{Math.min(timelinePage * TIMELINE_WEEK_PAGE_SIZE, weeks.length)} of {weeks.length}
           </Typography>
           <Pagination
@@ -799,11 +800,11 @@ function TimelineRow({
         />
       </Stack>
       <EventKindBadge kind={event.kind} />
-      <Typography noWrap sx={{ color: "var(--app-text)", fontSize: 13, fontWeight: 750 }}>{event.companyName}</Typography>
-      <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12 }}>{event.provider}</Typography>
+      <Typography noWrap sx={appTypography.tablePrimary}>{event.companyName}</Typography>
+      <Typography sx={appTypography.tableSecondary}>{event.provider}</Typography>
       <Box sx={{ textAlign: "right" }}>
-        <Typography noWrap sx={{ color: "var(--app-text)", fontSize: 13, fontWeight: 750, lineHeight: 1.15 }}>{event.amountLabel}</Typography>
-        <Typography noWrap sx={{ color: "var(--app-text-muted)", fontSize: 11, lineHeight: 1.2 }}>{eventAmountSubLabel(event)}</Typography>
+        <Typography noWrap sx={{ ...appTypography.numeric, fontSize: 13, lineHeight: 1.15 }}>{event.amountLabel}</Typography>
+        <Typography noWrap sx={appTypography.metadata}>{eventAmountSubLabel(event)}</Typography>
       </Box>
     </Box>
   )
@@ -850,8 +851,8 @@ function EventsContextRail({
 
       <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "var(--app-surface-panel)", display: "flex", flex: "0.9 1 0", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
         <Stack direction="row" sx={{ alignItems: "center", bgcolor: tableChromeBg, borderBottom: "1px solid var(--app-divider)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
-          <Typography sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 800 }}>Upcoming events this week</Typography>
-          <Typography sx={{ color: "var(--app-text-muted)", fontSize: 11 }}>{dateRangeLabel(dateKey(upcomingWeekStart), dateKey(upcomingWeekEnd), locale)}</Typography>
+          <Typography sx={appTypography.panelTitle}>Upcoming events this week</Typography>
+          <Typography sx={appTypography.panelMeta}>{dateRangeLabel(dateKey(upcomingWeekStart), dateKey(upcomingWeekEnd), locale)}</Typography>
         </Stack>
         <Stack sx={{ flex: 1, minHeight: 0, overflow: "auto" }}>
           {upcomingWeekEvents.length === 0 ? (
@@ -883,7 +884,7 @@ function ContextHeader({ events, locale, selectedEvent, selection }: { events: W
   if (selection.type === "event") {
     return (
       <Stack direction="row" sx={{ alignItems: "center", bgcolor: tableChromeBg, borderBottom: "1px solid var(--app-divider)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
-        <Typography sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 800 }}>Selected event</Typography>
+        <Typography sx={appTypography.panelTitle}>Selected event</Typography>
         {selectedEvent ? <BookmarkIcon /> : null}
       </Stack>
     )
@@ -891,16 +892,16 @@ function ContextHeader({ events, locale, selectedEvent, selection }: { events: W
   if (selection.type === "day") {
     return (
       <Stack direction="row" sx={{ alignItems: "center", bgcolor: tableChromeBg, borderBottom: "1px solid var(--app-divider)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
-        <Typography sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 800 }}>Selected day</Typography>
-        <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12 }}>{formatDate(selection.dateKey, locale)}</Typography>
+        <Typography sx={appTypography.panelTitle}>Selected day</Typography>
+        <Typography sx={appTypography.panelMeta}>{formatDate(selection.dateKey, locale)}</Typography>
       </Stack>
     )
   }
   const weekEndKey = dateKey(addDays(parseDateKey(selection.weekStartKey), 6))
   return (
     <Stack direction="row" sx={{ alignItems: "center", bgcolor: tableChromeBg, borderBottom: "1px solid var(--app-divider)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
-      <Typography sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 800 }}>Selected week</Typography>
-      <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12 }}>{dateRangeLabel(selection.weekStartKey, weekEndKey, locale)}</Typography>
+      <Typography sx={appTypography.panelTitle}>Selected week</Typography>
+      <Typography sx={appTypography.panelMeta}>{dateRangeLabel(selection.weekStartKey, weekEndKey, locale)}</Typography>
     </Stack>
   )
 }
@@ -934,8 +935,8 @@ function SelectedEventDetails({ event, locale }: { event: WorkbenchEvent; locale
           {event.symbol.slice(0, 3)}
         </Box>
         <Box sx={{ minWidth: 0 }}>
-          <Typography sx={{ color: "var(--app-text)", fontSize: 18, fontWeight: 800, lineHeight: 1.15 }}>{event.companyName} {event.detailLabel}</Typography>
-          <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12, mt: 0.55 }}>{event.symbol}</Typography>
+          <Typography sx={{ color: "var(--app-text)", fontSize: 18, fontWeight: 750, lineHeight: 1.15 }}>{event.companyName} {event.detailLabel}</Typography>
+          <Typography sx={{ ...appTypography.tableSecondary, mt: 0.55 }}>{event.symbol}</Typography>
         </Box>
       </Stack>
       <Box sx={{ display: "grid", gap: 0.75 }}>
@@ -967,7 +968,7 @@ function SelectedDayDetails({ dateKey: selectedDateKey, events, locale }: { date
       {events.map((event) => (
         <ContextEventLine key={event.id} event={event} locale={locale} />
       ))}
-      <Typography sx={{ color: "var(--app-text-muted)", fontSize: 11, mt: 1 }}>{events.length} events on this day</Typography>
+      <Typography sx={{ ...appTypography.panelMeta, mt: 1 }}>{events.length} events on this day</Typography>
     </Stack>
   )
 }
@@ -987,15 +988,15 @@ function ContextEventLine({ event, locale }: { event: WorkbenchEvent; locale: st
       <Stack direction="row" spacing={0.85} sx={{ alignItems: "center", minWidth: 0 }}>
         <EventKindIcon kind={event.kind} />
         <Box sx={{ minWidth: 0 }}>
-          <Typography noWrap sx={{ color: "var(--app-text)", fontSize: 12.5, fontWeight: 800, lineHeight: 1.2 }}>{event.companyName} {event.detailLabel}</Typography>
-          <Typography noWrap sx={{ color: "var(--app-text-muted)", fontSize: 10.5, lineHeight: 1.35 }}>
+          <Typography noWrap sx={{ ...appTypography.tablePrimary, fontSize: 12.5 }}>{event.companyName} {event.detailLabel}</Typography>
+          <Typography noWrap sx={appTypography.metadata}>
             {event.symbol} <Box component="span" sx={{ color: "var(--app-text-faint)", mx: 0.5 }}>·</Box> {event.kind === "earnings" ? "Report date" : "Ex-date"} {formatDate(event.dateKey, locale)}
           </Typography>
         </Box>
       </Stack>
       <Box sx={{ minWidth: 0, textAlign: "right" }}>
-        <Typography noWrap sx={{ color: "var(--app-text)", fontSize: 13, fontWeight: 800, lineHeight: 1.2 }}>{event.amountLabel}</Typography>
-        <Typography noWrap sx={{ color: "var(--app-text-muted)", fontSize: 10.5, lineHeight: 1.35 }}>{eventAmountSubLabel(event)}</Typography>
+        <Typography noWrap sx={{ ...appTypography.numeric, fontSize: 13, lineHeight: 1.2 }}>{event.amountLabel}</Typography>
+        <Typography noWrap sx={appTypography.metadata}>{eventAmountSubLabel(event)}</Typography>
       </Box>
     </Box>
   )
@@ -1007,11 +1008,11 @@ function CompactEventRow({ event, locale, onSelect }: { event: WorkbenchEvent; l
     <Box component="button" type="button" onClick={onSelect} sx={{ bgcolor: "transparent", border: 0, borderBottom: "1px solid var(--app-border)", boxShadow: `inset 3px 0 0 color-mix(in srgb, ${color} 46%, transparent)`, color: "inherit", cursor: "pointer", display: "grid", gap: 1, gridTemplateColumns: "96px minmax(0, 1fr) 58px 72px", outline: "none", px: 1.25, py: 0.75, textAlign: "left", "&:focus-visible": { boxShadow: `inset 3px 0 0 ${color}, inset 0 0 0 1px color-mix(in srgb, ${color} 42%, transparent)` }, "&:hover": { bgcolor: `color-mix(in srgb, ${color} 7%, var(--app-surface-hover))` } }}>
       <Stack direction="row" spacing={0.65} sx={{ alignItems: "center" }}>
         <EventKindIcon kind={event.kind} size={20} />
-        <Typography sx={{ color: "var(--app-text-muted)", fontSize: 11 }}>{shortWeekdayDate(event.dateKey, locale)}</Typography>
+        <Typography sx={appTypography.panelMeta}>{shortWeekdayDate(event.dateKey, locale)}</Typography>
       </Stack>
-      <Typography noWrap sx={{ color: "var(--app-text)", fontSize: 12, fontWeight: 700 }}>{event.companyName} {event.detailLabel}</Typography>
-      <Typography sx={{ color: "var(--app-text-muted)", fontSize: 11 }}>{event.symbol}</Typography>
-      <Typography sx={{ color: "var(--app-text)", fontSize: 12, fontWeight: 700, textAlign: "right" }}>{event.amountLabel}</Typography>
+      <Typography noWrap sx={{ ...appTypography.tablePrimary, fontSize: 12 }}>{event.companyName} {event.detailLabel}</Typography>
+      <Typography sx={appTypography.panelMeta}>{event.symbol}</Typography>
+      <Typography sx={{ ...appTypography.numeric, fontSize: 12, textAlign: "right" }}>{event.amountLabel}</Typography>
     </Box>
   )
 }
@@ -1020,7 +1021,7 @@ function LegendCard({ counts }: { counts: Record<EventFilter, number> }) {
   return (
     <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "var(--app-surface-panel)", overflow: "hidden" }}>
       <Stack direction="row" sx={{ alignItems: "center", bgcolor: tableChromeBg, borderBottom: "1px solid var(--app-divider)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
-        <Typography sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 800 }}>Legend</Typography>
+        <Typography sx={appTypography.panelTitle}>Legend</Typography>
       </Stack>
       <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: "repeat(2, minmax(0, 1fr))", p: 1.5 }}>
         <LegendItem kind="earnings" label="Earnings" value={counts.earnings} />
@@ -1036,8 +1037,8 @@ function LegendItem({ kind, label, value }: { kind: EventKind; label: string; va
   return (
     <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", bgcolor: `color-mix(in srgb, ${color} 7%, transparent)`, border: `1px solid color-mix(in srgb, ${color} 18%, var(--app-divider))`, borderRadius: 1.25, minWidth: 0, px: 1, py: 0.85 }}>
       <EventKindIcon kind={kind} size={22} />
-      <Typography sx={{ color: "var(--app-text)", fontSize: 12, fontWeight: 700 }}>{label}</Typography>
-      <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12, ml: "auto" }}>{value}</Typography>
+      <Typography sx={{ ...appTypography.tablePrimary, fontSize: 12 }}>{label}</Typography>
+      <Typography sx={{ ...appTypography.numeric, color: "var(--app-text-muted)", fontSize: 12, ml: "auto" }}>{value}</Typography>
     </Stack>
   )
 }
@@ -1051,9 +1052,9 @@ function MetricCard({ icon, label, value, sub, tone }: { icon: "calendar" | "rep
           <MetricIcon icon={icon} />
         </Box>
         <Box sx={{ minWidth: 0 }}>
-          <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12 }}>{label}</Typography>
-          <Typography sx={{ color: "var(--app-text)", fontSize: 24, fontWeight: 700, lineHeight: 1.1 }} className="tabular-nums">{value}</Typography>
-          <Typography noWrap sx={{ color: "var(--app-text-faint)", fontSize: 11, mt: 0.25 }}>{sub}</Typography>
+          <Typography sx={appTypography.tableSecondary}>{label}</Typography>
+          <Typography sx={{ ...appTypography.numeric, fontSize: 24, lineHeight: 1.1 }}>{value}</Typography>
+          <Typography noWrap sx={{ ...appTypography.metadata, mt: 0.25 }}>{sub}</Typography>
         </Box>
       </Stack>
     </Card>
@@ -1063,8 +1064,8 @@ function MetricCard({ icon, label, value, sub, tone }: { icon: "calendar" | "rep
 function EventDetailItem({ label, tone, value }: { label: string; tone?: string; value: string }) {
   return (
     <Box sx={{ bgcolor: tone ? `color-mix(in srgb, ${tone} 8%, var(--app-surface-inset))` : "var(--app-surface-inset)", border: tone ? `1px solid color-mix(in srgb, ${tone} 24%, var(--app-divider))` : "1px solid var(--app-divider)", borderRadius: 1, minWidth: 0, p: 1.1 }}>
-      <Typography sx={{ color: "var(--app-text-faint)", fontSize: 10, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase" }}>{label}</Typography>
-      <Typography noWrap sx={{ color: tone ?? "var(--app-text)", fontSize: 13, fontWeight: 800, mt: 0.45 }} className="tabular-nums">{value}</Typography>
+      <Typography sx={{ ...appTypography.sectionLabel, mb: 0, mt: 0 }}>{label}</Typography>
+      <Typography noWrap sx={{ ...appTypography.numeric, color: tone ?? "var(--app-text)", fontSize: 13, mt: 0.45 }}>{value}</Typography>
     </Box>
   )
 }

@@ -27,6 +27,7 @@ import {
   Typography,
 } from "@mui/material"
 import { AppBadge, appIconButtonSx } from "@/application/shell/AppBadge"
+import { appTypography, tableHeadSx } from "@/application/shell/appTypography"
 import { ControlBar } from "@/application/shell/ControlBar"
 import { PageShell } from "@/application/shell/PageShell"
 import { selectableRowSx } from "@/application/shell/rowSelection"
@@ -145,10 +146,10 @@ export function ExchangeAdministration({ exchanges: initialExchanges }: { exchan
   return (
     <PageShell kind="admin" maxWidth={1640}>
       <Breadcrumbs aria-label="breadcrumb">
-        <Typography sx={{ color: "var(--app-text-faint)", fontSize: 12, fontWeight: 600 }}>
+        <Typography sx={appTypography.breadcrumbParent}>
           Administration
         </Typography>
-        <Typography sx={{ color: "var(--app-text)", fontSize: 12, fontWeight: 700 }}>
+        <Typography sx={appTypography.breadcrumbCurrent}>
           Exchanges
         </Typography>
       </Breadcrumbs>
@@ -179,18 +180,18 @@ export function ExchangeAdministration({ exchanges: initialExchanges }: { exchan
       <Card variant="outlined" sx={{ overflow: "hidden", borderColor: "var(--app-border)", bgcolor: "var(--app-surface-panel)", boxShadow: "var(--app-shadow)" }}>
         <Stack direction="row" sx={{ alignItems: "center", bgcolor: "var(--app-surface-header)", borderBottom: "1px solid var(--app-divider)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
           <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
-            <Typography component="h2" sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 800 }}>Exchanges</Typography>
+            <Typography component="h2" sx={appTypography.panelTitle}>Exchanges</Typography>
             <AppBadge label={filteredExchanges.length} kind="count" />
             {loadingExchanges ? <CircularProgress size={14} /> : null}
           </Stack>
-          <Typography sx={{ color: "var(--app-text-faint)", fontSize: 11 }}>
+          <Typography sx={appTypography.panelMeta}>
             {exchangeTabs.find((exchangeTab) => exchangeTab.key === activeTab)?.label}
           </Typography>
         </Stack>
 
         <TableContainer>
           <Table size="small" sx={{ minWidth: 920 }}>
-            <TableHead sx={{ bgcolor: "var(--app-surface-inset)", "& .MuiTableCell-root": { color: "var(--app-text-faint)", fontSize: 10, fontWeight: 600, px: 1.5, py: 1 } }}>
+            <TableHead sx={tableHeadSx}>
               <TableRow>
                 <TableCell>Exchange</TableCell>
                 <TableCell align="right" sx={{ width: 190 }}>Timezone</TableCell>
@@ -218,15 +219,15 @@ export function ExchangeAdministration({ exchanges: initialExchanges }: { exchan
                   >
                     <TableCell>
                       <Stack spacing={0.5}>
-                        <Typography sx={{ color: "var(--app-text)", fontSize: 12, fontWeight: 750 }}>{exchange.mic}</Typography>
-                        <Typography noWrap sx={{ color: "var(--app-text-faint)", fontSize: 10 }}>{exchange.name}</Typography>
+                        <Typography sx={appTypography.tablePrimary}>{exchange.mic}</Typography>
+                        <Typography noWrap sx={appTypography.tableMeta}>{exchange.name}</Typography>
                       </Stack>
                     </TableCell>
                     <TableCell align="right">
                       <AppBadge label={exchange.timezone} kind="data-source" />
                     </TableCell>
                     <TableCell align="right">
-                      <Typography sx={{ color: "var(--app-text)", fontFamily: "monospace", fontSize: 12, fontWeight: 700 }}>
+                      <Typography sx={appTypography.tableMono}>
                         {tradingHours(exchange)}
                       </Typography>
                     </TableCell>
@@ -285,7 +286,7 @@ export function ExchangeAdministration({ exchanges: initialExchanges }: { exchan
             </TableBody>
           </Table>
           {!loadingExchanges && filteredExchanges.length === 0 ? (
-            <Typography sx={{ py: 8, textAlign: "center", color: "var(--app-text-faint)", fontSize: 12 }}>
+            <Typography sx={{ ...appTypography.tableSecondary, py: 8, textAlign: "center" }}>
               No exchanges match this view.
             </Typography>
           ) : null}
@@ -458,13 +459,13 @@ function ExchangeFormFields({ exchange, disabled = false }: { exchange?: Exchang
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} sx={{ alignItems: { xs: "stretch", sm: "center" }, justifyContent: "space-between", mb: 1.5 }}>
           <Box>
             <SectionLabel label="Holiday calendar" />
-            <Typography sx={{ color: "var(--app-text-faint)", fontSize: 11 }}>
+            <Typography sx={appTypography.metadata}>
               Leave replacement disabled to keep existing holidays unchanged.
             </Typography>
           </Box>
           <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
             <Switch checked={replaceHolidays} disabled={disabled} onChange={(_, checked) => setReplaceHolidays(checked)} slotProps={{ input: { "aria-label": "Replace holiday calendar" } }} />
-            <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12 }}>Replace</Typography>
+            <Typography sx={appTypography.tableSecondary}>Replace</Typography>
           </Stack>
         </Stack>
         <input type="hidden" name="replace_holidays" value={replaceHolidays ? "true" : "false"} />
@@ -510,7 +511,7 @@ function PaginationFooter({
         py: 1,
       }}
     >
-      <Typography sx={{ color: "var(--app-text-muted)", fontSize: 11 }}>{start}-{end} of {total}</Typography>
+      <Typography sx={appTypography.panelMeta}>{start}-{end} of {total}</Typography>
       <Pagination count={pageCount} page={page} size="small" onChange={(_, value) => onChange(value)} />
     </Stack>
   )
@@ -532,7 +533,7 @@ function DeleteExchangeDialog({
       <DialogTitle sx={dialogTitleSx}>Delete {exchange?.mic}?</DialogTitle>
       <DialogContent sx={{ bgcolor: "var(--app-surface-raised)", p: 0 }}>
         <Box sx={{ px: 2, py: 2 }}>
-          <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12 }}>
+          <Typography sx={appTypography.tableSecondary}>
             This removes the exchange from administration lists. Deletion is blocked while active listings still use it.
           </Typography>
         </Box>

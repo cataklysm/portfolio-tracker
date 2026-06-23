@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Box, Breadcrumbs, Card, CardActionArea, Divider, Stack, Typography } from "@mui/material"
 import { PageShell } from "@/application/shell/PageShell"
+import { appTypography } from "@/application/shell/appTypography"
 import { apiFetch, fetchMe } from "@/lib/api"
 import type { AdminSymbolsPage, ExchangeView, ProviderSettingsView } from "@/lib/types"
 
@@ -46,7 +47,7 @@ export default async function AdministrationPage() {
   return (
     <PageShell kind="admin">
       <Breadcrumbs aria-label="breadcrumb">
-        <Typography sx={{ color: "var(--app-text)", fontSize: 12, fontWeight: 700 }}>
+        <Typography sx={appTypography.breadcrumbCurrent}>
           Administration
         </Typography>
       </Breadcrumbs>
@@ -75,12 +76,12 @@ export default async function AdministrationPage() {
                   <Box sx={{ alignItems: "center", bgcolor: "var(--app-accent-soft)", border: "1px solid color-mix(in srgb, var(--app-accent) 38%, var(--app-border))", borderRadius: 1, color: "var(--app-accent)", display: "flex", height: 40, justifyContent: "center", width: 40 }}>
                     <SectionIcon icon={section.icon} />
                   </Box>
-                  <Typography component="h1" sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 800 }}>
+                  <Typography component="h1" sx={appTypography.panelTitle}>
                     {section.title}
                   </Typography>
                 </Stack>
                 <Divider sx={{ borderColor: "var(--app-divider)" }} />
-                <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12, lineHeight: 1.55 }}>
+                <Typography sx={{ ...appTypography.tableSecondary, lineHeight: 1.5 }}>
                   {section.description}
                 </Typography>
                 <Box sx={{ mt: "auto", pt: 0.5 }}>
@@ -109,14 +110,14 @@ function SectionMetric({ metric }: { metric: AdminSectionMetric }) {
     >
       <Box sx={{ minWidth: 0 }}>
         <Stack direction="row" spacing={0.75} sx={{ alignItems: "baseline" }}>
-          <Typography sx={{ color: "var(--app-text)", fontSize: 20, fontWeight: 800, lineHeight: 1 }}>
+          <Typography sx={{ ...appTypography.numeric, fontSize: 20, lineHeight: 1 }}>
             {metric.value}
           </Typography>
-          <Typography sx={{ color: "var(--app-text-muted)", fontSize: 11, fontWeight: 700 }}>
+          <Typography sx={appTypography.tableSecondary}>
             {metric.label}
           </Typography>
         </Stack>
-        <Typography noWrap sx={{ color: "var(--app-text-faint)", fontSize: 10.5, mt: 0.5 }}>
+        <Typography noWrap sx={{ ...appTypography.metadata, mt: 0.5 }}>
           {metric.detail}
         </Typography>
       </Box>
@@ -126,8 +127,8 @@ function SectionMetric({ metric }: { metric: AdminSectionMetric }) {
           borderRadius: 1,
           color: "var(--app-text-muted)",
           flexShrink: 0,
-          fontSize: 10,
-          fontWeight: 700,
+          fontSize: 10.5,
+          fontWeight: 650,
           px: 0.75,
           py: 0.35,
         }}

@@ -1,6 +1,7 @@
 import { Breadcrumbs, Card, Chip, Skeleton, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from "@mui/material"
 import type { ReactNode } from "react"
 import { PageShell, PageToolbar, type PageShellKind } from "@/application/shell/PageShell"
+import { appTypography, tableHeadSx } from "@/application/shell/appTypography"
 
 export function PageLoadingShell({
   breadcrumb,
@@ -19,7 +20,7 @@ export function PageLoadingShell({
         {breadcrumb.map((item, index) => {
           const current = index === breadcrumb.length - 1
           return (
-            <Typography key={`${item}-${index}`} sx={{ color: current ? "var(--app-text)" : "var(--app-text-faint)", fontSize: 12, fontWeight: current ? 700 : 600 }}>
+            <Typography key={`${item}-${index}`} sx={current ? appTypography.breadcrumbCurrent : appTypography.breadcrumbParent}>
               {item}
             </Typography>
           )
@@ -241,15 +242,15 @@ export function TablePanelSkeleton({
     <Card variant="outlined" sx={{ overflow: "hidden", borderColor: "var(--app-border)", bgcolor: "color-mix(in srgb, var(--app-surface) 94%, transparent)", boxShadow: "var(--app-shadow)" }}>
       <Stack direction="row" sx={{ alignItems: "center", borderBottom: "1px solid var(--app-border)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
         <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
-          <Typography component="h2" sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 800 }}>{title}</Typography>
+          <Typography component="h2" sx={appTypography.panelTitle}>{title}</Typography>
           <Chip label="Loading" color="primary" variant="outlined" size="small" />
         </Stack>
-        {rightLabel ? <Typography sx={{ color: "var(--app-text-faint)", fontSize: 11 }}>{rightLabel}</Typography> : null}
+        {rightLabel ? <Typography sx={appTypography.panelMeta}>{rightLabel}</Typography> : null}
       </Stack>
 
       <TableContainer>
         <Table size="small" sx={{ minWidth: 900 }}>
-          <TableHead sx={{ "& .MuiTableCell-root": { color: "var(--app-text-faint)", fontSize: 10, fontWeight: 600, px: 1.5, py: 1 } }}>
+          <TableHead sx={tableHeadSx}>
             <TableRow>
               {columns.map((column) => (
                 <TableCell key={column.label} align={column.align} sx={column.width ? { width: column.width } : undefined}>{column.label}</TableCell>

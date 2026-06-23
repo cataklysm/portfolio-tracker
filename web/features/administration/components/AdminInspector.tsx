@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react"
 import { Box, Stack, Typography } from "@mui/material"
+import { appTypography } from "@/application/shell/appTypography"
 
 export function AdminInspectorHeader({
   detail,
@@ -26,17 +27,17 @@ export function AdminInspectorHeader({
       }}
     >
       <Stack spacing={0.25} sx={{ minWidth: 0 }}>
-        <Typography sx={{ color: "var(--app-text)", fontSize: 13, fontWeight: 800 }}>
+        <Typography sx={{ ...appTypography.tablePrimary, fontWeight: 650 }}>
           {title}
         </Typography>
         {detail ? (
-          <Typography noWrap sx={{ color: "var(--app-text-muted)", fontSize: 11 }}>
+          <Typography noWrap sx={appTypography.tableSecondary}>
             {detail}
           </Typography>
         ) : null}
       </Stack>
       {meta ? (
-        <Typography sx={{ color: "var(--app-text-faint)", fontSize: 11, textAlign: { xs: "left", sm: "right" } }}>
+        <Typography sx={{ ...appTypography.panelMeta, textAlign: { xs: "left", sm: "right" } }}>
           {meta}
         </Typography>
       ) : null}
@@ -79,7 +80,7 @@ export function AdminInspectorActions({
         py: 1.25,
       }}
     >
-      <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12 }}>
+      <Typography sx={appTypography.tableSecondary}>
         {summary}
       </Typography>
       <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end" }}>
@@ -93,12 +94,7 @@ export function AdminSectionLabel({ label }: { label: string }) {
   return (
     <Typography
       sx={{
-        color: "var(--app-accent)",
-        fontSize: 10,
-        fontWeight: 800,
-        letterSpacing: "0.08em",
-        mb: 1.25,
-        textTransform: "uppercase",
+        ...appTypography.sectionLabel,
       }}
     >
       {label}

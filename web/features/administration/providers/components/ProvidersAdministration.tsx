@@ -26,6 +26,7 @@ import {
   Typography,
 } from "@mui/material"
 import { AppBadge } from "@/application/shell/AppBadge"
+import { appTypography, tableHeadSx } from "@/application/shell/appTypography"
 import {
   listAdminProviderConfigurationAction,
   listAdminProviderCadenceAction,
@@ -239,10 +240,10 @@ export function ProvidersAdministration({
   return (
     <PageShell kind="admin" maxWidth={1640}>
       <Breadcrumbs aria-label="breadcrumb">
-        <Typography sx={{ color: "var(--app-text-faint)", fontSize: 12, fontWeight: 600 }}>
+        <Typography sx={appTypography.breadcrumbParent}>
           Administration
         </Typography>
-        <Typography sx={{ color: "var(--app-text)", fontSize: 12, fontWeight: 700 }}>
+        <Typography sx={appTypography.breadcrumbCurrent}>
           Providers
         </Typography>
       </Breadcrumbs>
@@ -268,18 +269,18 @@ export function ProvidersAdministration({
       <Card variant="outlined" sx={{ overflow: "hidden", borderColor: "var(--app-border)", bgcolor: "var(--app-surface-panel)", boxShadow: "var(--app-shadow)" }}>
         <Stack direction="row" sx={{ alignItems: "center", bgcolor: "var(--app-surface-header)", borderBottom: "1px solid var(--app-divider)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
           <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
-            <Typography component="h2" sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 800 }}>Providers</Typography>
+            <Typography component="h2" sx={appTypography.panelTitle}>Providers</Typography>
             <AppBadge label={filteredProviders.length} kind="count" />
             {loadingProviders ? <Skeleton animation="wave" variant="circular" width={14} height={14} /> : null}
           </Stack>
-          <Typography sx={{ color: "var(--app-text-faint)", fontSize: 11 }}>
+          <Typography sx={appTypography.panelMeta}>
             {visibleTabs.find((providerTab) => providerTab.key === activeTab)?.label}
           </Typography>
         </Stack>
 
         <TableContainer>
           <Table size="small" sx={{ minWidth: 920 }}>
-            <TableHead sx={{ bgcolor: "var(--app-surface-inset)", "& .MuiTableCell-root": { color: "var(--app-text-faint)", fontSize: 10, fontWeight: 600, px: 1.5, py: 1 } }}>
+            <TableHead sx={tableHeadSx}>
               <TableRow>
                 <TableCell>Provider</TableCell>
                 <TableCell align="right" sx={{ width: 120 }}>Class</TableCell>
@@ -309,7 +310,7 @@ export function ProvidersAdministration({
             </TableBody>
           </Table>
           {!loadingProviders && filteredProviders.length === 0 ? (
-            <Typography sx={{ py: 8, textAlign: "center", color: "var(--app-text-faint)", fontSize: 12 }}>
+            <Typography sx={{ ...appTypography.tableSecondary, py: 8, textAlign: "center" }}>
               No providers match this view.
             </Typography>
           ) : null}
@@ -497,8 +498,8 @@ function ProviderSettingsRow({
       >
         <TableCell>
           <Stack spacing={0.5}>
-            <Typography sx={{ color: "var(--app-text)", fontSize: 12, fontWeight: 750 }}>{provider.provider}</Typography>
-            <Typography noWrap sx={{ color: "var(--app-text-faint)", fontSize: 10 }}>{provider.providerClass}</Typography>
+            <Typography sx={appTypography.tablePrimary}>{provider.provider}</Typography>
+            <Typography noWrap sx={appTypography.tableMeta}>{provider.providerClass}</Typography>
           </Stack>
         </TableCell>
         <TableCell align="right">
@@ -622,18 +623,18 @@ function DisableProviderDialog({
       </DialogTitle>
       <DialogContent sx={{ bgcolor: "var(--app-surface-raised)", p: 0 }}>
         <Box sx={{ px: 2, pb: 1.5, pt: 2.75 }}>
-          <Typography sx={{ mb: 1.5, color: "var(--app-text-muted)", fontSize: 12 }}>
+          <Typography sx={{ ...appTypography.tableSecondary, mb: 1.5 }}>
             These selections will stop refreshing until they are reassigned.
           </Typography>
           <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "var(--app-surface)", p: 1.25 }}>
             <Stack spacing={0.75}>
               {visibleAssets.map((usageItem) => (
-                <Typography key={usageItem.instrument_id} sx={{ color: "var(--app-text)", fontSize: 12 }}>
+                <Typography key={usageItem.instrument_id} sx={appTypography.tablePrimary}>
                   {usageItem.instrument_name}
                 </Typography>
               ))}
               {remainingAssetCount > 0 ? (
-                <Typography sx={{ color: "var(--app-text-faint)", fontSize: 12 }}>
+                <Typography sx={appTypography.tableMeta}>
                   and {remainingAssetCount} others
                 </Typography>
               ) : null}
@@ -686,9 +687,9 @@ function ProviderCapabilitiesCell({
         <Stack spacing={0.75} sx={{ py: 0.5, minWidth: 230 }}>
           {capabilityRows.length > 0 ? capabilityRows.map((capabilityRow) => (
             <Stack key={capabilityRow.capability} direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: "space-between" }}>
-              <Typography sx={{ color: "inherit", fontSize: 11, fontWeight: 700 }}>{capabilityRow.label}</Typography>
+              <Typography sx={{ color: "inherit", fontSize: 11, fontWeight: 650 }}>{capabilityRow.label}</Typography>
               <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
-                <Typography sx={{ color: "inherit", fontSize: 11 }}>{toTitleCase(capabilityRow.quality)}</Typography>
+                <Typography sx={{ color: "inherit", fontSize: 11, fontWeight: 500 }}>{toTitleCase(capabilityRow.quality)}</Typography>
                 <AppBadge
                   label={capabilityRow.active ? "Active" : "Disabled"}
                   kind="status"
@@ -697,7 +698,7 @@ function ProviderCapabilitiesCell({
               </Stack>
             </Stack>
           )) : (
-            <Typography sx={{ color: "inherit", fontSize: 11 }}>No capabilities configured</Typography>
+            <Typography sx={{ color: "inherit", fontSize: 11, fontWeight: 500 }}>No capabilities configured</Typography>
           )}
         </Stack>
       )}
@@ -774,12 +775,12 @@ function ProviderCapabilitiesEditor({
   return (
     <Box sx={{ px: 2, py: 2 }}>
       <SectionLabel label="Capabilities" />
-      <Typography sx={{ mb: 1.5, color: "var(--app-text-muted)", fontSize: 12 }}>
+      <Typography sx={{ ...appTypography.tableSecondary, mb: 1.5 }}>
         Quality and cadence are configured per feed.
       </Typography>
       <TableContainer component={Box} sx={{ border: "1px solid var(--app-divider)", borderRadius: 1, bgcolor: "var(--app-surface-inset)", overflow: "hidden" }}>
         <Table size="small" sx={{ minWidth: 900 }}>
-          <TableHead sx={{ "& .MuiTableCell-root": { color: "var(--app-text-faint)", fontSize: 10, fontWeight: 600, px: 1.5, py: 1 } }}>
+          <TableHead sx={{ "& .MuiTableCell-root": appTypography.tableHeaderCell }}>
             <TableRow>
               <TableCell>Capability</TableCell>
               <TableCell sx={{ width: 260 }}>Quality</TableCell>
@@ -798,7 +799,7 @@ function ProviderCapabilitiesEditor({
                   <TableCell>
                     <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
                       <CapabilityIcon capability={capability} />
-                      <Typography sx={{ color: "var(--app-text)", fontSize: 12, fontWeight: 700 }}>{capabilityLabel(capability)}</Typography>
+                      <Typography sx={appTypography.tablePrimary}>{capabilityLabel(capability)}</Typography>
                     </Stack>
                   </TableCell>
                   <TableCell>
@@ -827,7 +828,7 @@ function ProviderCapabilitiesEditor({
                         onUnit={(intervalUnit) => onCadenceState((currentState) => ({ ...currentState, [capability]: { ...state, intervalUnit } }))}
                       />
                     ) : (
-                      <Typography sx={{ color: "var(--app-text-faint)", fontSize: 13 }}>-</Typography>
+                      <Typography sx={appTypography.tableMeta}>-</Typography>
                     )}
                   </TableCell>
                   <TableCell>
@@ -841,12 +842,12 @@ function ProviderCapabilitiesEditor({
                         onUnit={(resolutionUnit) => onCadenceState((currentState) => ({ ...currentState, [capability]: { ...state, resolutionUnit } }))}
                       />
                     ) : (
-                      <Typography sx={{ color: "var(--app-text-faint)", fontSize: 13 }}>-</Typography>
+                      <Typography sx={appTypography.tableMeta}>-</Typography>
                     )}
                   </TableCell>
                   <TableCell align="right">
                     <Stack direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: "flex-end" }}>
-                      <Typography sx={{ color: active ? "success.main" : "var(--app-text-faint)", fontSize: 12, fontWeight: 700 }}>
+                      <Typography sx={{ ...appTypography.tableSecondary, color: active ? "var(--app-positive)" : "var(--app-text-faint)", fontWeight: 600 }}>
                         {active ? "Active" : "Disabled"}
                       </Typography>
                       {state ? (
@@ -1093,15 +1094,17 @@ function emptyNumberToNull(value: number | ""): number | null {
 }
 
 function CapabilityIcon({ capability }: { capability: string }) {
-  const icon = capabilityIconMap[capability] ?? { label: capability.slice(0, 1).toUpperCase(), bg: "rgba(99, 102, 241, 0.24)", color: "var(--app-accent)" }
+  const icon = capabilityIconMap[capability] ?? { label: capability.slice(0, 1).toUpperCase(), tone: "accent" }
+  const color = capabilityToneColor[icon.tone]
   return (
     <Box
       aria-hidden
       sx={{
         alignItems: "center",
-        bgcolor: icon.bg,
+        bgcolor: `color-mix(in srgb, ${color} 18%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${color} 24%, var(--app-border))`,
         borderRadius: 1.25,
-        color: icon.color,
+        color,
         display: "inline-flex",
         flexShrink: 0,
         fontSize: 11,
@@ -1116,14 +1119,23 @@ function CapabilityIcon({ capability }: { capability: string }) {
   )
 }
 
-const capabilityIconMap: Record<string, { label: string; bg: string; color: string }> = {
-  analyst: { label: "A", bg: "rgba(99, 102, 241, 0.24)", color: "#8ea2ff" },
-  earnings: { label: "E", bg: "rgba(168, 85, 247, 0.22)", color: "#c084fc" },
-  corporate_actions: { label: "C", bg: "rgba(168, 85, 247, 0.22)", color: "#c084fc" },
-  news: { label: "N", bg: "rgba(168, 85, 247, 0.22)", color: "#c084fc" },
-  fundamentals: { label: "F", bg: "rgba(16, 185, 129, 0.22)", color: "#5ee2a0" },
-  quotes: { label: "Q", bg: "rgba(245, 158, 11, 0.2)", color: "#fbbf24" },
-  chart: { label: "C", bg: "rgba(245, 158, 11, 0.2)", color: "#fbbf24" },
-  fx: { label: "FX", bg: "rgba(59, 130, 246, 0.2)", color: "#93c5fd" },
-  symbol_search: { label: "S", bg: "rgba(59, 130, 246, 0.2)", color: "#93c5fd" },
+type CapabilityTone = "accent" | "positive" | "warning" | "muted"
+
+const capabilityToneColor: Record<CapabilityTone, string> = {
+  accent: "var(--app-accent)",
+  muted: "var(--app-text-muted)",
+  positive: "var(--app-positive)",
+  warning: "var(--app-warning)",
+}
+
+const capabilityIconMap: Record<string, { label: string; tone: CapabilityTone }> = {
+  analyst: { label: "A", tone: "accent" },
+  earnings: { label: "E", tone: "accent" },
+  corporate_actions: { label: "C", tone: "accent" },
+  news: { label: "N", tone: "accent" },
+  fundamentals: { label: "F", tone: "positive" },
+  quotes: { label: "Q", tone: "warning" },
+  chart: { label: "C", tone: "warning" },
+  fx: { label: "FX", tone: "muted" },
+  symbol_search: { label: "S", tone: "muted" },
 }

@@ -24,7 +24,6 @@
   --app-text-muted: #68758a;
   --app-text-faint: #98a3b4;
   --app-accent: #4f6ee8;
-  --app-primary: var(--app-accent);
   --app-accent-soft: rgba(79, 110, 232, 0.12);
   --app-selection: rgba(79, 110, 232, 0.1);
   --app-selection-strong: rgba(79, 110, 232, 0.18);
@@ -54,7 +53,6 @@
   --app-text-muted: #93a4b9;
   --app-text-faint: #62758d;
   --app-accent: #6f8dff;
-  --app-primary: var(--app-accent);
   --app-accent-soft: rgba(111, 141, 255, 0.14);
   --app-selection: rgba(111, 141, 255, 0.1);
   --app-selection-strong: rgba(111, 141, 255, 0.19);

@@ -47,6 +47,49 @@ const muiTheme = createTheme({
         },
       },
     },
+    MuiChip: {
+      defaultProps: {
+        size: "small",
+        variant: "outlined",
+      },
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
+          fontSize: 11,
+          fontWeight: 800,
+          height: 22,
+          maxWidth: "100%",
+        },
+        label: {
+          paddingLeft: 6,
+          paddingRight: 6,
+        },
+        icon: {
+          marginLeft: 6,
+          marginRight: -2,
+        },
+        deleteIcon: {
+          height: 16,
+          width: 16,
+        },
+      },
+    },
+    MuiIconButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
+        },
+      },
+    },
+    MuiToggleButton: {
+      styleOverrides: {
+        root: {
+          borderColor: "var(--app-border)",
+          fontWeight: 700,
+          textTransform: "none",
+        },
+      },
+    },
     MuiPaper: {
       styleOverrides: {
         root: {

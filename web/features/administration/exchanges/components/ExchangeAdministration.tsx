@@ -6,7 +6,6 @@ import {
   Breadcrumbs,
   Button,
   Card,
-  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -27,6 +26,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material"
+import { AppBadge, appIconButtonSx } from "@/application/shell/AppBadge"
 import { ControlBar } from "@/application/shell/ControlBar"
 import { PageShell } from "@/application/shell/PageShell"
 import { selectableRowSx } from "@/application/shell/rowSelection"
@@ -180,7 +180,7 @@ export function ExchangeAdministration({ exchanges: initialExchanges }: { exchan
         <Stack direction="row" sx={{ alignItems: "center", bgcolor: "var(--app-surface-header)", borderBottom: "1px solid var(--app-divider)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
           <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
             <Typography component="h2" sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 800 }}>Exchanges</Typography>
-            <Chip label={filteredExchanges.length} color="primary" variant="outlined" size="small" />
+            <AppBadge label={filteredExchanges.length} kind="count" />
             {loadingExchanges ? <CircularProgress size={14} /> : null}
           </Stack>
           <Typography sx={{ color: "var(--app-text-faint)", fontSize: 11 }}>
@@ -223,7 +223,7 @@ export function ExchangeAdministration({ exchanges: initialExchanges }: { exchan
                       </Stack>
                     </TableCell>
                     <TableCell align="right">
-                      <Chip label={exchange.timezone} color="primary" variant="outlined" size="small" />
+                      <AppBadge label={exchange.timezone} kind="data-source" />
                     </TableCell>
                     <TableCell align="right">
                       <Typography sx={{ color: "var(--app-text)", fontFamily: "monospace", fontSize: 12, fontWeight: 700 }}>
@@ -231,7 +231,7 @@ export function ExchangeAdministration({ exchanges: initialExchanges }: { exchan
                       </Typography>
                     </TableCell>
                     <TableCell align="right">
-                      <Chip label={exchange.active ? "Active" : "Disabled"} color={exchange.active ? "success" : "default"} variant="outlined" size="small" />
+                      <AppBadge label={exchange.active ? "Active" : "Disabled"} kind="status" tone={exchange.active ? "success" : "neutral"} />
                     </TableCell>
                     <TableCell align="right">
                       <Stack direction="row" spacing={0.5} sx={{ justifyContent: "flex-end" }}>
@@ -242,6 +242,7 @@ export function ExchangeAdministration({ exchanges: initialExchanges }: { exchan
                               color="error"
                               size="small"
                               disabled={pending}
+                              sx={appIconButtonSx("destructive-action")}
                               onClick={(event) => {
                                 event.stopPropagation()
                                 setDeleteCandidate(exchange)
@@ -257,6 +258,7 @@ export function ExchangeAdministration({ exchanges: initialExchanges }: { exchan
                               color="primary"
                               size="small"
                               disabled={pending}
+                              sx={appIconButtonSx("accent")}
                               onClick={(event) => {
                                 event.stopPropagation()
                                 run(() => restoreExchangeAction(exchange.id), `${exchange.mic} restored.`)

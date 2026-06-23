@@ -12,7 +12,6 @@ import {
   Breadcrumbs,
   Button,
   Card,
-  Chip,
   IconButton,
   Pagination,
   Stack,
@@ -20,6 +19,7 @@ import {
   ToggleButtonGroup,
   Typography,
 } from "@mui/material"
+import { AppBadge } from "@/application/shell/AppBadge"
 import { ControlBar } from "@/application/shell/ControlBar"
 import { PageMetricGrid, PageShell } from "@/application/shell/PageShell"
 import { useToast } from "@/application/toast/ToastProvider"
@@ -703,7 +703,7 @@ function TimelineView({
                 }}
               >
                 <Typography sx={{ color: "var(--app-text)", fontSize: 14.25, fontWeight: 750 }}>{week.label}</Typography>
-                <Chip label={week.events.length} color="primary" variant="outlined" size="small" sx={{ height: 22, fontWeight: 800, "& .MuiChip-label": { fontSize: 11, px: 0.75 } }} />
+                <AppBadge label={week.events.length} kind="count" />
               </Box>
             </Box>
             {collapsed ? null : week.events.map((event, index) => (
@@ -788,19 +788,13 @@ function TimelineRow({
     >
       <Stack direction="row" spacing={1} sx={{ alignItems: "center", minWidth: 0 }}>
         <TimelineRailDot color={color} first={firstInWeek} last={lastInWeek} />
-        <Chip
+        <AppBadge
           label={shortWeekdayDate(event.dateKey, locale)}
-          size="small"
+          kind="data-source"
+          accentColor={color}
           sx={{
-            bgcolor: `color-mix(in srgb, ${color} 14%, transparent)`,
-            border: `1px solid color-mix(in srgb, ${color} 30%, transparent)`,
-            borderRadius: 1,
-            color,
-            fontSize: 11.5,
-            fontWeight: 800,
-            height: 25,
+            height: 22,
             minWidth: 82,
-            "& .MuiChip-label": { px: 1 },
           }}
         />
       </Stack>
@@ -1403,35 +1397,48 @@ function TimelineRailDot({ color, first, last }: { color: string; first: boolean
 function EventKindBadge({ compact = false, kind }: { compact?: boolean; kind: EventKind }) {
   const color = eventColor(kind)
   return (
-    <Stack
-      direction="row"
-      spacing={0.65}
+    <AppBadge
+      accentColor={color}
+      icon={<EventKindIcon contained={false} kind={kind} size={compact ? 13 : 14} />}
+      kind="category"
+      label={eventKindSignals[kind].label}
       sx={{
-        alignItems: "center",
-        bgcolor: `color-mix(in srgb, ${color} ${compact ? 9 : 11}%, transparent)`,
-        border: `1px solid color-mix(in srgb, ${color} ${compact ? 24 : 28}%, transparent)`,
-        borderRadius: 1,
-        color,
-        display: "inline-flex",
         flexShrink: 0,
-        height: compact ? 23 : 25,
+        height: 22,
         justifySelf: "start",
-        minWidth: 0,
-        px: compact ? 0.7 : 0.8,
+        textTransform: "capitalize",
+        "& .MuiChip-icon": {
+          color,
+          height: compact ? 13 : 14,
+          width: compact ? 13 : 14,
+        },
+        "& .MuiChip-label": {
+          fontSize: compact ? 10.5 : 11,
+          px: compact ? 0.65 : 0.8,
+        },
       }}
-    >
-      <EventKindIcon kind={kind} size={compact ? 16 : 18} />
-      <Typography noWrap sx={{ color, fontSize: compact ? 10.5 : 11.5, fontWeight: 750, lineHeight: 1, textTransform: "capitalize" }}>
-        {eventKindSignals[kind].label}
-      </Typography>
-    </Stack>
+    />
   )
 }
 
-function EventKindIcon({ kind, size = 24 }: { kind: EventKind; size?: number }) {
+function EventKindIcon({ className, contained = true, kind, size = 24 }: { className?: string; contained?: boolean; kind: EventKind; size?: number }) {
   const color = eventColor(kind)
   return (
-    <Box sx={{ alignItems: "center", bgcolor: `color-mix(in srgb, ${color} 18%, transparent)`, border: `1px solid color-mix(in srgb, ${color} 22%, transparent)`, borderRadius: "50%", color, display: "inline-flex", flexShrink: 0, height: size, justifyContent: "center", width: size }}>
+    <Box
+      className={className}
+      sx={{
+        alignItems: "center",
+        bgcolor: contained ? `color-mix(in srgb, ${color} 18%, transparent)` : "transparent",
+        border: contained ? `1px solid color-mix(in srgb, ${color} 22%, transparent)` : 0,
+        borderRadius: "50%",
+        color,
+        display: "inline-flex",
+        flexShrink: 0,
+        height: size,
+        justifyContent: "center",
+        width: size,
+      }}
+    >
       {kind === "dividend" ? <DollarIcon /> : kind === "split" ? <SplitIcon /> : <CalendarIcon />}
     </Box>
   )

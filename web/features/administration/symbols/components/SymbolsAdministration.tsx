@@ -8,7 +8,6 @@ import {
   Breadcrumbs,
   Button,
   Card,
-  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -29,6 +28,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material"
+import { AppBadge, appIconButtonSx } from "@/application/shell/AppBadge"
 import {
   createAdminSymbolAction,
   deactivateAdminSymbolAction,
@@ -223,7 +223,7 @@ export function SymbolsAdministration({
         <Stack direction="row" sx={{ alignItems: "center", bgcolor: "var(--app-surface-header)", borderBottom: "1px solid var(--app-divider)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
           <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
             <Typography component="h2" sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 800 }}>Symbols</Typography>
-            <Chip label={panelCountLabel} color="primary" variant="outlined" size="small" />
+            <AppBadge label={panelCountLabel} kind="count" />
             {loadingSymbols ? <CircularProgress size={14} /> : null}
           </Stack>
           <Typography sx={{ color: "var(--app-text-faint)", fontSize: 11 }}>
@@ -284,7 +284,7 @@ export function SymbolsAdministration({
                     </TableCell>
                     <TableCell align="right" sx={{ width: 100 }}><ProvidersCell selections={symbol.provider_selections} providers={providers} /></TableCell>
                     <TableCell align="right" sx={{ width: 96 }}>
-                      <Chip label={symbol.in_use ? "In use" : "Unused"} color="success" variant="outlined" size="small" />
+                      <AppBadge label={symbol.in_use ? "In use" : "Unused"} kind="status" tone={symbol.in_use ? "success" : "neutral"} />
                     </TableCell>
                     <TableCell align="right" sx={{ width: 132 }}>
                       <Stack direction="row" spacing={0.5} sx={{ justifyContent: "flex-end" }}>
@@ -294,6 +294,7 @@ export function SymbolsAdministration({
                             color="warning"
                             size="small"
                             disabled={pending}
+                            sx={appIconButtonSx("warning")}
                             onClick={(event) => {
                               event.stopPropagation()
                               run(() => purgeAdminSymbolQuotesAction(symbol.id), `${symbol.instrument_name} quote history purged.`)
@@ -308,6 +309,7 @@ export function SymbolsAdministration({
                             color="primary"
                             size="small"
                             disabled={pending}
+                            sx={appIconButtonSx("accent")}
                             onClick={(event) => {
                               event.stopPropagation()
                               run(
@@ -326,6 +328,7 @@ export function SymbolsAdministration({
                               color="error"
                               size="small"
                               disabled={symbol.in_use || pending}
+                              sx={appIconButtonSx("destructive-action")}
                               onClick={(event) => {
                                 event.stopPropagation()
                                 setRemoveCandidate(symbol)
@@ -425,12 +428,10 @@ function ProvidersCell({
               <Typography sx={{ color: "inherit", fontSize: 11, fontWeight: 700 }}>{providerRow.short}</Typography>
               <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
                 <Typography sx={{ color: "inherit", fontSize: 11 }}>{providerRow.provider ?? "None"}</Typography>
-                <Chip
+                <AppBadge
                   label={providerRow.status === "active" ? "Active" : providerRow.status === "disabled" ? "Disabled" : providerRow.status === "configured" ? "Configured" : "Missing"}
-                  color={providerRow.status === "missing" || providerRow.status === "disabled" ? "error" : "success"}
-                  variant="outlined"
-                  size="small"
-                  sx={{ height: 20, "& .MuiChip-label": { px: 0.75, fontSize: 10 } }}
+                  kind="status"
+                  tone={providerRow.status === "missing" || providerRow.status === "disabled" ? "danger" : "success"}
                 />
               </Stack>
             </Stack>
@@ -438,11 +439,10 @@ function ProvidersCell({
         </Stack>
       )}
     >
-      <Chip
+      <AppBadge
         label={`${configuredCount}/${FEED_GROUPS.length}`}
-        color={chipColor}
-        variant="outlined"
-        size="small"
+        kind="count"
+        tone={chipColor === "success" ? "success" : chipColor === "warning" ? "warning" : "danger"}
         clickable={providerRows.some((providerRow) => providerRow.provider !== null)}
         onClick={(event) => {
           event.stopPropagation()
@@ -878,7 +878,7 @@ function ProviderSymbolRow({
       </Stack>
       <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: "wrap", mt: 0.75 }}>
         {feeds.map((feed) => (
-          <Chip key={feed.key} label={feed.label} color="primary" variant="outlined" size="small" sx={{ height: 22, "& .MuiChip-label": { px: 0.8, fontSize: 10 } }} />
+          <AppBadge key={feed.key} label={feed.label} kind="data-source" tone="accent" />
         ))}
       </Stack>
     </Box>

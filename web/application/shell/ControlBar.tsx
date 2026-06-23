@@ -5,7 +5,6 @@ import {
   Box,
   Button,
   Card,
-  Chip,
   CircularProgress,
   FormControl,
   IconButton,
@@ -19,6 +18,7 @@ import {
   Tooltip,
 } from "@mui/material"
 import type { ReactNode } from "react"
+import { AppBadge } from "@/application/shell/AppBadge"
 
 export interface ControlBarTab<TValue extends string> {
   value: TValue
@@ -310,15 +310,10 @@ export function ControlBar<TTab extends string, TPeriod extends string = string>
                   <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", minWidth: 0 }}>
                     <Box component="span">{tab.label}</Box>
                     {tab.count !== undefined ? (
-                      <Chip
+                      <AppBadge
                         label={tab.count}
-                        color="primary"
-                        size="small"
-                        sx={{
-                          height: 20,
-                          minWidth: 30,
-                          "& .MuiChip-label": { fontSize: 11, fontWeight: 800, px: 0.75 },
-                        }}
+                        kind="count"
+                        tone="accent"
                       />
                     ) : null}
                   </Stack>
@@ -356,21 +351,12 @@ export function ControlBar<TTab extends string, TPeriod extends string = string>
         {visibleBadges.length > 0 ? (
           <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap", gap: 1, px: 1, py: 0.75 }}>
             {visibleBadges.map((badge) => (
-              <Chip
+              <AppBadge
                 key={badge.id}
                 label={badge.label ? `${badge.label}: ${badge.value}` : badge.value}
+                kind="category"
                 onDelete={badge.onClear}
-                variant="outlined"
-                color="primary"
-                sx={{
-                  bgcolor: "var(--app-surface)",
-                  borderColor: "var(--app-border)",
-                  color: "var(--app-accent)",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  maxWidth: 280,
-                  "& .MuiChip-deleteIcon": { color: "var(--app-text-muted)" },
-                }}
+                sx={{ maxWidth: 280 }}
               />
             ))}
             {onClearFilters ? (

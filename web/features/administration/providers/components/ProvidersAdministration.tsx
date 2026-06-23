@@ -7,7 +7,6 @@ import {
   Breadcrumbs,
   Button,
   Card,
-  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -26,6 +25,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material"
+import { AppBadge } from "@/application/shell/AppBadge"
 import {
   listAdminProviderConfigurationAction,
   listAdminProviderCadenceAction,
@@ -269,7 +269,7 @@ export function ProvidersAdministration({
         <Stack direction="row" sx={{ alignItems: "center", bgcolor: "var(--app-surface-header)", borderBottom: "1px solid var(--app-divider)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
           <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
             <Typography component="h2" sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 800 }}>Providers</Typography>
-            <Chip label={filteredProviders.length} color="primary" variant="outlined" size="small" />
+            <AppBadge label={filteredProviders.length} kind="count" />
             {loadingProviders ? <Skeleton animation="wave" variant="circular" width={14} height={14} /> : null}
           </Stack>
           <Typography sx={{ color: "var(--app-text-faint)", fontSize: 11 }}>
@@ -502,7 +502,7 @@ function ProviderSettingsRow({
           </Stack>
         </TableCell>
         <TableCell align="right">
-          <Chip label={toTitleCase(providerTabFor(provider))} color="primary" variant="outlined" size="small" />
+          <AppBadge label={toTitleCase(providerTabFor(provider))} kind="category" />
         </TableCell>
         <TableCell align="right">
           <QualityChip quality={dataQuality} />
@@ -689,12 +689,10 @@ function ProviderCapabilitiesCell({
               <Typography sx={{ color: "inherit", fontSize: 11, fontWeight: 700 }}>{capabilityRow.label}</Typography>
               <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
                 <Typography sx={{ color: "inherit", fontSize: 11 }}>{toTitleCase(capabilityRow.quality)}</Typography>
-                <Chip
+                <AppBadge
                   label={capabilityRow.active ? "Active" : "Disabled"}
-                  color={capabilityRow.active ? "success" : "error"}
-                  variant="outlined"
-                  size="small"
-                  sx={{ height: 20, "& .MuiChip-label": { px: 0.75, fontSize: 10 } }}
+                  kind="status"
+                  tone={capabilityRow.active ? "success" : "danger"}
                 />
               </Stack>
             </Stack>
@@ -704,11 +702,10 @@ function ProviderCapabilitiesCell({
         </Stack>
       )}
     >
-      <Chip
+      <AppBadge
         label={`${activeCount}/${totalCount}`}
-        color={chipColor}
-        variant="outlined"
-        size="small"
+        kind="count"
+        tone={chipColor === "success" ? "success" : chipColor === "warning" ? "warning" : "danger"}
         sx={{ minWidth: 48 }}
       />
     </Tooltip>
@@ -1082,13 +1079,13 @@ function toTitleCase(value: string) {
 }
 
 function StatusChip({ label, tone }: { label: string; tone: "positive" | "warning" | "negative" | "neutral" }) {
-  const colorByTone = {
-    positive: "success",
-    warning: "warning",
-    negative: "error",
-    neutral: "default",
-  } as const
-  return <Chip label={label} color={colorByTone[tone]} variant="outlined" size="small" />
+  return (
+    <AppBadge
+      label={label}
+      kind="status"
+      tone={tone === "positive" ? "success" : tone === "warning" ? "warning" : tone === "negative" ? "danger" : "neutral"}
+    />
+  )
 }
 
 function emptyNumberToNull(value: number | ""): number | null {

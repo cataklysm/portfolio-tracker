@@ -47,7 +47,7 @@ export default async function AdministrationPage() {
               minHeight: 180,
               overflow: "hidden",
               borderColor: "var(--app-border)",
-              bgcolor: "var(--app-surface-raised)",
+              bgcolor: "var(--app-surface-panel)",
               boxShadow: "var(--app-shadow)",
             }}
           >
@@ -65,7 +65,7 @@ export default async function AdministrationPage() {
                     {section.title}
                   </Typography>
                 </Stack>
-                <Divider />
+                <Divider sx={{ borderColor: "var(--app-divider)" }} />
                 <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12, lineHeight: 1.55 }}>
                   {section.description}
                 </Typography>

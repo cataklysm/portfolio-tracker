@@ -49,7 +49,7 @@ export function AppHeader({ me, unreadCount, positions }: { me: MeData | null; u
   }, [])
 
   return (
-    <header className="relative z-40 flex h-14 shrink-0 items-center gap-3 border-b border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-sidebar)_94%,transparent)] px-3 backdrop-blur-xl sm:px-4">
+    <header className="relative z-40 flex h-14 shrink-0 items-center gap-3 border-b border-[var(--app-divider)] bg-[color-mix(in_srgb,var(--app-sidebar)_98%,transparent)] px-3 backdrop-blur-xl sm:px-4">
       <div className="relative mx-auto w-full max-w-2xl">
         <div className={`flex h-9 items-center gap-2 rounded-lg border bg-[var(--app-bg-muted)] px-3 transition ${focused ? "border-[color-mix(in_srgb,var(--app-accent)_65%,var(--app-border))] shadow-[0_0_0_3px_var(--app-accent-soft)]" : "border-[var(--app-border)]"}`}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4 shrink-0 text-[var(--app-text-faint)]"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" /></svg>

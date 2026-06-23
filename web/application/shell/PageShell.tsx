@@ -76,7 +76,7 @@ export function PageToolbar({
   right?: ReactNode
 }) {
   return (
-    <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "var(--app-surface-raised)", p: 1 }}>
+    <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "var(--app-surface-toolbar)", boxShadow: "var(--app-shadow)", p: 1 }}>
       <Stack direction={{ xs: "column", lg: "row" }} spacing={1.25} sx={{ alignItems: { xs: "stretch", lg: "center" }, justifyContent: "space-between" }}>
         <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} sx={{ alignItems: { xs: "stretch", md: "center" }, minWidth: 0 }}>
           {children}

@@ -55,6 +55,30 @@ const muiTheme = createTheme({
         },
       },
     },
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          backgroundImage: "none",
+        },
+      },
+    },
+    MuiTableCell: {
+      styleOverrides: {
+        root: {
+          borderBottomColor: "var(--app-divider)",
+        },
+      },
+    },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          backgroundColor: "var(--app-surface-inset)",
+        },
+        notchedOutline: {
+          borderColor: "var(--app-border)",
+        },
+      },
+    },
   },
 })
 

@@ -211,8 +211,8 @@ export function SymbolsAdministration({
         tabValue={activeTab}
       />
 
-      <Card variant="outlined" sx={{ overflow: "hidden", borderColor: "var(--app-border)", bgcolor: "color-mix(in srgb, var(--app-surface) 94%, transparent)", boxShadow: "var(--app-shadow)" }}>
-        <Stack direction="row" sx={{ alignItems: "center", borderBottom: "1px solid var(--app-border)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
+      <Card variant="outlined" sx={{ overflow: "hidden", borderColor: "var(--app-border)", bgcolor: "var(--app-surface-panel)", boxShadow: "var(--app-shadow)" }}>
+        <Stack direction="row" sx={{ alignItems: "center", bgcolor: "var(--app-surface-header)", borderBottom: "1px solid var(--app-divider)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
           <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
             <Typography component="h2" sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 800 }}>Symbols</Typography>
             <Chip label={panelCountLabel} color="primary" variant="outlined" size="small" />
@@ -225,7 +225,7 @@ export function SymbolsAdministration({
 
         <TableContainer>
           <Table size="small" sx={{ minWidth: 900 }}>
-            <TableHead sx={{ "& .MuiTableCell-root": { color: "var(--app-text-faint)", fontSize: 10, fontWeight: 600, px: 1.5, py: 1 } }}>
+            <TableHead sx={{ bgcolor: "var(--app-surface-inset)", "& .MuiTableCell-root": { color: "var(--app-text-faint)", fontSize: 10, fontWeight: 600, px: 1.5, py: 1 } }}>
               <TableRow>
                 <TableCell>Instrument</TableCell>
                 <TableCell align="right" sx={{ width: 140 }}>Listing</TableCell>
@@ -518,7 +518,7 @@ function SectionLabel({ label }: { label: string }) {
   return (
     <Typography
       sx={{
-        color: "var(--app-primary)",
+        color: "var(--app-accent)",
         fontSize: 10,
         fontWeight: 800,
         letterSpacing: "0.08em",
@@ -550,7 +550,7 @@ function InlineSymbolEditor({
 }) {
   return (
     <TableRow>
-      <TableCell colSpan={5} sx={{ borderTop: "2px solid var(--app-primary)", bgcolor: "var(--app-surface-raised)", p: 0 }}>
+      <TableCell colSpan={5} sx={inlineEditorCellSx}>
         <Box component="form" action={onSubmit}>
           <Box sx={{ px: 2, py: 2 }}>
             {metadataLoading ? <SymbolEditMetadataSkeleton /> : <SymbolFormFields exchanges={exchanges} providers={providers} symbol={symbol} variant="inline" />}
@@ -589,7 +589,7 @@ function InlineSymbolCreate({
 }) {
   return (
     <TableRow>
-      <TableCell colSpan={5} sx={{ borderTop: "2px solid var(--app-primary)", bgcolor: "var(--app-surface-raised)", p: 0 }}>
+      <TableCell colSpan={5} sx={inlineEditorCellSx}>
         <Box component="form" action={onSubmit}>
           <Box sx={{ px: 2, py: 2 }}>
             {metadataLoading ? <SymbolEditMetadataSkeleton /> : <SymbolFormFields exchanges={exchanges} providers={providers} defaultAssetType={assetType} variant="inline" />}
@@ -1014,5 +1014,23 @@ const dialogActionsSx = {
 
 const inlineActionsSx = {
   ...dialogActionsSx,
-  bgcolor: "var(--app-surface-raised)",
+  bgcolor: "var(--app-surface-header)",
+}
+
+const inlineEditorCellSx = {
+  borderTop: "1px solid var(--app-editor-border)",
+  bgcolor: "var(--app-surface-editor)",
+  p: 0,
+  position: "relative",
+  "&::before": {
+    bgcolor: "var(--app-accent)",
+    bottom: 0,
+    content: "\"\"",
+    left: 0,
+    pointerEvents: "none",
+    position: "absolute",
+    top: 0,
+    width: 3,
+    zIndex: 1,
+  },
 }

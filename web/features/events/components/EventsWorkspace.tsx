@@ -29,7 +29,7 @@ import type { PortfolioCorporateAction, PortfolioEarnings } from "@/lib/portfoli
 const EVENT_VIEW_STORAGE_KEY = "portfolio.events.view"
 const WORKBENCH_HEIGHT = 900
 const UPCOMING_WEEK_PAGE_SIZE = 6
-const tableChromeBg = "color-mix(in srgb, var(--app-surface-raised) 94%, transparent)"
+const tableChromeBg = "var(--app-surface-header)"
 
 type EventFilter = "all" | "earnings" | "dividends" | "splits"
 type EventView = "timeline" | "calendar"
@@ -291,8 +291,8 @@ function MainEventsCard({
   view: EventView
 }) {
   return (
-    <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "color-mix(in srgb, var(--app-surface) 94%, transparent)", display: "flex", flexDirection: "column", height: WORKBENCH_HEIGHT, overflow: "hidden" }}>
-      <Stack direction="row" sx={{ alignItems: "center", bgcolor: tableChromeBg, borderBottom: "1px solid var(--app-border)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
+    <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "var(--app-surface-panel)", boxShadow: "var(--app-shadow)", display: "flex", flexDirection: "column", height: WORKBENCH_HEIGHT, overflow: "hidden" }}>
+      <Stack direction="row" sx={{ alignItems: "center", bgcolor: tableChromeBg, borderBottom: "1px solid var(--app-divider)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
         {view === "calendar" ? (
           <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
             <Typography component="h2" sx={{ color: "var(--app-text)", fontSize: 18, fontWeight: 800 }}>{monthLabel(calendarMonth, locale)}</Typography>
@@ -357,7 +357,7 @@ function ViewToggle({ value, onChange }: { value: EventView; onChange: (view: Ev
           px: 1.5,
           textTransform: "none",
           "&:first-of-type": { borderLeft: 0 },
-          "&.Mui-selected": { bgcolor: "var(--app-primary)", color: "white" },
+          "&.Mui-selected": { bgcolor: "var(--app-accent)", color: "white" },
         },
       }}
     >
@@ -499,10 +499,10 @@ function CalendarView({
             bgcolor: "var(--app-surface-hover)",
           },
           "&[data-current]": {
-            bgcolor: "color-mix(in srgb, var(--app-primary) 8%, transparent)",
+            bgcolor: "var(--app-selection)",
           },
           "&[data-weekend]": {
-            bgcolor: "color-mix(in srgb, var(--app-surface-raised) 60%, transparent)",
+            bgcolor: "color-mix(in srgb, var(--app-surface-inset) 72%, transparent)",
           },
           "&[data-other-month]": {
             color: "var(--app-text-faint)",
@@ -611,7 +611,7 @@ function TimelineView({
               sx={{
                 alignItems: "center",
                 background: selected
-                  ? "linear-gradient(90deg, color-mix(in srgb, var(--app-accent) 42%, var(--app-surface-raised)) 0%, color-mix(in srgb, var(--app-accent) 18%, var(--app-surface-raised)) 12%, color-mix(in srgb, var(--app-surface-raised) 94%, transparent) 42%, color-mix(in srgb, var(--app-surface-raised) 94%, transparent) 100%)"
+                  ? "linear-gradient(90deg, color-mix(in srgb, var(--app-accent) 42%, var(--app-surface-header)) 0%, color-mix(in srgb, var(--app-accent) 18%, var(--app-surface-header)) 12%, var(--app-surface-header) 42%, var(--app-surface-header) 100%)"
                   : tableChromeBg,
                 border: 0,
                 borderBottom: "1px solid var(--app-border)",
@@ -753,7 +753,7 @@ function EventsContextRail({
 }) {
   return (
     <Stack spacing={1.5} sx={{ height: WORKBENCH_HEIGHT, minHeight: 0 }}>
-      <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "color-mix(in srgb, var(--app-surface) 94%, transparent)", display: "flex", flex: "1.45 1 0", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
+      <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "var(--app-surface-panel)", display: "flex", flex: "1.45 1 0", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
         <ContextHeader selection={selection} selectedEvent={selectedEvent} events={events} locale={locale} />
         <Box sx={{ flex: 1, minHeight: 0, overflow: "auto", p: 1.5 }}>
           <ContextContent selection={selection} selectedEvent={selectedEvent} events={events} locale={locale} />
@@ -761,8 +761,8 @@ function EventsContextRail({
         {selection.type === "event" && selectedEvent ? <SelectedEventFooter event={selectedEvent} /> : null}
       </Card>
 
-      <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "color-mix(in srgb, var(--app-surface) 94%, transparent)", display: "flex", flex: "0.9 1 0", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
-        <Stack direction="row" sx={{ alignItems: "center", bgcolor: tableChromeBg, borderBottom: "1px solid var(--app-border)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
+      <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "var(--app-surface-panel)", display: "flex", flex: "0.9 1 0", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
+        <Stack direction="row" sx={{ alignItems: "center", bgcolor: tableChromeBg, borderBottom: "1px solid var(--app-divider)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
           <Typography sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 800 }}>Upcoming events this week</Typography>
           <Typography sx={{ color: "var(--app-text-muted)", fontSize: 11 }}>{dateRangeLabel(dateKey(upcomingWeekStart), dateKey(upcomingWeekEnd), locale)}</Typography>
         </Stack>
@@ -775,7 +775,7 @@ function EventsContextRail({
             ))
           )}
         </Stack>
-        <Stack direction="row" sx={{ alignItems: "center", bgcolor: tableChromeBg, borderTop: "1px solid var(--app-border)", justifyContent: "flex-end", px: 1.5, py: 0.75 }}>
+        <Stack direction="row" sx={{ alignItems: "center", bgcolor: tableChromeBg, borderTop: "1px solid var(--app-divider)", justifyContent: "flex-end", px: 1.5, py: 0.75 }}>
           <Pagination
             boundaryCount={1}
             count={upcomingPageCount}
@@ -851,7 +851,7 @@ function SelectedEventDetails({ event, locale }: { event: WorkbenchEvent; locale
           <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12 }}>{event.companyName} · {event.symbol}</Typography>
         </Box>
       </Stack>
-      <Box sx={{ bgcolor: "color-mix(in srgb, var(--app-surface-raised) 76%, transparent)", border: "1px solid color-mix(in srgb, var(--app-border) 72%, transparent)", borderRadius: 1.5, overflow: "hidden" }}>
+      <Box sx={{ display: "grid", gap: 0.75 }}>
         <Box sx={{ display: "grid", gap: 0.75, gridTemplateColumns: "repeat(2, minmax(0, 1fr))", p: 0.75 }}>
           {details.map((detail) => (
             <EventDetailItem key={detail.label} label={detail.label} value={detail.value} />
@@ -929,8 +929,8 @@ function CompactEventRow({ event, locale, onSelect }: { event: WorkbenchEvent; l
 
 function LegendCard({ counts }: { counts: Record<EventFilter, number> }) {
   return (
-    <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "color-mix(in srgb, var(--app-surface) 94%, transparent)", overflow: "hidden" }}>
-      <Stack direction="row" sx={{ alignItems: "center", bgcolor: tableChromeBg, borderBottom: "1px solid var(--app-border)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
+    <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "var(--app-surface-panel)", overflow: "hidden" }}>
+      <Stack direction="row" sx={{ alignItems: "center", bgcolor: tableChromeBg, borderBottom: "1px solid var(--app-divider)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
         <Typography sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 800 }}>Legend</Typography>
       </Stack>
       <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: "repeat(2, minmax(0, 1fr))", p: 1.5 }}>
@@ -955,7 +955,7 @@ function LegendItem({ kind, label, value }: { kind: EventKind; label: string; va
 function MetricCard({ icon, label, value, sub, tone }: { icon: "calendar" | "report" | "action"; label: string; value: number; sub: string; tone: "primary" | "success" | "warning" }) {
   const color = tone === "success" ? "var(--app-positive)" : tone === "warning" ? "var(--app-warning)" : "var(--app-accent)"
   return (
-    <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "color-mix(in srgb, var(--app-surface-raised) 92%, transparent)", p: 1.5 }}>
+    <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "var(--app-surface-header)", boxShadow: "var(--app-shadow)", p: 1.5 }}>
       <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
         <Box sx={{ alignItems: "center", bgcolor: `color-mix(in srgb, ${color} 18%, transparent)`, borderRadius: 1.5, color, display: "flex", height: 46, justifyContent: "center", width: 46 }}>
           <MetricIcon icon={icon} />
@@ -972,7 +972,7 @@ function MetricCard({ icon, label, value, sub, tone }: { icon: "calendar" | "rep
 
 function EventDetailItem({ label, value }: { label: string; value: string }) {
   return (
-    <Box sx={{ bgcolor: "color-mix(in srgb, var(--app-surface) 48%, transparent)", borderRadius: 1, minWidth: 0, p: 1.1 }}>
+    <Box sx={{ bgcolor: "var(--app-surface-inset)", border: "1px solid var(--app-divider)", borderRadius: 1, minWidth: 0, p: 1.1 }}>
       <Typography sx={{ color: "var(--app-text-faint)", fontSize: 10, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase" }}>{label}</Typography>
       <Typography noWrap sx={{ color: "var(--app-text)", fontSize: 13, fontWeight: 800, mt: 0.45 }} className="tabular-nums">{value}</Typography>
     </Box>
@@ -1281,7 +1281,7 @@ function TimelineRailDot({ color, first, last }: { color: string; first: boolean
       <Box
         sx={{
           bgcolor: color,
-          border: "2px solid color-mix(in srgb, var(--app-surface) 85%, transparent)",
+          border: "2px solid color-mix(in srgb, var(--app-surface-panel) 85%, transparent)",
           borderRadius: "50%",
           boxShadow: `0 0 0 2px color-mix(in srgb, ${color} 22%, transparent)`,
           height: 11,

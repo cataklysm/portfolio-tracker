@@ -46,8 +46,8 @@ export function SidebarNavigation({ collapsed, onToggle, animate, me, unreadCoun
   const selectedPortfolio = pathname === "/dashboard" ? searchParams.get("portfolio") : null
 
   return (
-    <aside className={`hidden shrink-0 flex-col border-r border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-sidebar)_96%,transparent)] backdrop-blur-xl lg:flex ${animate ? "transition-[width] duration-200" : ""} ${collapsed ? "w-16" : "w-48"}`}>
-      <Link href="/dashboard" className={`flex h-14 items-center border-b border-[var(--app-border)] ${collapsed ? "justify-center" : "gap-2.5 px-3"}`}>
+    <aside className={`hidden shrink-0 flex-col border-r border-[var(--app-divider)] bg-[color-mix(in_srgb,var(--app-sidebar)_98%,transparent)] backdrop-blur-xl lg:flex ${animate ? "transition-[width] duration-200" : ""} ${collapsed ? "w-16" : "w-48"}`}>
+      <Link href="/dashboard" className={`flex h-14 items-center border-b border-[var(--app-divider)] ${collapsed ? "justify-center" : "gap-2.5 px-3"}`}>
         <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--app-accent)_55%,var(--app-border))] bg-[var(--app-accent-soft)] font-bold text-[var(--app-accent)]">PT</span>
         {!collapsed && <span className="text-sm font-semibold tracking-tight text-[var(--app-text)]">Portfolio Tracker</span>}
       </Link>

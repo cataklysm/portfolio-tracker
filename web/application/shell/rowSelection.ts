@@ -1,5 +1,5 @@
-export const selectedRowGradient = "linear-gradient(90deg, color-mix(in srgb, var(--app-accent) 26%, transparent) 0%, color-mix(in srgb, var(--app-accent) 10%, transparent) 16%, transparent 46%, transparent 100%)"
-export const selectedRowHoverGradient = "linear-gradient(90deg, color-mix(in srgb, var(--app-accent) 30%, transparent) 0%, color-mix(in srgb, var(--app-accent) 13%, transparent) 18%, color-mix(in srgb, var(--app-surface-hover) 32%, transparent) 50%, transparent 100%)"
+export const selectedRowGradient = "linear-gradient(90deg, var(--app-selection-strong) 0%, var(--app-selection) 18%, transparent 52%, transparent 100%)"
+export const selectedRowHoverGradient = "linear-gradient(90deg, color-mix(in srgb, var(--app-accent) 24%, transparent) 0%, var(--app-selection-strong) 20%, color-mix(in srgb, var(--app-surface-hover) 42%, transparent) 54%, transparent 100%)"
 
 export function selectableRowSx(selected: boolean) {
   return {

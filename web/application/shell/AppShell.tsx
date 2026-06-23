@@ -46,7 +46,7 @@ export function AppShell({ children, me, unreadCount = 0, positions = [], portfo
         <SidebarNavigation collapsed={collapsed} onToggle={toggle} animate={ready} me={me} unreadCount={liveUnreadCount} portfolios={portfolios} />
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <AppHeader me={me} unreadCount={liveUnreadCount} positions={positions} />
-          <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+          <div className="app-workspace min-h-0 flex-1 overflow-y-auto">{children}</div>
         </main>
       </div>
     </NotificationSubscriptionProvider>

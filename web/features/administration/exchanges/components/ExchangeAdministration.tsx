@@ -168,8 +168,8 @@ export function ExchangeAdministration({ exchanges: initialExchanges }: { exchan
         tabValue={activeTab}
       />
 
-      <Card variant="outlined" sx={{ overflow: "hidden", borderColor: "var(--app-border)", bgcolor: "color-mix(in srgb, var(--app-surface) 94%, transparent)", boxShadow: "var(--app-shadow)" }}>
-        <Stack direction="row" sx={{ alignItems: "center", borderBottom: "1px solid var(--app-border)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
+      <Card variant="outlined" sx={{ overflow: "hidden", borderColor: "var(--app-border)", bgcolor: "var(--app-surface-panel)", boxShadow: "var(--app-shadow)" }}>
+        <Stack direction="row" sx={{ alignItems: "center", bgcolor: "var(--app-surface-header)", borderBottom: "1px solid var(--app-divider)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
           <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
             <Typography component="h2" sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 800 }}>Exchanges</Typography>
             <Chip label={filteredExchanges.length} color="primary" variant="outlined" size="small" />
@@ -182,7 +182,7 @@ export function ExchangeAdministration({ exchanges: initialExchanges }: { exchan
 
         <TableContainer>
           <Table size="small" sx={{ minWidth: 920 }}>
-            <TableHead sx={{ "& .MuiTableCell-root": { color: "var(--app-text-faint)", fontSize: 10, fontWeight: 600, px: 1.5, py: 1 } }}>
+            <TableHead sx={{ bgcolor: "var(--app-surface-inset)", "& .MuiTableCell-root": { color: "var(--app-text-faint)", fontSize: 10, fontWeight: 600, px: 1.5, py: 1 } }}>
               <TableRow>
                 <TableCell>Exchange</TableCell>
                 <TableCell align="right" sx={{ width: 190 }}>Timezone</TableCell>
@@ -343,7 +343,7 @@ function InlineExchangeEditor({
 }) {
   return (
     <TableRow>
-      <TableCell colSpan={5} sx={{ borderTop: "2px solid var(--app-primary)", bgcolor: "var(--app-surface-raised)", p: 0 }}>
+      <TableCell colSpan={5} sx={inlineEditorCellSx}>
         <Box component="form" action={onSubmit}>
           <Box sx={{ px: 2, py: 2 }}>
             <ExchangeFormFields exchange={exchange} disabled={!exchange.active} />
@@ -378,7 +378,7 @@ function InlineExchangeCreate({
 }) {
   return (
     <TableRow>
-      <TableCell colSpan={5} sx={{ borderTop: "2px solid var(--app-primary)", bgcolor: "var(--app-surface-raised)", p: 0 }}>
+      <TableCell colSpan={5} sx={inlineEditorCellSx}>
         <Box component="form" action={onSubmit}>
           <Box sx={{ px: 2, py: 2 }}>
             <ExchangeFormFields />
@@ -596,7 +596,7 @@ function SectionLabel({ label }: { label: string }) {
   return (
     <Typography
       sx={{
-        color: "var(--app-primary)",
+        color: "var(--app-accent)",
         fontSize: 10,
         fontWeight: 800,
         letterSpacing: "0.08em",
@@ -659,8 +659,26 @@ const dialogActionsSx = {
 
 const inlineActionsSx = {
   borderTop: "1px solid var(--app-border)",
-  bgcolor: "var(--app-surface-raised)",
+  bgcolor: "var(--app-surface-header)",
   gap: 1,
   px: 2,
   py: 1.5,
+}
+
+const inlineEditorCellSx = {
+  borderTop: "1px solid var(--app-editor-border)",
+  bgcolor: "var(--app-surface-editor)",
+  p: 0,
+  position: "relative",
+  "&::before": {
+    bgcolor: "var(--app-accent)",
+    bottom: 0,
+    content: "\"\"",
+    left: 0,
+    pointerEvents: "none",
+    position: "absolute",
+    top: 0,
+    width: 3,
+    zIndex: 1,
+  },
 }

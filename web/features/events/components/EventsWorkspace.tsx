@@ -28,6 +28,7 @@ import type { PortfolioCorporateAction, PortfolioEarnings } from "@/lib/portfoli
 
 const EVENT_VIEW_STORAGE_KEY = "portfolio.events.view"
 const WORKBENCH_HEIGHT = 900
+const TIMELINE_WEEK_PAGE_SIZE = 4
 const UPCOMING_WEEK_PAGE_SIZE = 6
 const tableChromeBg = "var(--app-surface-header)"
 
@@ -86,6 +87,12 @@ const eventFilterTabs = [
   { value: "dividends", label: "Dividends" },
   { value: "splits", label: "Splits" },
 ] as const
+
+const eventKindSignals = {
+  dividend: { label: "Dividend", color: "var(--app-positive)", schedulerColor: "teal" },
+  earnings: { label: "Earnings", color: "var(--app-accent)", schedulerColor: "blue" },
+  split: { label: "Split", color: "var(--app-warning)", schedulerColor: "amber" },
+} satisfies Record<EventKind, { label: string; color: string; schedulerColor: SchedulerEventColor }>
 
 export function EventsWorkspace({ earnings, corporateActions, locale }: EventsWorkspaceProps) {
   const router = useRouter()
@@ -294,18 +301,18 @@ function MainEventsCard({
     <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "var(--app-surface-panel)", boxShadow: "var(--app-shadow)", display: "flex", flexDirection: "column", height: WORKBENCH_HEIGHT, overflow: "hidden" }}>
       <Stack direction="row" sx={{ alignItems: "center", bgcolor: tableChromeBg, borderBottom: "1px solid var(--app-divider)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
         {view === "calendar" ? (
-          <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-            <Typography component="h2" sx={{ color: "var(--app-text)", fontSize: 18, fontWeight: 800 }}>{monthLabel(calendarMonth, locale)}</Typography>
+          <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
+            <Typography component="h2" sx={{ color: "var(--app-text)", fontSize: 15, fontWeight: 800, minWidth: 116 }}>{monthLabel(calendarMonth, locale)}</Typography>
             <IconButton size="small" aria-label="Previous month" onClick={() => onChangeMonth(addMonths(calendarMonth, -1))} sx={iconButtonSx}>
               <ChevronLeftIcon />
             </IconButton>
             <IconButton size="small" aria-label="Next month" onClick={() => onChangeMonth(addMonths(calendarMonth, 1))} sx={iconButtonSx}>
               <ChevronRightIcon />
             </IconButton>
-            <Button size="small" variant="outlined" onClick={() => onChangeMonth(startOfMonth(today))} sx={{ textTransform: "none" }}>Today</Button>
+            <Button size="small" variant="outlined" onClick={() => { onChangeMonth(startOfMonth(today)); onSelectDay(dateKey(today)) }} sx={calendarTextButtonSx}>Today</Button>
           </Stack>
         ) : (
-          <Typography component="h2" sx={{ color: "var(--app-text)", fontSize: 16, fontWeight: 800 }}>Event timeline</Typography>
+          <Typography component="h2" sx={{ color: "var(--app-text)", fontSize: 15, fontWeight: 800 }}>Event timeline</Typography>
         )}
         <ViewToggle value={view} onChange={onChangeView} />
       </Stack>
@@ -521,19 +528,20 @@ function CalendarView({
           borderRadius: 1,
           boxShadow: "none",
           minHeight: 20,
+          transition: "background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease",
         },
         [`& .${eventCalendarClasses.dayGridEvent}[data-palette="teal"]`]: {
-          bgcolor: "color-mix(in srgb, var(--app-positive) 26%, transparent)",
+          bgcolor: "color-mix(in srgb, var(--app-positive) 18%, transparent)",
           border: "1px solid color-mix(in srgb, var(--app-positive) 34%, transparent)",
           color: "var(--app-text)",
         },
         [`& .${eventCalendarClasses.dayGridEvent}[data-palette="blue"]`]: {
-          bgcolor: "color-mix(in srgb, var(--app-accent) 24%, transparent)",
+          bgcolor: "color-mix(in srgb, var(--app-accent) 18%, transparent)",
           border: "1px solid color-mix(in srgb, var(--app-accent) 34%, transparent)",
           color: "var(--app-text)",
         },
         [`& .${eventCalendarClasses.dayGridEvent}[data-palette="amber"]`]: {
-          bgcolor: "color-mix(in srgb, var(--app-warning) 24%, transparent)",
+          bgcolor: "color-mix(in srgb, var(--app-warning) 18%, transparent)",
           border: "1px solid color-mix(in srgb, var(--app-warning) 34%, transparent)",
           color: "var(--app-text)",
         },
@@ -544,7 +552,7 @@ function CalendarView({
         },
         [`& .${eventCalendarClasses.dayGridEvent}.portfolio-calendar-event-selected`]: {
           borderColor: "var(--app-accent)",
-          boxShadow: "inset 0 0 0 1px var(--app-accent)",
+          boxShadow: "inset 0 0 0 1px var(--app-accent), 0 0 0 2px color-mix(in srgb, var(--app-accent) 18%, transparent)",
         },
         [`& .${eventCalendarClasses.dayGridEvent}.portfolio-calendar-more-event`]: {
           fontWeight: 800,
@@ -597,42 +605,108 @@ function TimelineView({
   selectedWeekStartKey: string | null
   weeks: WeekGroup[]
 }) {
+  const [collapsedWeeks, setCollapsedWeeks] = useState<Set<string>>(() => new Set())
+  const [timelinePage, setTimelinePage] = useState(1)
+  const timelinePageCount = Math.max(1, Math.ceil(weeks.length / TIMELINE_WEEK_PAGE_SIZE))
+  const visibleWeeks = weeks.slice((timelinePage - 1) * TIMELINE_WEEK_PAGE_SIZE, timelinePage * TIMELINE_WEEK_PAGE_SIZE)
+
+  useEffect(() => {
+    setTimelinePage(1)
+    setCollapsedWeeks(new Set())
+  }, [weeks])
+
+  useEffect(() => {
+    if (timelinePage > timelinePageCount) setTimelinePage(timelinePageCount)
+  }, [timelinePage, timelinePageCount])
+
+  function toggleWeek(weekStartKey: string) {
+    setCollapsedWeeks((current) => {
+      const next = new Set(current)
+      if (next.has(weekStartKey)) next.delete(weekStartKey)
+      else next.add(weekStartKey)
+      return next
+    })
+  }
+
   if (weeks.length === 0) return <EmptyState text="No upcoming events match these filters." />
   return (
-    <Box sx={{ flex: 1, minHeight: 0, overflow: "auto" }}>
-      {weeks.map((week) => {
+    <Box sx={{ display: "flex", flex: 1, flexDirection: "column", minHeight: 0 }}>
+      <Box sx={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+      {visibleWeeks.map((week) => {
         const selected = week.startKey === selectedWeekStartKey
+        const collapsed = collapsedWeeks.has(week.startKey)
         return (
           <Box key={week.key} sx={{ position: "relative" }}>
             <Box
-              component="button"
-              type="button"
-              onClick={() => onSelectWeek(week.startKey)}
               sx={{
                 alignItems: "center",
                 background: selected
-                  ? "linear-gradient(90deg, color-mix(in srgb, var(--app-accent) 42%, var(--app-surface-header)) 0%, color-mix(in srgb, var(--app-accent) 18%, var(--app-surface-header)) 12%, var(--app-surface-header) 42%, var(--app-surface-header) 100%)"
+                  ? "linear-gradient(90deg, color-mix(in srgb, var(--app-accent) 24%, var(--app-surface-header)) 0%, color-mix(in srgb, var(--app-accent) 10%, var(--app-surface-header)) 18%, var(--app-surface-header) 52%, var(--app-surface-header) 100%)"
                   : tableChromeBg,
                 border: 0,
                 borderBottom: "1px solid var(--app-border)",
-                borderTop: selected ? "1px solid color-mix(in srgb, var(--app-accent) 55%, var(--app-border))" : 0,
-                boxShadow: selected ? "inset 0 0 0 1px color-mix(in srgb, var(--app-accent) 18%, transparent)" : "none",
+                boxShadow: selected ? "inset 3px 0 0 var(--app-accent)" : "inset 3px 0 0 transparent",
                 color: "inherit",
-                cursor: "pointer",
                 display: "flex",
-                gap: 1,
-                minHeight: 44,
-                px: 1.25,
-                py: 0.85,
-                textAlign: "left",
+                gap: 0.5,
+                minHeight: 38,
+                px: 0.75,
+                py: 0,
                 width: "100%",
+                "&:hover": { bgcolor: "var(--app-surface-hover)" },
               }}
             >
-              <CollapseIndicator />
-              <Typography sx={{ color: "var(--app-text)", fontSize: 16, fontWeight: 800 }}>{week.label}</Typography>
-              <Chip label={week.events.length} color="primary" variant="outlined" size="small" sx={{ height: 24, fontWeight: 800 }} />
+              <Box
+                component="button"
+                type="button"
+                aria-expanded={!collapsed}
+                aria-label={`${collapsed ? "Expand" : "Collapse"} ${week.label}`}
+                onClick={() => toggleWeek(week.startKey)}
+                sx={{
+                  alignItems: "center",
+                  bgcolor: "transparent",
+                  border: 0,
+                  borderRadius: 1,
+                  color: "var(--app-text-muted)",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  flexShrink: 0,
+                  height: 28,
+                  justifyContent: "center",
+                  outline: "none",
+                  width: 28,
+                  "&:focus-visible": { boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--app-accent) 46%, transparent)" },
+                  "&:hover": { bgcolor: "var(--app-surface-hover)", color: "var(--app-text)" },
+                }}
+              >
+                <CollapseIndicator collapsed={collapsed} />
+              </Box>
+              <Box
+                component="button"
+                type="button"
+                onClick={() => onSelectWeek(week.startKey)}
+                sx={{
+                  alignItems: "center",
+                  bgcolor: "transparent",
+                  border: 0,
+                  color: "inherit",
+                  cursor: "pointer",
+                  display: "flex",
+                  flex: 1,
+                  gap: 1,
+                  minHeight: 38,
+                  minWidth: 0,
+                  outline: "none",
+                  px: 0.25,
+                  textAlign: "left",
+                  "&:focus-visible": { boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--app-accent) 42%, transparent)" },
+                }}
+              >
+                <Typography sx={{ color: "var(--app-text)", fontSize: 14.25, fontWeight: 750 }}>{week.label}</Typography>
+                <Chip label={week.events.length} color="primary" variant="outlined" size="small" sx={{ height: 22, fontWeight: 800, "& .MuiChip-label": { fontSize: 11, px: 0.75 } }} />
+              </Box>
             </Box>
-            {week.events.map((event, index) => (
+            {collapsed ? null : week.events.map((event, index) => (
               <TimelineRow
                 key={event.id}
                 event={event}
@@ -646,6 +720,22 @@ function TimelineView({
           </Box>
         )
       })}
+      </Box>
+      {timelinePageCount > 1 ? (
+        <Stack direction="row" sx={{ alignItems: "center", bgcolor: tableChromeBg, borderTop: "1px solid var(--app-divider)", justifyContent: "space-between", px: 1.5, py: 0.75 }}>
+          <Typography sx={{ color: "var(--app-text-muted)", fontSize: 11 }}>
+            Weeks {(timelinePage - 1) * TIMELINE_WEEK_PAGE_SIZE + 1}-{Math.min(timelinePage * TIMELINE_WEEK_PAGE_SIZE, weeks.length)} of {weeks.length}
+          </Typography>
+          <Pagination
+            boundaryCount={1}
+            count={timelinePageCount}
+            page={timelinePage}
+            siblingCount={1}
+            size="small"
+            onChange={(_, page) => setTimelinePage(page)}
+          />
+        </Stack>
+      ) : null}
     </Box>
   )
 }
@@ -674,21 +764,26 @@ function TimelineRow({
       sx={{
         alignItems: "center",
         background: selected
-          ? "linear-gradient(90deg, color-mix(in srgb, var(--app-accent) 26%, transparent) 0%, color-mix(in srgb, var(--app-accent) 10%, transparent) 16%, transparent 46%, transparent 100%)"
+          ? `linear-gradient(90deg, color-mix(in srgb, ${color} 24%, transparent) 0%, color-mix(in srgb, ${color} 10%, transparent) 18%, transparent 52%, transparent 100%)`
           : "transparent",
         border: 0,
         borderBottom: "1px solid var(--app-border)",
+        boxShadow: selected ? `inset 3px 0 0 ${color}` : "inset 3px 0 0 transparent",
         color: "inherit",
         cursor: "pointer",
         display: "grid",
         gap: 1.25,
-        gridTemplateColumns: { xs: "176px 132px minmax(0, 1fr) 96px 96px", md: "208px 148px minmax(0, 1fr) 118px 108px" },
+        gridTemplateColumns: { xs: "168px 122px minmax(0, 1fr) 96px 96px", md: "196px 134px minmax(0, 1fr) 118px 108px" },
         minWidth: 760,
+        outline: "none",
         px: 1.25,
         py: 0.65,
         textAlign: "left",
         width: "100%",
-        "&:hover": { bgcolor: "var(--app-surface-hover)" },
+        "&:focus-visible": {
+          boxShadow: `inset 3px 0 0 ${color}, inset 0 0 0 1px color-mix(in srgb, ${color} 48%, transparent)`,
+        },
+        "&:hover": { bgcolor: `color-mix(in srgb, ${color} 7%, var(--app-surface-hover))` },
       }}
     >
       <Stack direction="row" spacing={1} sx={{ alignItems: "center", minWidth: 0 }}>
@@ -697,25 +792,23 @@ function TimelineRow({
           label={shortWeekdayDate(event.dateKey, locale)}
           size="small"
           sx={{
-            bgcolor: `color-mix(in srgb, ${color} 20%, transparent)`,
+            bgcolor: `color-mix(in srgb, ${color} 14%, transparent)`,
+            border: `1px solid color-mix(in srgb, ${color} 30%, transparent)`,
             borderRadius: 1,
             color,
-            fontSize: 12,
+            fontSize: 11.5,
             fontWeight: 800,
-            height: 28,
-            minWidth: 88,
+            height: 25,
+            minWidth: 82,
             "& .MuiChip-label": { px: 1 },
           }}
         />
       </Stack>
-      <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
-        <EventKindIcon kind={event.kind} />
-        <Typography sx={{ color, fontSize: 12.5, fontWeight: 800, textTransform: "capitalize" }}>{event.detailLabel}</Typography>
-      </Stack>
-      <Typography noWrap sx={{ color: "var(--app-text)", fontSize: 13.5, fontWeight: 800 }}>{event.companyName}</Typography>
+      <EventKindBadge kind={event.kind} />
+      <Typography noWrap sx={{ color: "var(--app-text)", fontSize: 13, fontWeight: 750 }}>{event.companyName}</Typography>
       <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12 }}>{event.provider}</Typography>
       <Box sx={{ textAlign: "right" }}>
-        <Typography noWrap sx={{ color: "var(--app-text)", fontSize: 13.5, fontWeight: 800, lineHeight: 1.15 }}>{event.amountLabel}</Typography>
+        <Typography noWrap sx={{ color: "var(--app-text)", fontSize: 13, fontWeight: 750, lineHeight: 1.15 }}>{event.amountLabel}</Typography>
         <Typography noWrap sx={{ color: "var(--app-text-muted)", fontSize: 11, lineHeight: 1.2 }}>{eventAmountSubLabel(event)}</Typography>
       </Box>
     </Box>
@@ -755,7 +848,7 @@ function EventsContextRail({
     <Stack spacing={1.5} sx={{ height: WORKBENCH_HEIGHT, minHeight: 0 }}>
       <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "var(--app-surface-panel)", display: "flex", flex: "1.45 1 0", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
         <ContextHeader selection={selection} selectedEvent={selectedEvent} events={events} locale={locale} />
-        <Box sx={{ flex: 1, minHeight: 0, overflow: "auto", p: 1.5 }}>
+        <Box sx={{ flex: 1, minHeight: 0, overflow: "auto", p: selection.type === "event" ? 1.5 : 0 }}>
           <ContextContent selection={selection} selectedEvent={selectedEvent} events={events} locale={locale} />
         </Box>
         {selection.type === "event" && selectedEvent ? <SelectedEventFooter event={selectedEvent} /> : null}
@@ -795,7 +888,7 @@ function EventsContextRail({
 function ContextHeader({ events, locale, selectedEvent, selection }: { events: WorkbenchEvent[]; locale: string; selectedEvent: WorkbenchEvent | null; selection: ContextSelection }) {
   if (selection.type === "event") {
     return (
-      <Stack direction="row" sx={{ alignItems: "center", bgcolor: tableChromeBg, borderBottom: "1px solid var(--app-border)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
+      <Stack direction="row" sx={{ alignItems: "center", bgcolor: tableChromeBg, borderBottom: "1px solid var(--app-divider)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
         <Typography sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 800 }}>Selected event</Typography>
         {selectedEvent ? <BookmarkIcon /> : null}
       </Stack>
@@ -803,7 +896,7 @@ function ContextHeader({ events, locale, selectedEvent, selection }: { events: W
   }
   if (selection.type === "day") {
     return (
-      <Stack direction="row" sx={{ alignItems: "center", bgcolor: tableChromeBg, borderBottom: "1px solid var(--app-border)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
+      <Stack direction="row" sx={{ alignItems: "center", bgcolor: tableChromeBg, borderBottom: "1px solid var(--app-divider)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
         <Typography sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 800 }}>Selected day</Typography>
         <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12 }}>{formatDate(selection.dateKey, locale)}</Typography>
       </Stack>
@@ -811,7 +904,7 @@ function ContextHeader({ events, locale, selectedEvent, selection }: { events: W
   }
   const weekEndKey = dateKey(addDays(parseDateKey(selection.weekStartKey), 6))
   return (
-    <Stack direction="row" sx={{ alignItems: "center", bgcolor: tableChromeBg, borderBottom: "1px solid var(--app-border)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
+    <Stack direction="row" sx={{ alignItems: "center", bgcolor: tableChromeBg, borderBottom: "1px solid var(--app-divider)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
       <Typography sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 800 }}>Selected week</Typography>
       <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12 }}>{dateRangeLabel(selection.weekStartKey, weekEndKey, locale)}</Typography>
     </Stack>
@@ -843,20 +936,20 @@ function SelectedEventDetails({ event, locale }: { event: WorkbenchEvent; locale
   return (
     <Stack spacing={1.25}>
       <Stack direction="row" spacing={1.25} sx={{ alignItems: "center" }}>
-        <Box sx={{ alignItems: "center", bgcolor: `color-mix(in srgb, ${color} 24%, transparent)`, border: `1px solid color-mix(in srgb, ${color} 42%, transparent)`, borderRadius: "50%", color: "var(--app-text)", display: "flex", flexShrink: 0, fontSize: 13, fontWeight: 800, height: 46, justifyContent: "center", width: 46 }}>
+        <Box sx={{ alignItems: "center", bgcolor: `color-mix(in srgb, ${color} 20%, transparent)`, border: `1px solid color-mix(in srgb, ${color} 42%, transparent)`, borderRadius: 1.5, boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${color} 12%, transparent)`, color: "var(--app-text)", display: "flex", flexShrink: 0, fontSize: 13, fontWeight: 800, height: 46, justifyContent: "center", width: 46 }}>
           {event.symbol.slice(0, 3)}
         </Box>
         <Box sx={{ minWidth: 0 }}>
           <Typography sx={{ color: "var(--app-text)", fontSize: 18, fontWeight: 800, lineHeight: 1.15 }}>{event.companyName} {event.detailLabel}</Typography>
-          <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12 }}>{event.companyName} · {event.symbol}</Typography>
+          <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12, mt: 0.55 }}>{event.symbol}</Typography>
         </Box>
       </Stack>
       <Box sx={{ display: "grid", gap: 0.75 }}>
         <Box sx={{ display: "grid", gap: 0.75, gridTemplateColumns: "repeat(2, minmax(0, 1fr))", p: 0.75 }}>
           {details.map((detail) => (
-            <EventDetailItem key={detail.label} label={detail.label} value={detail.value} />
+            <EventDetailItem key={detail.label} label={detail.label} tone={detail.label === "Amount" || detail.label === "Status" ? color : undefined} value={detail.value} />
           ))}
-          {event.kind === "earnings" ? <EventDetailItem label="EPS" value={`${event.epsEstimate} / ${event.epsActual}`} /> : null}
+          {event.kind === "earnings" ? <EventDetailItem label="EPS" tone={color} value={`${event.epsEstimate} / ${event.epsActual}`} /> : null}
         </Box>
       </Box>
     </Stack>
@@ -894,8 +987,9 @@ function SelectedWeekDetails({ events, locale }: { endKey: string; events: Workb
 }
 
 function ContextEventLine({ event, locale }: { event: WorkbenchEvent; locale: string }) {
+  const color = eventColor(event.kind)
   return (
-    <Box sx={{ borderBottom: "1px solid var(--app-border)", display: "grid", gap: 1, gridTemplateColumns: "minmax(0, 1fr) 86px", px: 0.25, py: 0.85 }}>
+    <Box sx={{ borderBottom: "1px solid var(--app-border)", borderLeft: `3px solid color-mix(in srgb, ${color} 54%, transparent)`, display: "grid", gap: 1, gridTemplateColumns: "minmax(0, 1fr) 86px", px: 0.75, py: 0.85 }}>
       <Stack direction="row" spacing={0.85} sx={{ alignItems: "center", minWidth: 0 }}>
         <EventKindIcon kind={event.kind} />
         <Box sx={{ minWidth: 0 }}>
@@ -914,10 +1008,11 @@ function ContextEventLine({ event, locale }: { event: WorkbenchEvent; locale: st
 }
 
 function CompactEventRow({ event, locale, onSelect }: { event: WorkbenchEvent; locale: string; onSelect: () => void }) {
+  const color = eventColor(event.kind)
   return (
-    <Box component="button" type="button" onClick={onSelect} sx={{ bgcolor: "transparent", border: 0, borderBottom: "1px solid var(--app-border)", color: "inherit", cursor: "pointer", display: "grid", gap: 1, gridTemplateColumns: "92px minmax(0, 1fr) 58px 72px", px: 1.5, py: 0.75, textAlign: "left", "&:hover": { bgcolor: "var(--app-surface-hover)" } }}>
-      <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
-        <EventKindIcon kind={event.kind} />
+    <Box component="button" type="button" onClick={onSelect} sx={{ bgcolor: "transparent", border: 0, borderBottom: "1px solid var(--app-border)", boxShadow: `inset 3px 0 0 color-mix(in srgb, ${color} 46%, transparent)`, color: "inherit", cursor: "pointer", display: "grid", gap: 1, gridTemplateColumns: "96px minmax(0, 1fr) 58px 72px", outline: "none", px: 1.25, py: 0.75, textAlign: "left", "&:focus-visible": { boxShadow: `inset 3px 0 0 ${color}, inset 0 0 0 1px color-mix(in srgb, ${color} 42%, transparent)` }, "&:hover": { bgcolor: `color-mix(in srgb, ${color} 7%, var(--app-surface-hover))` } }}>
+      <Stack direction="row" spacing={0.65} sx={{ alignItems: "center" }}>
+        <EventKindIcon kind={event.kind} size={20} />
         <Typography sx={{ color: "var(--app-text-muted)", fontSize: 11 }}>{shortWeekdayDate(event.dateKey, locale)}</Typography>
       </Stack>
       <Typography noWrap sx={{ color: "var(--app-text)", fontSize: 12, fontWeight: 700 }}>{event.companyName} {event.detailLabel}</Typography>
@@ -943,9 +1038,10 @@ function LegendCard({ counts }: { counts: Record<EventFilter, number> }) {
 }
 
 function LegendItem({ kind, label, value }: { kind: EventKind; label: string; value: number }) {
+  const color = eventColor(kind)
   return (
-    <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
-      <EventKindIcon kind={kind} />
+    <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", bgcolor: `color-mix(in srgb, ${color} 7%, transparent)`, border: `1px solid color-mix(in srgb, ${color} 18%, var(--app-divider))`, borderRadius: 1.25, minWidth: 0, px: 1, py: 0.85 }}>
+      <EventKindIcon kind={kind} size={22} />
       <Typography sx={{ color: "var(--app-text)", fontSize: 12, fontWeight: 700 }}>{label}</Typography>
       <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12, ml: "auto" }}>{value}</Typography>
     </Stack>
@@ -970,11 +1066,11 @@ function MetricCard({ icon, label, value, sub, tone }: { icon: "calendar" | "rep
   )
 }
 
-function EventDetailItem({ label, value }: { label: string; value: string }) {
+function EventDetailItem({ label, tone, value }: { label: string; tone?: string; value: string }) {
   return (
-    <Box sx={{ bgcolor: "var(--app-surface-inset)", border: "1px solid var(--app-divider)", borderRadius: 1, minWidth: 0, p: 1.1 }}>
+    <Box sx={{ bgcolor: tone ? `color-mix(in srgb, ${tone} 8%, var(--app-surface-inset))` : "var(--app-surface-inset)", border: tone ? `1px solid color-mix(in srgb, ${tone} 24%, var(--app-divider))` : "1px solid var(--app-divider)", borderRadius: 1, minWidth: 0, p: 1.1 }}>
       <Typography sx={{ color: "var(--app-text-faint)", fontSize: 10, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase" }}>{label}</Typography>
-      <Typography noWrap sx={{ color: "var(--app-text)", fontSize: 13, fontWeight: 800, mt: 0.45 }} className="tabular-nums">{value}</Typography>
+      <Typography noWrap sx={{ color: tone ?? "var(--app-text)", fontSize: 13, fontWeight: 800, mt: 0.45 }} className="tabular-nums">{value}</Typography>
     </Box>
   )
 }
@@ -1222,15 +1318,11 @@ function eventAmountSubLabel(event: WorkbenchEvent): string {
 }
 
 function eventColor(kind: EventKind): string {
-  if (kind === "dividend") return "var(--app-positive)"
-  if (kind === "split") return "var(--app-warning)"
-  return "var(--app-accent)"
+  return eventKindSignals[kind].color
 }
 
 function schedulerEventColor(kind: EventKind): SchedulerEventColor {
-  if (kind === "dividend") return "teal"
-  if (kind === "split") return "amber"
-  return "blue"
+  return eventKindSignals[kind].schedulerColor
 }
 
 function schedulerEventClassName(index: number): string {
@@ -1244,10 +1336,22 @@ function schedulerLocale(locale: string) {
 const iconButtonSx = {
   border: "1px solid var(--app-border)",
   borderRadius: 1,
+  bgcolor: "transparent",
   color: "var(--app-text-muted)",
-  height: 34,
-  width: 34,
+  height: 32,
+  minHeight: 32,
+  width: 32,
   "&:hover": { bgcolor: "var(--app-surface-hover)", color: "var(--app-text)" },
+}
+
+const calendarTextButtonSx = {
+  ...iconButtonSx,
+  fontSize: 12,
+  fontWeight: 800,
+  minWidth: 64,
+  px: 1.25,
+  textTransform: "none",
+  width: "auto",
 }
 
 const selectedEventActionSx = {
@@ -1296,10 +1400,38 @@ function TimelineRailDot({ color, first, last }: { color: string; first: boolean
   )
 }
 
-function EventKindIcon({ kind }: { kind: EventKind }) {
+function EventKindBadge({ compact = false, kind }: { compact?: boolean; kind: EventKind }) {
   const color = eventColor(kind)
   return (
-    <Box sx={{ alignItems: "center", bgcolor: `color-mix(in srgb, ${color} 18%, transparent)`, borderRadius: "50%", color, display: "inline-flex", flexShrink: 0, height: 24, justifyContent: "center", width: 24 }}>
+    <Stack
+      direction="row"
+      spacing={0.65}
+      sx={{
+        alignItems: "center",
+        bgcolor: `color-mix(in srgb, ${color} ${compact ? 9 : 11}%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${color} ${compact ? 24 : 28}%, transparent)`,
+        borderRadius: 1,
+        color,
+        display: "inline-flex",
+        flexShrink: 0,
+        height: compact ? 23 : 25,
+        justifySelf: "start",
+        minWidth: 0,
+        px: compact ? 0.7 : 0.8,
+      }}
+    >
+      <EventKindIcon kind={kind} size={compact ? 16 : 18} />
+      <Typography noWrap sx={{ color, fontSize: compact ? 10.5 : 11.5, fontWeight: 750, lineHeight: 1, textTransform: "capitalize" }}>
+        {eventKindSignals[kind].label}
+      </Typography>
+    </Stack>
+  )
+}
+
+function EventKindIcon({ kind, size = 24 }: { kind: EventKind; size?: number }) {
+  const color = eventColor(kind)
+  return (
+    <Box sx={{ alignItems: "center", bgcolor: `color-mix(in srgb, ${color} 18%, transparent)`, border: `1px solid color-mix(in srgb, ${color} 22%, transparent)`, borderRadius: "50%", color, display: "inline-flex", flexShrink: 0, height: size, justifyContent: "center", width: size }}>
       {kind === "dividend" ? <DollarIcon /> : kind === "split" ? <SplitIcon /> : <CalendarIcon />}
     </Box>
   )
@@ -1369,9 +1501,9 @@ function ChevronRightIcon() {
   )
 }
 
-function CollapseIndicator() {
+function CollapseIndicator({ collapsed = false }: { collapsed?: boolean }) {
   return (
-    <Box component="span" sx={{ color: "var(--app-text-muted)", display: "inline-flex" }}>
+    <Box component="span" sx={{ color: "var(--app-text-muted)", display: "inline-flex", transform: collapsed ? "rotate(-90deg)" : "none", transition: "transform 140ms ease" }}>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="m7 10 5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       </svg>

@@ -37,6 +37,13 @@ import { ControlBar } from "@/application/shell/ControlBar"
 import { PageShell } from "@/application/shell/PageShell"
 import { selectableRowSx } from "@/application/shell/rowSelection"
 import { useToast, type ToastMessage } from "@/application/toast/ToastProvider"
+import {
+  AdminInspectorActions,
+  AdminInspectorBody,
+  AdminInspectorHeader,
+  AdminSectionLabel as SectionLabel,
+  adminInlineEditorCellSx,
+} from "@/features/administration/components/AdminInspector"
 import type { CapabilityRefreshView, DataQuality, ProviderSettingsView, ProviderUsageView } from "@/lib/types"
 
 const providerExpansionStorageKey = "administration.providers.expanded.v2"
@@ -490,7 +497,7 @@ function ProviderSettingsRow({
       >
         <TableCell>
           <Stack spacing={0.5}>
-            <Typography sx={{ color: "var(--app-text)", fontSize: 12, fontWeight: 800 }}>{provider.provider}</Typography>
+            <Typography sx={{ color: "var(--app-text)", fontSize: 12, fontWeight: 750 }}>{provider.provider}</Typography>
             <Typography noWrap sx={{ color: "var(--app-text-faint)", fontSize: 10 }}>{provider.providerClass}</Typography>
           </Stack>
         </TableCell>
@@ -521,8 +528,13 @@ function ProviderSettingsRow({
 
       {expanded ? (
         <TableRow>
-          <TableCell colSpan={5} sx={inlineEditorCellSx}>
-            <Box sx={{ borderBottom: "1px solid var(--app-divider)", px: 2, py: 2 }}>
+          <TableCell colSpan={5} sx={adminInlineEditorCellSx}>
+            <AdminInspectorHeader
+              title="Provider inspector"
+              detail={`${provider.provider} - ${toTitleCase(providerTabFor(provider))}`}
+              meta={enabled ? "Enabled" : "Disabled"}
+            />
+            <AdminInspectorBody divided>
               <fieldset disabled={!enabled} style={{ border: 0, margin: 0, padding: 0 }}>
                 <SectionLabel label="Provider settings" />
                 <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(4, minmax(0, 1fr))" } }}>
@@ -534,7 +546,7 @@ function ProviderSettingsRow({
                   <NumberField label="Rate/min" value={rateLimitPerMin} onValue={setRateLimitPerMin} placeholder="unset" disabled={!enabled} />
                 </Box>
               </fieldset>
-            </Box>
+            </AdminInspectorBody>
             {cadenceLoading && !cadenceLoaded ? (
               <ProviderDetailSkeleton />
             ) : (
@@ -547,15 +559,12 @@ function ProviderSettingsRow({
                 onCapabilityQuality={setCapabilityQuality}
               />
             )}
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ ...inlineActionsSx, alignItems: { xs: "stretch", sm: "center" }, justifyContent: "space-between" }}>
-              <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12 }}>
-                {cadenceLoading && !cadenceLoaded ? "Loading capability details..." : enabled ? `${capabilities.length} capabilities configured` : `${provider.provider} is disabled`}
-              </Typography>
-              <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end" }}>
-                <Button type="button" variant="outlined" disabled={pending} onClick={() => onToggle(false)}>Cancel</Button>
-                <Button type="button" variant="contained" disabled={pending || !enabled || !isDirty || (cadenceLoading && !cadenceLoaded)} onClick={save}>{pending ? "Saving..." : "Save changes"}</Button>
-              </Stack>
-            </Stack>
+            <AdminInspectorActions
+              summary={cadenceLoading && !cadenceLoaded ? "Loading capability details..." : enabled ? `${capabilities.length} capabilities configured` : `${provider.provider} is disabled`}
+            >
+              <Button type="button" variant="outlined" disabled={pending} onClick={() => onToggle(false)}>Cancel</Button>
+              <Button type="button" variant="contained" disabled={pending || !enabled || !isDirty || (cadenceLoading && !cadenceLoaded)} onClick={save}>{pending ? "Saving..." : "Save changes"}</Button>
+            </AdminInspectorActions>
           </TableCell>
         </TableRow>
       ) : null}
@@ -608,7 +617,7 @@ function DisableProviderDialog({
         },
       }}
     >
-      <DialogTitle sx={{ borderBottom: "1px solid var(--app-border)", color: "var(--app-text)", fontSize: 15, fontWeight: 700, px: 2, py: 1.5 }}>
+      <DialogTitle sx={dialogTitleSx}>
         Disable {provider}?
       </DialogTitle>
       <DialogContent sx={{ bgcolor: "var(--app-surface-raised)", p: 0 }}>
@@ -632,7 +641,7 @@ function DisableProviderDialog({
           </Card>
         </Box>
       </DialogContent>
-      <DialogActions sx={{ borderTop: "1px solid var(--app-border)", bgcolor: "var(--app-surface)", px: 2, py: 1.5 }}>
+      <DialogActions sx={dialogActionsSx}>
         <Button type="button" variant="outlined" disabled={pending} onClick={onCancel}>Cancel</Button>
         <Button type="button" variant="contained" color="error" disabled={pending} onClick={onConfirm}>
           {pending ? "Disabling..." : "Disable provider"}
@@ -717,23 +726,6 @@ function uniqueProviderUsageAssets(usage: ProviderUsageView[]): ProviderUsageVie
   return uniqueUsage
 }
 
-function SectionLabel({ label }: { label: string }) {
-  return (
-    <Typography
-      sx={{
-        color: "var(--app-accent)",
-        fontSize: 10,
-        fontWeight: 800,
-        letterSpacing: "0.08em",
-        mb: 1.25,
-        textTransform: "uppercase",
-      }}
-    >
-      {label}
-    </Typography>
-  )
-}
-
 const capabilityLabels: Record<string, string> = {
   quotes: "Quotes & chart",
   earnings: "Events (earnings, actions, news)",
@@ -748,30 +740,22 @@ function capabilityLabel(capability: string): string {
   return capabilityLabels[capability] ?? toTitleCase(capability)
 }
 
-const inlineActionsSx = {
-  borderTop: "1px solid var(--app-border)",
+const dialogTitleSx = {
+  borderBottom: "1px solid var(--app-divider)",
   bgcolor: "var(--app-surface-header)",
-  gap: 1,
+  color: "var(--app-text)",
+  fontSize: 15,
+  fontWeight: 800,
   px: 2,
   py: 1.5,
 }
 
-const inlineEditorCellSx = {
-  borderTop: "1px solid var(--app-editor-border)",
-  bgcolor: "var(--app-surface-editor)",
-  p: 0,
-  position: "relative",
-  "&::before": {
-    bgcolor: "var(--app-accent)",
-    bottom: 0,
-    content: "\"\"",
-    left: 0,
-    pointerEvents: "none",
-    position: "absolute",
-    top: 0,
-    width: 3,
-    zIndex: 1,
-  },
+const dialogActionsSx = {
+  borderTop: "1px solid var(--app-divider)",
+  bgcolor: "var(--app-surface-header)",
+  gap: 1,
+  px: 2,
+  py: 1.25,
 }
 
 function ProviderCapabilitiesEditor({
@@ -796,7 +780,7 @@ function ProviderCapabilitiesEditor({
       <Typography sx={{ mb: 1.5, color: "var(--app-text-muted)", fontSize: 12 }}>
         Quality and cadence are configured per feed.
       </Typography>
-      <TableContainer component={Card} variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "var(--app-surface)", boxShadow: "none" }}>
+      <TableContainer component={Box} sx={{ border: "1px solid var(--app-divider)", borderRadius: 1, bgcolor: "var(--app-surface-inset)", overflow: "hidden" }}>
         <Table size="small" sx={{ minWidth: 900 }}>
           <TableHead sx={{ "& .MuiTableCell-root": { color: "var(--app-text-faint)", fontSize: 10, fontWeight: 600, px: 1.5, py: 1 } }}>
             <TableRow>
@@ -893,7 +877,7 @@ function ProviderDetailSkeleton() {
     <Box sx={{ px: 2, py: 2 }}>
       <Skeleton animation="wave" variant="text" width={120} height={20} />
       <Skeleton animation="wave" variant="text" width={260} height={18} sx={{ mb: 1.5 }} />
-      <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "var(--app-surface)", boxShadow: "none" }}>
+      <Box sx={{ border: "1px solid var(--app-divider)", borderRadius: 1, bgcolor: "var(--app-surface-inset)", overflow: "hidden" }}>
         {Array.from({ length: 4 }, (_, index) => (
           <Stack
             key={index}
@@ -901,7 +885,7 @@ function ProviderDetailSkeleton() {
             spacing={2}
             sx={{
               alignItems: "center",
-              borderTop: index === 0 ? 0 : "1px solid var(--app-border)",
+              borderTop: index === 0 ? 0 : "1px solid var(--app-divider)",
               px: 1.5,
               py: 1.25,
             }}
@@ -913,7 +897,7 @@ function ProviderDetailSkeleton() {
             <Skeleton animation="wave" width="12%" sx={{ ml: "auto" }} />
           </Stack>
         ))}
-      </Card>
+      </Box>
     </Box>
   )
 }

@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { Fragment, useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
@@ -45,6 +45,14 @@ import { ControlBar } from "@/application/shell/ControlBar"
 import { PageShell } from "@/application/shell/PageShell"
 import { selectableRowSx } from "@/application/shell/rowSelection"
 import { useToast } from "@/application/toast/ToastProvider"
+import {
+  AdminInspectorActions,
+  AdminInspectorBody,
+  AdminInspectorHeader,
+  AdminSectionLabel as SectionLabel,
+  adminInlineEditorCellSx,
+  adminInspectorSectionSx,
+} from "@/features/administration/components/AdminInspector"
 import type { AdminSymbolsPage, AdminSymbolView, ExchangeView, ProviderSettingsView } from "@/lib/types"
 
 /**
@@ -468,8 +476,8 @@ function PaginationFooter({
       spacing={1}
       sx={{
         alignItems: { xs: "stretch", sm: "center" },
-        borderTop: "1px solid var(--app-border)",
-        bgcolor: "var(--app-surface-raised)",
+        borderTop: "1px solid var(--app-divider)",
+        bgcolor: "var(--app-surface-header)",
         justifyContent: "space-between",
         px: 1.5,
         py: 1,
@@ -514,23 +522,6 @@ function quoteProviderFor(symbol: AdminSymbolView): string | null {
     ?? null
 }
 
-function SectionLabel({ label }: { label: string }) {
-  return (
-    <Typography
-      sx={{
-        color: "var(--app-accent)",
-        fontSize: 10,
-        fontWeight: 800,
-        letterSpacing: "0.08em",
-        mb: 1.25,
-        textTransform: "uppercase",
-      }}
-    >
-      {label}
-    </Typography>
-  )
-}
-
 function InlineSymbolEditor({
   exchanges,
   metadataLoading,
@@ -550,20 +541,22 @@ function InlineSymbolEditor({
 }) {
   return (
     <TableRow>
-      <TableCell colSpan={5} sx={inlineEditorCellSx}>
+      <TableCell colSpan={5} sx={adminInlineEditorCellSx}>
         <Box component="form" action={onSubmit}>
-          <Box sx={{ px: 2, py: 2 }}>
+          <AdminInspectorHeader
+            title="Symbol inspector"
+            detail={`${symbol.instrument_name} - ${symbol.symbol}`}
+            meta={`${symbol.exchange_mic ?? "No exchange"} - ${symbol.currency}`}
+          />
+          <AdminInspectorBody>
             {metadataLoading ? <SymbolEditMetadataSkeleton /> : <SymbolFormFields exchanges={exchanges} providers={providers} symbol={symbol} variant="inline" />}
-          </Box>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ ...inlineActionsSx, alignItems: { xs: "stretch", sm: "center" }, justifyContent: "space-between" }}>
-            <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12 }}>
-              {new Set(symbol.provider_selections.map((selection) => selection.provider)).size} providers · {symbol.provider_selections.length} feeds configured
-            </Typography>
-            <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end" }}>
-              <Button type="button" variant="outlined" disabled={pending} onClick={onClose}>Cancel</Button>
-              <Button type="submit" variant="contained" disabled={pending || metadataLoading}>{pending ? "Saving..." : "Save changes"}</Button>
-            </Stack>
-          </Stack>
+          </AdminInspectorBody>
+          <AdminInspectorActions
+            summary={`${new Set(symbol.provider_selections.map((selection) => selection.provider)).size} providers - ${symbol.provider_selections.length} feeds configured`}
+          >
+            <Button type="button" variant="outlined" disabled={pending} onClick={onClose}>Cancel</Button>
+            <Button type="submit" variant="contained" disabled={pending || metadataLoading}>{pending ? "Saving..." : "Save changes"}</Button>
+          </AdminInspectorActions>
         </Box>
       </TableCell>
     </TableRow>
@@ -589,20 +582,20 @@ function InlineSymbolCreate({
 }) {
   return (
     <TableRow>
-      <TableCell colSpan={5} sx={inlineEditorCellSx}>
+      <TableCell colSpan={5} sx={adminInlineEditorCellSx}>
         <Box component="form" action={onSubmit}>
-          <Box sx={{ px: 2, py: 2 }}>
+          <AdminInspectorHeader
+            title="New symbol"
+            detail="Create listing, provider assignment, and provider identifiers"
+            meta={symbolTabs.find((tab) => tab.key === assetType)?.label ?? "Symbol"}
+          />
+          <AdminInspectorBody>
             {metadataLoading ? <SymbolEditMetadataSkeleton /> : <SymbolFormFields exchanges={exchanges} providers={providers} defaultAssetType={assetType} variant="inline" />}
-          </Box>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ ...inlineActionsSx, alignItems: { xs: "stretch", sm: "center" }, justifyContent: "space-between" }}>
-            <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12 }}>
-              New {symbolTabs.find((tab) => tab.key === assetType)?.label ?? "symbol"} listing
-            </Typography>
-            <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end" }}>
-              <Button type="button" variant="outlined" disabled={pending} onClick={onClose}>Cancel</Button>
-              <Button type="submit" variant="contained" disabled={pending || metadataLoading}>{pending ? "Saving..." : "Create symbol"}</Button>
-            </Stack>
-          </Stack>
+          </AdminInspectorBody>
+          <AdminInspectorActions summary={`New ${symbolTabs.find((tab) => tab.key === assetType)?.label ?? "symbol"} listing`}>
+            <Button type="button" variant="outlined" disabled={pending} onClick={onClose}>Cancel</Button>
+            <Button type="submit" variant="contained" disabled={pending || metadataLoading}>{pending ? "Saving..." : "Create symbol"}</Button>
+          </AdminInspectorActions>
         </Box>
       </TableCell>
     </TableRow>
@@ -625,7 +618,7 @@ function SymbolEditMetadataSkeleton() {
           <Skeleton animation="wave" variant="rounded" height={56} />
         </Box>
       </Box>
-      <Box sx={{ borderTop: "1px solid var(--app-border)", pt: 2 }}>
+      <Box sx={adminInspectorSectionSx}>
         <SectionLabel label="Data providers" />
         <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))", xl: "repeat(4, minmax(0, 1fr))" } }}>
           {Array.from({ length: 4 }, (_, index) => <Skeleton key={index} animation="wave" variant="rounded" height={56} />)}
@@ -745,7 +738,7 @@ function ProviderMatrix({ symbol, providers, variant = "dialog" }: { symbol?: Ad
   const inline = variant === "inline"
 
   return (
-    <Box sx={{ borderTop: "1px solid var(--app-border)", mt: inline ? 2 : 2, pt: 2 }}>
+      <Box sx={adminInspectorSectionSx}>
       <input type="hidden" name="provider_selections" value={JSON.stringify(selectionsPayload)} />
       <input type="hidden" name="provider_identifiers" value={JSON.stringify(identifiersPayload)} />
 
@@ -775,7 +768,7 @@ function ProviderMatrix({ symbol, providers, variant = "dialog" }: { symbol?: Ad
           </Box>
 
           {distinctProviders.length > 0 ? (
-            <Stack spacing={1.25} sx={{ borderTop: "1px solid var(--app-border)", mt: 2, pt: 2 }}>
+            <Stack spacing={1.25} sx={adminInspectorSectionSx}>
               <Stack spacing={0.35}>
                 <SectionLabel label="Provider symbols" />
                 <Typography sx={{ color: "var(--app-text-faint)", fontSize: 11 }}>
@@ -995,42 +988,21 @@ const dialogPaperSlotProps = {
 } as const
 
 const dialogTitleSx = {
-  borderBottom: "1px solid var(--app-border)",
-  bgcolor: "var(--app-surface-raised)",
+  borderBottom: "1px solid var(--app-divider)",
+  bgcolor: "var(--app-surface-header)",
   color: "var(--app-text)",
-  fontSize: 16,
-  fontWeight: 700,
+  fontSize: 15,
+  fontWeight: 800,
   px: 2,
   py: 1.5,
 }
 
 const dialogActionsSx = {
-  borderTop: "1px solid var(--app-border)",
-  bgcolor: "var(--app-surface)",
+  borderTop: "1px solid var(--app-divider)",
+  bgcolor: "var(--app-surface-header)",
   gap: 1,
   px: 2,
-  py: 1.5,
+  py: 1.25,
 }
 
-const inlineActionsSx = {
-  ...dialogActionsSx,
-  bgcolor: "var(--app-surface-header)",
-}
 
-const inlineEditorCellSx = {
-  borderTop: "1px solid var(--app-editor-border)",
-  bgcolor: "var(--app-surface-editor)",
-  p: 0,
-  position: "relative",
-  "&::before": {
-    bgcolor: "var(--app-accent)",
-    bottom: 0,
-    content: "\"\"",
-    left: 0,
-    pointerEvents: "none",
-    position: "absolute",
-    top: 0,
-    width: 3,
-    zIndex: 1,
-  },
-}

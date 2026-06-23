@@ -2,7 +2,8 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Box, Breadcrumbs, Card, CardActionArea, Divider, Stack, Typography } from "@mui/material"
 import { PageShell } from "@/application/shell/PageShell"
-import { fetchMe } from "@/lib/api"
+import { apiFetch, fetchMe } from "@/lib/api"
+import type { AdminSymbolsPage, ExchangeView, ProviderSettingsView } from "@/lib/types"
 
 const administrationSections = [
   {
@@ -10,24 +11,37 @@ const administrationSections = [
     title: "Symbols",
     description: "Manage instrument listings, provider assignments, and catalog usage.",
     icon: "symbols",
+    metricKey: "symbols",
   },
   {
     href: "/administration/providers",
     title: "Providers",
     description: "Configure provider availability, data quality, batching, and refresh cadence.",
     icon: "providers",
+    metricKey: "providers",
   },
   {
     href: "/administration/exchanges",
     title: "Exchanges",
     description: "Maintain exchange metadata, trading hours, and calendar configuration.",
     icon: "exchanges",
+    metricKey: "exchanges",
   },
 ] as const
+
+type AdminSectionKey = (typeof administrationSections)[number]["metricKey"]
+
+type AdminSectionMetric = {
+  detail: string
+  label: string
+  signal: string
+  value: string
+}
 
 export default async function AdministrationPage() {
   const me = await fetchMe()
   if (me?.role !== "admin") redirect("/dashboard")
+  const metrics = await fetchAdministrationMetrics()
 
   return (
     <PageShell kind="admin">
@@ -44,7 +58,7 @@ export default async function AdministrationPage() {
             variant="outlined"
             sx={{
               display: "flex",
-              minHeight: 180,
+              minHeight: 156,
               overflow: "hidden",
               borderColor: "var(--app-border)",
               bgcolor: "var(--app-surface-panel)",
@@ -54,14 +68,14 @@ export default async function AdministrationPage() {
             <CardActionArea
               component={Link}
               href={section.href}
-              sx={{ alignItems: "stretch", display: "flex", flex: 1, p: 2 }}
+              sx={{ alignItems: "stretch", display: "flex", flex: 1, p: 1.5 }}
             >
               <Stack spacing={1.25} sx={{ flex: 1, width: "100%" }}>
                 <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                  <Box sx={{ alignItems: "center", bgcolor: "var(--app-accent-soft)", border: "1px solid color-mix(in srgb, var(--app-accent) 45%, var(--app-border))", borderRadius: 1, color: "var(--app-accent)", display: "flex", height: 44, justifyContent: "center", width: 44 }}>
+                  <Box sx={{ alignItems: "center", bgcolor: "var(--app-accent-soft)", border: "1px solid color-mix(in srgb, var(--app-accent) 38%, var(--app-border))", borderRadius: 1, color: "var(--app-accent)", display: "flex", height: 40, justifyContent: "center", width: 40 }}>
                     <SectionIcon icon={section.icon} />
                   </Box>
-                  <Typography component="h1" sx={{ color: "var(--app-text)", fontSize: 15, fontWeight: 700 }}>
+                  <Typography component="h1" sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 800 }}>
                     {section.title}
                   </Typography>
                 </Stack>
@@ -69,6 +83,9 @@ export default async function AdministrationPage() {
                 <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12, lineHeight: 1.55 }}>
                   {section.description}
                 </Typography>
+                <Box sx={{ mt: "auto", pt: 0.5 }}>
+                  <SectionMetric metric={metrics[section.metricKey]} />
+                </Box>
               </Stack>
             </CardActionArea>
           </Card>
@@ -76,6 +93,130 @@ export default async function AdministrationPage() {
       </Box>
     </PageShell>
   )
+}
+
+function SectionMetric({ metric }: { metric: AdminSectionMetric }) {
+  return (
+    <Stack
+      direction="row"
+      spacing={1}
+      sx={{
+        alignItems: "flex-end",
+        borderTop: "1px solid var(--app-divider)",
+        justifyContent: "space-between",
+        pt: 1.25,
+      }}
+    >
+      <Box sx={{ minWidth: 0 }}>
+        <Stack direction="row" spacing={0.75} sx={{ alignItems: "baseline" }}>
+          <Typography sx={{ color: "var(--app-text)", fontSize: 20, fontWeight: 800, lineHeight: 1 }}>
+            {metric.value}
+          </Typography>
+          <Typography sx={{ color: "var(--app-text-muted)", fontSize: 11, fontWeight: 700 }}>
+            {metric.label}
+          </Typography>
+        </Stack>
+        <Typography noWrap sx={{ color: "var(--app-text-faint)", fontSize: 10.5, mt: 0.5 }}>
+          {metric.detail}
+        </Typography>
+      </Box>
+      <Typography
+        sx={{
+          border: "1px solid var(--app-divider)",
+          borderRadius: 1,
+          color: "var(--app-text-muted)",
+          flexShrink: 0,
+          fontSize: 10,
+          fontWeight: 700,
+          px: 0.75,
+          py: 0.35,
+        }}
+      >
+        {metric.signal}
+      </Typography>
+    </Stack>
+  )
+}
+
+async function fetchAdministrationMetrics(): Promise<Record<AdminSectionKey, AdminSectionMetric>> {
+  const [symbols, providers, exchanges] = await Promise.all([
+    fetchSymbolsMetric(),
+    fetchProvidersMetric(),
+    fetchExchangesMetric(),
+  ])
+  return { exchanges, providers, symbols }
+}
+
+async function fetchSymbolsMetric(): Promise<AdminSectionMetric> {
+  try {
+    const resp = await apiFetch("/instruments/admin/symbols?asset_type=equity&limit=1&offset=0", { cache: "no-store" })
+    if (!resp.ok) throw new Error("symbols")
+    const page = (await resp.json()) as AdminSymbolsPage
+    const total = Object.values(page.counts).reduce((sum, count) => sum + count, 0)
+    return {
+      detail: `${page.counts.equity} equity / ${page.counts.fund} funds / ${page.counts.crypto} crypto / ${page.counts.index} index`,
+      label: plural(total, "symbol"),
+      signal: "Live catalog",
+      value: formatNumber(total),
+    }
+  } catch {
+    return unavailableMetric("symbols")
+  }
+}
+
+async function fetchProvidersMetric(): Promise<AdminSectionMetric> {
+  try {
+    const resp = await apiFetch("/admin/providers", { cache: "no-store" })
+    if (!resp.ok) throw new Error("providers")
+    const body = (await resp.json()) as { providers: ProviderSettingsView[] }
+    const providers = body.providers
+    const disabled = providers.filter((provider) => !provider.enabled).length
+    const symbolProviders = providers.filter((provider) => provider.providerClass === "symbol").length
+    const referenceProviders = providers.filter((provider) => provider.providerClass === "reference").length
+    return {
+      detail: `${symbolProviders} symbol / ${referenceProviders} reference`,
+      label: plural(providers.length, "provider"),
+      signal: disabled > 0 ? `${disabled} disabled` : "All enabled",
+      value: formatNumber(providers.length),
+    }
+  } catch {
+    return unavailableMetric("providers")
+  }
+}
+
+async function fetchExchangesMetric(): Promise<AdminSectionMetric> {
+  try {
+    const resp = await apiFetch("/exchanges?include_inactive=true", { cache: "no-store" })
+    if (!resp.ok) throw new Error("exchanges")
+    const exchanges = (await resp.json()) as ExchangeView[]
+    const active = exchanges.filter((exchange) => exchange.active).length
+    const disabled = exchanges.length - active
+    return {
+      detail: `${active} active / ${disabled} disabled`,
+      label: plural(exchanges.length, "exchange"),
+      signal: "Calendars",
+      value: formatNumber(exchanges.length),
+    }
+  } catch {
+    return unavailableMetric("items")
+  }
+}
+
+function unavailableMetric(label: string): AdminSectionMetric {
+  return {
+    detail: "Gateway unavailable",
+    label,
+    signal: "Check",
+    value: "-",
+  }
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("en-US").format(value)
+}
+
+function plural(count: number, singular: string) {
+  return count === 1 ? singular : `${singular}s`
 }
 
 function SectionIcon({ icon }: { icon: (typeof administrationSections)[number]["icon"] }) {

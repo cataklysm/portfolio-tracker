@@ -31,6 +31,14 @@ import { ControlBar } from "@/application/shell/ControlBar"
 import { PageShell } from "@/application/shell/PageShell"
 import { selectableRowSx } from "@/application/shell/rowSelection"
 import { useToast } from "@/application/toast/ToastProvider"
+import {
+  AdminInspectorActions,
+  AdminInspectorBody,
+  AdminInspectorHeader,
+  AdminSectionLabel as SectionLabel,
+  adminInlineEditorCellSx,
+  adminInspectorSectionSx,
+} from "@/features/administration/components/AdminInspector"
 import { createExchangeAction, deleteExchangeAction, listAdminExchangesAction, restoreExchangeAction, updateExchangeAction } from "@/features/administration/exchanges/actions"
 import type { ExchangeView } from "@/lib/types"
 
@@ -210,7 +218,7 @@ export function ExchangeAdministration({ exchanges: initialExchanges }: { exchan
                   >
                     <TableCell>
                       <Stack spacing={0.5}>
-                        <Typography sx={{ color: "var(--app-text)", fontSize: 12, fontWeight: 800 }}>{exchange.mic}</Typography>
+                        <Typography sx={{ color: "var(--app-text)", fontSize: 12, fontWeight: 750 }}>{exchange.mic}</Typography>
                         <Typography noWrap sx={{ color: "var(--app-text-faint)", fontSize: 10 }}>{exchange.name}</Typography>
                       </Stack>
                     </TableCell>
@@ -343,24 +351,24 @@ function InlineExchangeEditor({
 }) {
   return (
     <TableRow>
-      <TableCell colSpan={5} sx={inlineEditorCellSx}>
+      <TableCell colSpan={5} sx={adminInlineEditorCellSx}>
         <Box component="form" action={onSubmit}>
-          <Box sx={{ px: 2, py: 2 }}>
+          <AdminInspectorHeader
+            title="Exchange inspector"
+            detail={`${exchange.mic} - ${exchange.name}`}
+            meta={exchange.active ? "Active" : "Disabled"}
+          />
+          <AdminInspectorBody>
             <ExchangeFormFields exchange={exchange} disabled={!exchange.active} />
-          </Box>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ ...inlineActionsSx, alignItems: { xs: "stretch", sm: "center" }, justifyContent: "space-between" }}>
-            <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12 }}>
-              {exchange.active ? `${exchange.mic} trading calendar` : `${exchange.mic} is disabled`}
-            </Typography>
-            <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end" }}>
-              <Button type="button" variant="outlined" disabled={pending} onClick={onClose}>Cancel</Button>
-              {!exchange.active ? (
-                <Button type="button" variant="contained" disabled={pending} onClick={onRestore}>{pending ? "Restoring..." : "Restore exchange"}</Button>
-              ) : (
-                <Button type="submit" variant="contained" disabled={pending}>{pending ? "Saving..." : "Save changes"}</Button>
-              )}
-            </Stack>
-          </Stack>
+          </AdminInspectorBody>
+          <AdminInspectorActions summary={exchange.active ? `${exchange.mic} trading calendar` : `${exchange.mic} is disabled`}>
+            <Button type="button" variant="outlined" disabled={pending} onClick={onClose}>Cancel</Button>
+            {!exchange.active ? (
+              <Button type="button" variant="contained" disabled={pending} onClick={onRestore}>{pending ? "Restoring..." : "Restore exchange"}</Button>
+            ) : (
+              <Button type="submit" variant="contained" disabled={pending}>{pending ? "Saving..." : "Save changes"}</Button>
+            )}
+          </AdminInspectorActions>
         </Box>
       </TableCell>
     </TableRow>
@@ -378,20 +386,20 @@ function InlineExchangeCreate({
 }) {
   return (
     <TableRow>
-      <TableCell colSpan={5} sx={inlineEditorCellSx}>
+      <TableCell colSpan={5} sx={adminInlineEditorCellSx}>
         <Box component="form" action={onSubmit}>
-          <Box sx={{ px: 2, py: 2 }}>
+          <AdminInspectorHeader
+            title="New exchange"
+            detail="Create exchange metadata and trading calendar"
+            meta="Exchange"
+          />
+          <AdminInspectorBody>
             <ExchangeFormFields />
-          </Box>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ ...inlineActionsSx, alignItems: { xs: "stretch", sm: "center" }, justifyContent: "space-between" }}>
-            <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12 }}>
-              New exchange calendar
-            </Typography>
-            <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end" }}>
-              <Button type="button" variant="outlined" disabled={pending} onClick={onClose}>Cancel</Button>
-              <Button type="submit" variant="contained" disabled={pending}>{pending ? "Creating..." : "Create exchange"}</Button>
-            </Stack>
-          </Stack>
+          </AdminInspectorBody>
+          <AdminInspectorActions summary="New exchange calendar">
+            <Button type="button" variant="outlined" disabled={pending} onClick={onClose}>Cancel</Button>
+            <Button type="submit" variant="contained" disabled={pending}>{pending ? "Creating..." : "Create exchange"}</Button>
+          </AdminInspectorActions>
         </Box>
       </TableCell>
     </TableRow>
@@ -444,7 +452,7 @@ function ExchangeFormFields({ exchange, disabled = false }: { exchange?: Exchang
         />
       </Box>
 
-      <Box sx={{ borderTop: "1px solid var(--app-border)", mt: 2, pt: 2 }}>
+      <Box sx={adminInspectorSectionSx}>
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} sx={{ alignItems: { xs: "stretch", sm: "center" }, justifyContent: "space-between", mb: 1.5 }}>
           <Box>
             <SectionLabel label="Holiday calendar" />
@@ -493,8 +501,8 @@ function PaginationFooter({
       spacing={1}
       sx={{
         alignItems: { xs: "stretch", sm: "center" },
-        borderTop: "1px solid var(--app-border)",
-        bgcolor: "var(--app-surface-raised)",
+        borderTop: "1px solid var(--app-divider)",
+        bgcolor: "var(--app-surface-header)",
         justifyContent: "space-between",
         px: 1.5,
         py: 1,
@@ -592,23 +600,6 @@ function splitDates(value: string): string[] {
   return value.split(/[\s,;]+/).map((item) => item.trim()).filter(Boolean)
 }
 
-function SectionLabel({ label }: { label: string }) {
-  return (
-    <Typography
-      sx={{
-        color: "var(--app-accent)",
-        fontSize: 10,
-        fontWeight: 800,
-        letterSpacing: "0.08em",
-        mb: 1.25,
-        textTransform: "uppercase",
-      }}
-    >
-      {label}
-    </Typography>
-  )
-}
-
 function TrashIcon() {
   return (
     <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
@@ -642,43 +633,18 @@ const dialogPaperSlotProps = {
 } as const
 
 const dialogTitleSx = {
-  borderBottom: "1px solid var(--app-border)",
+  borderBottom: "1px solid var(--app-divider)",
+  bgcolor: "var(--app-surface-header)",
   color: "var(--app-text)",
   fontSize: 15,
-  fontWeight: 700,
+  fontWeight: 800,
   px: 2,
   py: 1.5,
 }
 
 const dialogActionsSx = {
-  borderTop: "1px solid var(--app-border)",
-  bgcolor: "var(--app-surface)",
-  px: 2,
-  py: 1.5,
-}
-
-const inlineActionsSx = {
-  borderTop: "1px solid var(--app-border)",
+  borderTop: "1px solid var(--app-divider)",
   bgcolor: "var(--app-surface-header)",
-  gap: 1,
   px: 2,
-  py: 1.5,
-}
-
-const inlineEditorCellSx = {
-  borderTop: "1px solid var(--app-editor-border)",
-  bgcolor: "var(--app-surface-editor)",
-  p: 0,
-  position: "relative",
-  "&::before": {
-    bgcolor: "var(--app-accent)",
-    bottom: 0,
-    content: "\"\"",
-    left: 0,
-    pointerEvents: "none",
-    position: "absolute",
-    top: 0,
-    width: 3,
-    zIndex: 1,
-  },
+  py: 1.25,
 }

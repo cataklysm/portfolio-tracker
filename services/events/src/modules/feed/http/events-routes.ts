@@ -85,6 +85,8 @@ const StoredNewsSchema = Type.Object({
   headline: Type.String(),
   url: Ns,
   sentiment: Ns,
+  category: Ns,
+  relevance: Ns,
 });
 
 const UpcomingEarningsSchema = Type.Object({

@@ -15,6 +15,11 @@ export interface FundamentalsTable {
   instrument_id: string;
   effective_date: ColumnType<Date, string, string>;
   provider: string;
+  currency: string | null;
+  /** The provider's own as-of timestamp, distinct from our retrieval `created_at`. */
+  provider_as_of: Date | null;
+  /** Coarse completeness grade of the snapshot: 'high' | 'medium' | 'low'. */
+  quality: string | null;
   pe_ratio: Numeric | null;
   pb_ratio: Numeric | null;
   ps_ratio: Numeric | null;

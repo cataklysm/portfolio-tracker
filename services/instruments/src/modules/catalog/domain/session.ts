@@ -26,6 +26,17 @@ export interface MarketSession {
    * is captured even though the venue is now closed.
    */
   minutes_since_close: number | null;
+  /**
+   * UTC instant (ISO) of the most recent regular session close, or null when the
+   * venue has no known open/close times (crypto / unknown). Used by consumers to
+   * judge whether a "stale" quote is actually a valid last official close.
+   */
+  last_session_close: string | null;
+  /**
+   * UTC instant (ISO) of the next regular session open, or null when unknown.
+   * Lets the UI say e.g. "valid until XETR opens tomorrow".
+   */
+  next_session_open: string | null;
 }
 
 const UNKNOWN: MarketSession = {
@@ -34,6 +45,8 @@ const UNKNOWN: MarketSession = {
   current_trading_date: null,
   previous_trading_date: null,
   minutes_since_close: null,
+  last_session_close: null,
+  next_session_open: null,
 };
 
 /**
@@ -67,12 +80,26 @@ export function computeMarketSession(now: Date, calendar: ExchangeCalendar | nul
 
   const currentTrading = trading ? date : previousTradingDate(date, holidays);
   const previousTrading = previousTradingDate(currentTrading, holidays);
+
+  // Most recent regular close (UTC): today's close once we're past it on a trading
+  // day; otherwise the prior session's close.
+  const afterTodaysClose = trading && close !== null && minutes >= close;
+  const lastCloseDate = afterTodaysClose ? currentTrading : trading ? previousTrading : currentTrading;
+  const lastSessionClose = close === null ? null : wallClockToUtc(lastCloseDate, close, calendar.timezone);
+
+  // Next regular open (UTC): today's open if still ahead on a trading day; else the
+  // next trading day's open.
+  const nextOpenDate = trading && open !== null && minutes < open ? date : nextTradingDate(date, holidays);
+  const nextSessionOpen = open === null ? null : wallClockToUtc(nextOpenDate, open, calendar.timezone);
+
   return {
     status,
     local_date: date,
     current_trading_date: currentTrading,
     previous_trading_date: previousTrading,
     minutes_since_close: minutesSinceClose,
+    last_session_close: lastSessionClose ? lastSessionClose.toISOString() : null,
+    next_session_open: nextSessionOpen ? nextSessionOpen.toISOString() : null,
   };
 }
 
@@ -134,4 +161,36 @@ function previousTradingDate(date: string, holidays: Set<string>): string {
     cursor = addDays(cursor, -1);
   }
   return cursor; // fall back after a full fortnight of closures (degenerate calendar)
+}
+
+/** The next trading date strictly after `date` (skips weekends/holidays). */
+function nextTradingDate(date: string, holidays: Set<string>): string {
+  let cursor = addDays(date, 1);
+  for (let i = 0; i < 14; i += 1) {
+    if (isTradingDay(cursor, holidays)) return cursor;
+    cursor = addDays(cursor, 1);
+  }
+  return cursor; // degenerate calendar fallback
+}
+
+/**
+ * The UTC instant for a wall-clock time (`minutes` past midnight) on a local
+ * calendar date in `timezone`. Two passes settle the timezone offset correctly
+ * across DST boundaries. Returns null on an invalid date/timezone.
+ */
+function wallClockToUtc(date: string, minutes: number, timezone: string): Date | null {
+  const wallAsUtc = Date.parse(`${date}T00:00:00Z`);
+  if (Number.isNaN(wallAsUtc)) return null;
+  const target = wallAsUtc + minutes * 60_000;
+  let utc = target - tzOffsetMs(new Date(target), timezone);
+  utc = target - tzOffsetMs(new Date(utc), timezone);
+  return Number.isNaN(utc) ? null : new Date(utc);
+}
+
+/** Timezone offset in ms (tz ahead of UTC is positive) at a given instant. */
+function tzOffsetMs(instant: Date, timezone: string): number {
+  const parts = localParts(instant, timezone);
+  if (!parts) return 0;
+  const asUtc = Date.parse(`${parts.date}T00:00:00Z`) + parts.minutes * 60_000;
+  return asUtc - instant.getTime();
 }

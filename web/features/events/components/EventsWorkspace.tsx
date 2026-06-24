@@ -21,7 +21,8 @@ import {
 } from "@mui/material"
 import { AppBadge } from "@/application/shell/AppBadge"
 import { appTypography } from "@/application/shell/appTypography"
-import { ControlBar } from "@/application/shell/ControlBar"
+import { ControlBar } from "@/design/components/ControlBar"
+import { MetricBar, MetricBarItem } from "@/design/components/MetricBar"
 import { PageMetricGrid, PageShell } from "@/application/shell/PageShell"
 import { useToast } from "@/application/toast/ToastProvider"
 import { fmtCurrency, num } from "@/lib/format"
@@ -1044,20 +1045,18 @@ function LegendItem({ kind, label, value }: { kind: EventKind; label: string; va
 }
 
 function MetricCard({ icon, label, value, sub, tone }: { icon: "calendar" | "report" | "action"; label: string; value: number; sub: string; tone: "primary" | "success" | "warning" }) {
-  const color = tone === "success" ? "var(--app-positive)" : tone === "warning" ? "var(--app-warning)" : "var(--app-accent)"
+  const metricTone = tone === "success" ? "positive" : tone === "warning" ? "warning" : "accent"
   return (
-    <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "var(--app-surface-header)", boxShadow: "var(--app-shadow)", p: 1.5 }}>
-      <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-        <Box sx={{ alignItems: "center", bgcolor: `color-mix(in srgb, ${color} 18%, transparent)`, borderRadius: 1.5, color, display: "flex", height: 46, justifyContent: "center", width: 46 }}>
-          <MetricIcon icon={icon} />
-        </Box>
-        <Box sx={{ minWidth: 0 }}>
-          <Typography sx={appTypography.tableSecondary}>{label}</Typography>
-          <Typography sx={{ ...appTypography.numeric, fontSize: 24, lineHeight: 1.1 }}>{value}</Typography>
-          <Typography noWrap sx={{ ...appTypography.metadata, mt: 0.25 }}>{sub}</Typography>
-        </Box>
-      </Stack>
-    </Card>
+    <MetricBar>
+      <MetricBarItem
+        icon={<MetricIcon icon={icon} />}
+        label={label}
+        primary
+        sub={sub}
+        tone={metricTone}
+        value={value}
+      />
+    </MetricBar>
   )
 }
 

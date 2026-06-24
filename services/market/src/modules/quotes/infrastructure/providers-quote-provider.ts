@@ -19,7 +19,7 @@ export class ProvidersQuoteProvider implements QuoteProvider {
       previousClose: chart.previousClose,
       currency: chart.currency,
       timestampMs: chart.timestampMs,
-      series: chart.series,
+      series: chart.series.map((p) => ({ timeMs: p.timeMs, close: p.close, volume: p.volume ?? null })),
     };
   }
 
@@ -34,7 +34,7 @@ export class ProvidersQuoteProvider implements QuoteProvider {
         timestampMs: q.timestampMs,
         // Providers with an intraday feed (lstc) attach it; latest-only providers
         // (yahoo's batch endpoint) omit it, so the series is empty for them.
-        series: q.series ?? [],
+        series: (q.series ?? []).map((p) => ({ timeMs: p.timeMs, close: p.close, volume: p.volume ?? null })),
       });
     }
     return out;

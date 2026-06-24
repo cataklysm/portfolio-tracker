@@ -20,7 +20,7 @@ import {
 } from "@mui/material"
 import { markAllNotificationsReadAction, markNotificationReadAction } from "@/app/notifications/actions"
 import { deleteRuleAction, toggleRuleAction } from "@/app/notifications/settings/actions"
-import { ControlBar, type ControlBarFilterBadge } from "@/application/shell/ControlBar"
+import { ControlBar, type ControlBarFilterBadge } from "@/design/components/ControlBar"
 import { PageMetricGrid, PageShell } from "@/application/shell/PageShell"
 import { useToast } from "@/application/toast/ToastProvider"
 import type { AlertRule, AlertRuleKind, ListingSummary, NotificationInbox, NotificationItem, PositionView } from "@/lib/types"

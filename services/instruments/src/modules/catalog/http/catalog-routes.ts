@@ -187,6 +187,9 @@ const ListingSessionViewSchema = Type.Object({
   local_date: Ns,
   current_trading_date: Ns,
   previous_trading_date: Ns,
+  minutes_since_close: Type.Union([Type.Number(), Type.Null()]),
+  last_session_close: Ns,
+  next_session_open: Ns,
 });
 
 const ProviderListingSchema = Type.Object({

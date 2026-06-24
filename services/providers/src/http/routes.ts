@@ -46,7 +46,11 @@ const SearchResultSchema = Type.Object({
   quoteType: Ns,
 });
 
-const SeriesPointSchema = Type.Object({ timeMs: Type.Integer(), close: Type.String() });
+const SeriesPointSchema = Type.Object({
+  timeMs: Type.Integer(),
+  close: Type.String(),
+  volume: Type.Optional(Ns),
+});
 
 const QuoteDtoSchema = Type.Object({
   symbol: Type.String(),

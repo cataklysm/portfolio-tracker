@@ -49,6 +49,9 @@ export interface StoredFundamentals {
   instrument_id: string;
   effective_date: string;
   provider: string;
+  currency: string | null;
+  provider_as_of: string | null;
+  quality: string | null;
   pe_ratio: string | null;
   pb_ratio: string | null;
   ps_ratio: string | null;
@@ -69,6 +72,9 @@ export interface FundamentalsRow {
   instrumentId: string;
   effectiveDate: string;
   provider: string;
+  currency: string | null;
+  providerAsOf: Date | null;
+  quality: string | null;
   peRatio: string | null;
   pbRatio: string | null;
   psRatio: string | null;

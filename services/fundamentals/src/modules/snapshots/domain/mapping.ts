@@ -17,6 +17,8 @@ export interface FundamentalsView {
   earnings_growth: string | null;
   shares_outstanding: string | null;
   net_debt: string | null;
+  /** Coarse completeness grade of the snapshot: 'high' | 'medium' | 'low' | null. */
+  quality: string | null;
   /** Full provider payload (extra ratios/financials) for transparency. */
   extra: Record<string, unknown> | null;
   as_of: string;
@@ -38,6 +40,9 @@ export function toRow(instrumentId: string, provider: string, snapshot: Fundamen
     instrumentId,
     effectiveDate: effectiveDate(snapshot.asOfMs),
     provider,
+    currency: snapshot.currency,
+    providerAsOf: snapshot.asOfMs ? new Date(snapshot.asOfMs) : null,
+    quality: gradeQuality(snapshot),
     peRatio: numToStr(snapshot.peRatio),
     pbRatio: numToStr(snapshot.pbRatio),
     psRatio: numToStr(snapshot.psRatio),
@@ -53,15 +58,31 @@ export function toRow(instrumentId: string, provider: string, snapshot: Fundamen
   };
 }
 
-/** Maps a stored snapshot to its API view, lifting currency out of the payload. */
+/** Coarse completeness grade from how many of the typed metrics the provider filled. */
+export function gradeQuality(snapshot: FundamentalsSnapshot): 'high' | 'medium' | 'low' {
+  const metrics = [
+    snapshot.peRatio, snapshot.pbRatio, snapshot.psRatio, snapshot.dividendYield, snapshot.eps,
+    snapshot.marketCap, snapshot.revenue, snapshot.revenueGrowth, snapshot.earningsGrowth,
+    snapshot.sharesOutstanding, snapshot.netDebt,
+  ];
+  const present = metrics.filter((m) => m !== null).length;
+  if (present >= 8) return 'high';
+  if (present >= 4) return 'medium';
+  return 'low';
+}
+
+/** Maps a stored snapshot to its API view, preferring real columns over the payload. */
 export function toView(stored: StoredFundamentals): FundamentalsView {
   const payload = (stored.raw_payload ?? null) as Record<string, unknown> | null;
-  const currency = typeof payload?.['currency'] === 'string' ? (payload['currency'] as string) : null;
+  // Real `currency` column wins; legacy rows that predate it fall back to the payload.
+  const currency =
+    stored.currency ?? (typeof payload?.['currency'] === 'string' ? (payload['currency'] as string) : null);
   return {
     instrument_id: stored.instrument_id,
     effective_date: stored.effective_date,
     provider: stored.provider,
     currency,
+    quality: stored.quality,
     pe_ratio: stored.pe_ratio,
     pb_ratio: stored.pb_ratio,
     ps_ratio: stored.ps_ratio,
@@ -73,7 +94,8 @@ export function toView(stored: StoredFundamentals): FundamentalsView {
     earnings_growth: stored.earnings_growth,
     shares_outstanding: stored.shares_outstanding,
     net_debt: stored.net_debt,
+    // The provider's own as-of wins; legacy rows fall back to our retrieval time.
+    as_of: stored.provider_as_of ?? stored.created_at,
     extra: payload,
-    as_of: stored.created_at,
   };
 }

@@ -24,6 +24,7 @@ export const en = {
 
   nav: {
     portfolio: "Portfolio",
+    addPortfolio: "Create portfolio",
     reports: "Reports",
     activity: "Activity",
     watchlist: "Watchlist",
@@ -154,6 +155,8 @@ export const en = {
   },
 
   createPortfolio: {
+    title: "Create portfolio",
+    name: "Name",
     namePlaceholder: "Portfolio name (e.g. Main)",
     creating: "Creating…",
     submit: "Create portfolio",

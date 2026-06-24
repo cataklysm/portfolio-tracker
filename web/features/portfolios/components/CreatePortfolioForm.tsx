@@ -1,6 +1,6 @@
 "use client"
 import { useActionState } from "react"
-import { createPortfolioAction } from "@/app/dashboard/actions"
+import { createPortfolioAction } from "@/features/portfolios/actions"
 import { useTranslations } from "@/lib/i18n"
 
 const inputClass =

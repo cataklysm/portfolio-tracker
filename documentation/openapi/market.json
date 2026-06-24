@@ -44,7 +44,9 @@
                       "previous",
                       "currency",
                       "latest_at",
-                      "freshness_status"
+                      "freshness_status",
+                      "provider",
+                      "provider_timestamp"
                     ],
                     "properties": {
                       "listing_id": {
@@ -111,6 +113,26 @@
                             ]
                           }
                         ]
+                      },
+                      "provider": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "provider_timestamp": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     }
                   }
@@ -154,7 +176,8 @@
                     "type": "object",
                     "required": [
                       "time",
-                      "price"
+                      "price",
+                      "volume"
                     ],
                     "properties": {
                       "time": {
@@ -162,6 +185,16 @@
                       },
                       "price": {
                         "type": "string"
+                      },
+                      "volume": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     }
                   }
@@ -213,7 +246,8 @@
                     "type": "object",
                     "required": [
                       "date",
-                      "price"
+                      "price",
+                      "volume"
                     ],
                     "properties": {
                       "date": {
@@ -221,6 +255,16 @@
                       },
                       "price": {
                         "type": "string"
+                      },
+                      "volume": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     }
                   }
@@ -280,6 +324,57 @@
                       "type": "integer"
                     },
                     "rebuilt": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/quotes/purge": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "listing_ids",
+                  "confirm"
+                ],
+                "properties": {
+                  "listing_ids": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "format": "uuid",
+                      "type": "string"
+                    }
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "purged"
+                  ],
+                  "properties": {
+                    "purged": {
                       "type": "integer"
                     }
                   }
@@ -420,7 +515,9 @@
                       "previous",
                       "currency",
                       "latest_at",
-                      "freshness_status"
+                      "freshness_status",
+                      "provider",
+                      "provider_timestamp"
                     ],
                     "properties": {
                       "listing_id": {
@@ -487,6 +584,26 @@
                             ]
                           }
                         ]
+                      },
+                      "provider": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "provider_timestamp": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     }
                   }
@@ -546,6 +663,57 @@
                       "type": "integer"
                     },
                     "rebuilt": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/quotes/purge": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "listing_ids",
+                  "confirm"
+                ],
+                "properties": {
+                  "listing_ids": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "format": "uuid",
+                      "type": "string"
+                    }
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "purged"
+                  ],
+                  "properties": {
+                    "purged": {
                       "type": "integer"
                     }
                   }

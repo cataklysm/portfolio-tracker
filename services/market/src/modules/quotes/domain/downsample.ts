@@ -2,6 +2,8 @@
 export interface SeriesPoint {
   timeMs: number;
   close: string;
+  /** Traded volume for the bar, when the provider supplies it. */
+  volume: string | null;
 }
 
 /**

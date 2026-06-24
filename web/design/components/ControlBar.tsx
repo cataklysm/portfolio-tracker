@@ -39,6 +39,7 @@ export interface ControlBarFilterBadge {
 }
 
 export function ControlBar<TTab extends string, TPeriod extends string = string>({
+  actions,
   addHref,
   addLabel = "Add",
   badges = [],
@@ -62,6 +63,7 @@ export function ControlBar<TTab extends string, TPeriod extends string = string>
   tabs,
   tabValue,
 }: {
+  actions?: ReactNode
   addHref?: string
   addLabel?: string
   badges?: ControlBarFilterBadge[]
@@ -101,6 +103,15 @@ export function ControlBar<TTab extends string, TPeriod extends string = string>
   const visibleBadges = [...generatedBadges, ...badges]
   const hasAdd = Boolean(addHref || onAdd)
 
+  function clearVisibleFilters() {
+    if (onClearFilters) {
+      onClearFilters()
+      return
+    }
+
+    visibleBadges.forEach((badge) => badge.onClear())
+  }
+
   return (
     <Card
       variant="outlined"
@@ -128,68 +139,10 @@ export function ControlBar<TTab extends string, TPeriod extends string = string>
             py: 0.875,
           }}
         >
-          <TextField
-            value={searchValue}
-            onChange={(event) => onSearchChange(event.target.value)}
-            variant="outlined"
-            size="small"
+          <AppSearchField
+            onChange={onSearchChange}
             placeholder={searchPlaceholder}
-            sx={{
-              width: "100%",
-              "& .MuiInputBase-root": {
-                bgcolor: "var(--app-surface-inset)",
-                background: "linear-gradient(90deg, color-mix(in srgb, var(--app-surface-inset) 86%, var(--app-surface) 14%) 0%, color-mix(in srgb, var(--app-surface-inset) 72%, var(--app-surface-header) 28%) 72%, transparent 100%)",
-                borderRadius: 1,
-                color: "var(--app-text)",
-                height: 40,
-                position: "relative",
-                transition: "background 140ms ease, box-shadow 140ms ease",
-                "&::before": {
-                  background: "linear-gradient(90deg, color-mix(in srgb, var(--app-border) 58%, transparent) 0%, color-mix(in srgb, var(--app-border) 44%, transparent) 72%, transparent 100%)",
-                  borderRadius: "inherit",
-                  content: "\"\"",
-                  inset: 0,
-                  padding: "1px",
-                  pointerEvents: "none",
-                  position: "absolute",
-                  WebkitMask: "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
-                  WebkitMaskComposite: "xor",
-                  maskComposite: "exclude",
-                },
-                "&.Mui-focused": {
-                  background: "linear-gradient(90deg, color-mix(in srgb, var(--app-surface-inset) 70%, var(--app-accent) 8%) 0%, color-mix(in srgb, var(--app-surface-header) 86%, var(--app-accent) 14%) 76%, transparent 100%)",
-                  boxShadow: "0 0 0 1px color-mix(in srgb, var(--app-accent) 28%, transparent)",
-                },
-                "&.Mui-focused::before": {
-                  background: "linear-gradient(90deg, color-mix(in srgb, var(--app-accent) 48%, transparent) 0%, color-mix(in srgb, var(--app-accent) 34%, transparent) 76%, transparent 100%)",
-                },
-              },
-              "& .MuiInputBase-input": {
-                fontSize: 14,
-                fontWeight: 600,
-                py: 0,
-                zIndex: 1,
-                "&::placeholder": {
-                  color: "var(--app-text-faint)",
-                  opacity: 0.82,
-                },
-              },
-              "& .MuiOutlinedInput-notchedOutline": {
-                borderColor: "transparent",
-              },
-              "&:hover .MuiOutlinedInput-notchedOutline": {
-                borderColor: "transparent",
-              },
-              "& .Mui-focused .MuiOutlinedInput-notchedOutline": {
-                borderColor: "transparent",
-              },
-              "& .MuiInputAdornment-root": { color: "var(--app-text-faint)", mr: 0.75, zIndex: 1 },
-            }}
-            slotProps={{
-              input: {
-                startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment>,
-              },
-            }}
+            value={searchValue}
           />
           <Stack direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: "flex-end" }}>
             {onReload ? (
@@ -251,6 +204,7 @@ export function ControlBar<TTab extends string, TPeriod extends string = string>
                 )}
               </Tooltip>
             ) : null}
+            {actions}
           </Stack>
         </Box>
 
@@ -293,32 +247,46 @@ export function ControlBar<TTab extends string, TPeriod extends string = string>
                   minWidth: 132,
                   px: 2,
                   py: 0,
+                  position: "relative",
                   textTransform: "none",
                   "&:first-of-type": { borderLeft: 0 },
                   "&.Mui-selected": {
                     bgcolor: "color-mix(in srgb, var(--app-accent) 82%, white)",
+                    boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--app-accent) 46%, transparent)",
                     color: "white",
                   },
                   "&.Mui-selected:hover": {
                     bgcolor: "color-mix(in srgb, var(--app-accent) 88%, white)",
                   },
                 },
+                "& .MuiToggleButtonGroup-grouped": {
+                  margin: 0,
+                },
               }}
             >
-              {tabs.map((tab) => (
-                <ToggleButton key={tab.value} value={tab.value}>
-                  <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", minWidth: 0 }}>
-                    <Box component="span">{tab.label}</Box>
-                    {tab.count !== undefined ? (
-                      <AppBadge
-                        label={tab.count}
-                        kind="count"
-                        tone="accent"
-                      />
-                    ) : null}
-                  </Stack>
-                </ToggleButton>
-              ))}
+              {tabs.map((tab) => {
+                const selected = tab.value === tabValue
+                return (
+                  <ToggleButton key={tab.value} value={tab.value}>
+                    <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", minWidth: 0 }}>
+                      <Box component="span">{tab.label}</Box>
+                      {tab.count !== undefined ? (
+                        <AppBadge
+                          label={tab.count}
+                          kind="count"
+                          sx={selected ? {
+                            bgcolor: "color-mix(in srgb, white 20%, transparent)",
+                            borderColor: "color-mix(in srgb, white 38%, transparent)",
+                            color: "white",
+                            "& .MuiChip-label": { color: "white" },
+                          } : undefined}
+                          tone="accent"
+                        />
+                      ) : null}
+                    </Stack>
+                  </ToggleButton>
+                )
+              })}
             </ToggleButtonGroup>
           </Box>
 
@@ -349,31 +317,59 @@ export function ControlBar<TTab extends string, TPeriod extends string = string>
         </Box>
 
         {visibleBadges.length > 0 ? (
-          <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap", gap: 1, px: 1, py: 0.75 }}>
-            {visibleBadges.map((badge) => (
-              <AppBadge
-                key={badge.id}
-                label={badge.label ? `${badge.label}: ${badge.value}` : badge.value}
-                kind="category"
-                onDelete={badge.onClear}
-                sx={{ maxWidth: 280 }}
-              />
-            ))}
-            {onClearFilters ? (
-              <Button size="small" onClick={onClearFilters} sx={{ fontWeight: 700, textTransform: "none" }}>Clear all</Button>
-            ) : null}
-          </Stack>
+          <Box
+            sx={{
+              alignItems: "center",
+              display: "flex",
+              gap: 1,
+              justifyContent: "space-between",
+              px: 1,
+              py: 0.75,
+            }}
+          >
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{ alignItems: "center", flex: "1 1 auto", flexWrap: "wrap", gap: 1, minWidth: 0 }}
+            >
+              {visibleBadges.map((badge) => (
+                <AppBadge
+                  key={badge.id}
+                  label={badge.label ? `${badge.label}: ${badge.value}` : badge.value}
+                  kind="category"
+                  onDelete={badge.onClear}
+                  sx={{ maxWidth: 280 }}
+                />
+              ))}
+            </Stack>
+            <Button
+              size="small"
+              onClick={clearVisibleFilters}
+              startIcon={<ClearFiltersIcon />}
+              sx={{
+                border: "1px solid var(--app-border)",
+                borderRadius: 1,
+                color: "var(--app-text-muted)",
+                flexShrink: 0,
+                fontSize: 12,
+                fontWeight: 700,
+                height: 30,
+                px: 1.25,
+                textTransform: "none",
+                "& .MuiButton-startIcon": { mr: 0.5 },
+                "&:hover": {
+                  bgcolor: "var(--app-surface-hover)",
+                  borderColor: "var(--app-border-strong)",
+                  color: "var(--app-text)",
+                },
+              }}
+            >
+              Clear all
+            </Button>
+          </Box>
         ) : null}
       </Stack>
     </Card>
-  )
-}
-
-function SearchIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="m21 21-4.4-4.4M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
   )
 }
 
@@ -390,6 +386,98 @@ function AddIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function ClearFiltersIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M7 7l10 10M17 7 7 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function AppSearchField({
+  onChange,
+  placeholder,
+  value,
+}: {
+  onChange: (value: string) => void
+  placeholder: string
+  value: string
+}) {
+  return (
+    <TextField
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      variant="outlined"
+      size="small"
+      placeholder={placeholder}
+      sx={{
+        width: "100%",
+        "& .MuiInputBase-root": {
+          bgcolor: "var(--app-surface-inset)",
+          background: "linear-gradient(90deg, color-mix(in srgb, var(--app-surface-inset) 86%, var(--app-surface) 14%) 0%, color-mix(in srgb, var(--app-surface-inset) 72%, var(--app-surface-header) 28%) 72%, transparent 100%)",
+          borderRadius: 1,
+          color: "var(--app-text)",
+          height: 40,
+          position: "relative",
+          transition: "background 140ms ease, box-shadow 140ms ease",
+          "&::before": {
+            background: "linear-gradient(90deg, color-mix(in srgb, var(--app-border) 58%, transparent) 0%, color-mix(in srgb, var(--app-border) 44%, transparent) 72%, transparent 100%)",
+            borderRadius: "inherit",
+            content: "\"\"",
+            inset: 0,
+            padding: "1px",
+            pointerEvents: "none",
+            position: "absolute",
+            WebkitMask: "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
+            WebkitMaskComposite: "xor",
+            maskComposite: "exclude",
+          },
+          "&.Mui-focused": {
+            background: "linear-gradient(90deg, color-mix(in srgb, var(--app-surface-inset) 70%, var(--app-accent) 8%) 0%, color-mix(in srgb, var(--app-surface-header) 86%, var(--app-accent) 14%) 76%, transparent 100%)",
+            boxShadow: "0 0 0 1px color-mix(in srgb, var(--app-accent) 28%, transparent)",
+          },
+          "&.Mui-focused::before": {
+            background: "linear-gradient(90deg, color-mix(in srgb, var(--app-accent) 48%, transparent) 0%, color-mix(in srgb, var(--app-accent) 34%, transparent) 76%, transparent 100%)",
+          },
+        },
+        "& .MuiInputBase-input": {
+          fontSize: 14,
+          fontWeight: 600,
+          py: 0,
+          zIndex: 1,
+          "&::placeholder": {
+            color: "var(--app-text-faint)",
+            opacity: 0.82,
+          },
+        },
+        "& .MuiOutlinedInput-notchedOutline": {
+          borderColor: "transparent",
+        },
+        "&:hover .MuiOutlinedInput-notchedOutline": {
+          borderColor: "transparent",
+        },
+        "& .Mui-focused .MuiOutlinedInput-notchedOutline": {
+          borderColor: "transparent",
+        },
+        "& .MuiInputAdornment-root": { color: "var(--app-text-faint)", mr: 0.75, zIndex: 1 },
+      }}
+      slotProps={{
+        input: {
+          startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment>,
+        },
+      }}
+    />
+  )
+}
+
+function SearchIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="m21 21-4.4-4.4M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   )
 }

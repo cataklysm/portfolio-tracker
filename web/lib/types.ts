@@ -123,6 +123,8 @@ export interface RealizationAllocationView {
 export interface SparklinePoint {
   time: string
   price: string
+  /** Traded volume for the point, when the provider supplies it (else null). */
+  volume?: string | null
 }
 
 export type PerformancePeriod = "1W" | "1M" | "YTD" | "1Y" | "ALL"
@@ -389,6 +391,23 @@ export interface ListingSession {
   local_date: string | null
   current_trading_date: string | null
   previous_trading_date: string | null
+  minutes_since_close: number | null
+  /** UTC ISO instant of the most recent regular session close, or null. */
+  last_session_close: string | null
+  /** UTC ISO instant of the next regular session open, or null. */
+  next_session_open: string | null
+}
+
+/** Latest stored quote for a listing, as served by the market `/quotes` endpoint. */
+export interface Quote {
+  listing_id: string
+  latest: string | null
+  previous: string | null
+  currency: string | null
+  latest_at: string | null
+  freshness_status: "fresh" | "stale" | "unavailable"
+  provider: string | null
+  provider_timestamp: string | null
 }
 
 export interface TaxResidency {
@@ -778,6 +797,10 @@ export interface NewsItem {
   headline: string
   url: string | null
   sentiment: string | null
+  /** Heuristic category: earnings | analyst | regulation | macro | company. */
+  category?: string | null
+  /** Heuristic 0..1 relevance score (string-encoded NUMERIC). */
+  relevance?: string | null
 }
 
 /** A fundamentals snapshot for an instrument (NUMERICs stay strings). */
@@ -797,6 +820,8 @@ export interface Fundamentals {
   earnings_growth: string | null
   shares_outstanding: string | null
   net_debt: string | null
+  /** Coarse completeness grade: 'high' | 'medium' | 'low' | null. */
+  quality?: string | null
   extra: Record<string, unknown> | null
   as_of: string
 }

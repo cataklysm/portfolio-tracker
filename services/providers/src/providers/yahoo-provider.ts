@@ -55,7 +55,11 @@ export class YahooProvider implements MarketDataProvider {
       previousClose: chart.previousClose === null ? null : String(chart.previousClose),
       currency: chart.currency,
       timestampMs: chart.timestampMs,
-      series: chart.series.map((point) => ({ timeMs: point.timeMs, close: String(point.close) })),
+      series: chart.series.map((point) => ({
+        timeMs: point.timeMs,
+        close: String(point.close),
+        volume: point.volume === null ? null : String(point.volume),
+      })),
     };
   }
 

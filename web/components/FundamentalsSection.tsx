@@ -6,6 +6,8 @@ interface Props {
   data: Fundamentals | null
   currency: string
   locale: string
+  /** Why the section is empty, when the service explained it (theme 15). */
+  emptyReason?: string | null
 }
 
 /** Signed percentage from a decimal ratio (0.166 -> "+16.60%"). */
@@ -24,9 +26,10 @@ function pctPlain(value: number): string {
  * and refreshed in the background by the fundamentals service; this just renders
  * whatever is stored, showing only the metrics the provider actually supplied.
  */
-export function FundamentalsSection({ data, currency, locale }: Props) {
+export function FundamentalsSection({ data, currency, locale, emptyReason }: Props) {
   const t = getTranslations()
-  if (!data) return <p className="text-sm text-[var(--app-text-faint)]">{t("fundamentals.empty")}</p>
+  const emptyText = emptyReason ?? t("fundamentals.empty")
+  if (!data) return <p className="text-sm text-[var(--app-text-faint)]">{emptyText}</p>
 
   const ccy = data.currency ?? currency
   const metrics: { label: string; value: string }[] = []
@@ -47,7 +50,7 @@ export function FundamentalsSection({ data, currency, locale }: Props) {
   push(data.shares_outstanding, t("fundamentals.sharesOutstanding"), (n) => fmtCompact(locale, n))
   push(data.net_debt, t("fundamentals.netDebt"), (n) => fmtCompact(locale, n, ccy))
 
-  if (metrics.length === 0) return <p className="text-sm text-[var(--app-text-faint)]">{t("fundamentals.empty")}</p>
+  if (metrics.length === 0) return <p className="text-sm text-[var(--app-text-faint)]">{emptyText}</p>
 
   return (
     <div className="space-y-3">
@@ -64,6 +67,7 @@ export function FundamentalsSection({ data, currency, locale }: Props) {
       </div>
       <p className="text-[11px] text-[var(--app-text-faint)]">
         {t("fundamentals.asOf", { date: data.effective_date, provider: data.provider })}
+        {data.quality ? ` · ${data.quality} coverage` : ""}
       </p>
     </div>
   )

@@ -6,15 +6,19 @@ import type { AlertRuleKind } from "@/lib/types"
 
 type Result = string | null
 
-function revalidateNotifications(positionId: string) {
-  revalidatePath(`/positions/${positionId}`)
+function detailPath(detailContext: string) {
+  return detailContext.startsWith("/") ? detailContext : `/positions/${detailContext}`
+}
+
+function revalidateNotifications(detailContext: string) {
+  revalidatePath(detailPath(detailContext))
   revalidatePath("/notifications")
   revalidatePath("/notifications/settings")
   revalidatePath("/", "layout")
 }
 
 export async function createAssetAlertAction(
-  positionId: string,
+  detailContext: string,
   instrumentId: string,
   listingId: string,
   _prevState: Result,
@@ -65,11 +69,11 @@ export async function createAssetAlertAction(
     return "Cannot reach the gateway."
   }
 
-  revalidateNotifications(positionId)
+  revalidateNotifications(detailContext)
   return null
 }
 
-export async function toggleAssetAlertAction(positionId: string, id: string, enabled: boolean): Promise<Result> {
+export async function toggleAssetAlertAction(detailContext: string, id: string, enabled: boolean): Promise<Result> {
   try {
     const resp = await apiFetch(`/notifications/rules/${id}`, {
       method: "PATCH",
@@ -81,11 +85,11 @@ export async function toggleAssetAlertAction(positionId: string, id: string, ena
     return "Cannot reach the gateway."
   }
 
-  revalidateNotifications(positionId)
+  revalidateNotifications(detailContext)
   return null
 }
 
-export async function deleteAssetAlertAction(positionId: string, id: string): Promise<Result> {
+export async function deleteAssetAlertAction(detailContext: string, id: string): Promise<Result> {
   try {
     const resp = await apiFetch(`/notifications/rules/${id}`, { method: "DELETE" })
     if (!resp.ok) return problemDetail(resp, "Failed to delete the alert.")
@@ -93,6 +97,6 @@ export async function deleteAssetAlertAction(positionId: string, id: string): Pr
     return "Cannot reach the gateway."
   }
 
-  revalidateNotifications(positionId)
+  revalidateNotifications(detailContext)
   return null
 }

@@ -7,11 +7,13 @@ interface EventsProps {
   corporateActions: CorporateAction[]
   currency: string
   locale: string
+  emptyReason?: string | null
 }
 
 interface NewsProps {
   news: NewsItem[]
   locale: string
+  emptyReason?: string | null
 }
 
 function eps(value: string | null): string {
@@ -31,7 +33,7 @@ function formatDate(iso: string, locale: string, withYear = true): string {
  * High-signal market events only. Historical earnings are progressively
  * disclosed so the default asset detail view stays compact.
  */
-export function EventsSection({ earnings, corporateActions, currency, locale }: EventsProps) {
+export function EventsSection({ earnings, corporateActions, currency, locale, emptyReason }: EventsProps) {
   const t = getTranslations()
   const upcoming = earnings
     .filter((item) => item.is_upcoming)
@@ -40,7 +42,7 @@ export function EventsSection({ earnings, corporateActions, currency, locale }: 
   const actions = corporateActions.slice(0, 8)
 
   if (upcoming.length === 0 && history.length === 0 && actions.length === 0) {
-    return <EmptyState text={t("events.empty")} />
+    return <EmptyState text={emptyReason ?? t("events.empty")} />
   }
 
   return (
@@ -110,12 +112,22 @@ export function EventsSection({ earnings, corporateActions, currency, locale }: 
 }
 
 /** A separate, scan-friendly news feed rather than another event subsection. */
-export function NewsSection({ news, locale }: NewsProps) {
+export function NewsSection({ news, locale, emptyReason }: NewsProps) {
   const t = getTranslations()
-  if (news.length === 0) return <EmptyState text={t("events.noNews")} />
+  if (news.length === 0) return <EmptyState text={emptyReason ?? t("events.noNews")} />
 
-  const recent = news.slice(0, 4)
-  const older = news.slice(4)
+  // Most relevant first (theme 10), de-duplicating repeated headlines.
+  const seen = new Set<string>()
+  const ranked = [...news]
+    .sort((a, b) => (num(b.relevance) ?? 0) - (num(a.relevance) ?? 0))
+    .filter((item) => {
+      const key = item.headline.trim().toLowerCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  const recent = ranked.slice(0, 4)
+  const older = ranked.slice(4)
 
   return (
     <div className="space-y-3">
@@ -211,7 +223,7 @@ function NewsRow({ item, locale, featured = false }: { item: NewsItem; locale: s
         <div className="min-w-0">
           <p className={`${featured ? "text-sm font-semibold leading-5" : "text-[11px] font-medium leading-4"} text-[var(--app-text)]`}>{item.headline}</p>
           <p className="mt-1 text-[9px] text-[var(--app-text-faint)]">
-            {item.provider} · {formatDate(item.published_at, locale)}
+            {item.category ? `${capitalize(item.category)} · ` : ""}{item.provider} · {formatDate(item.published_at, locale)}
             {item.sentiment ? ` · ${capitalize(item.sentiment)}` : ""}
           </p>
         </div>

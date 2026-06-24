@@ -42,7 +42,7 @@ import {
   updateAdminSymbolAction,
   type ProviderSymbolHit,
 } from "@/features/administration/symbols/actions"
-import { ControlBar } from "@/application/shell/ControlBar"
+import { ControlBar } from "@/design/components/ControlBar"
 import { PageShell } from "@/application/shell/PageShell"
 import { selectableRowSx } from "@/application/shell/rowSelection"
 import { useToast } from "@/application/toast/ToastProvider"

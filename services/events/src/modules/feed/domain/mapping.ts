@@ -4,8 +4,10 @@ import type {
   CorporateActionRow,
   EarningsRow,
   EarningsSnapshot,
+  NewsCategory,
   NewsItem,
   NewsRow,
+  NewsSentiment,
 } from '../application/ports.js';
 
 function numToStr(value: number | null): string | null {
@@ -142,8 +144,55 @@ export function toNewsRows(instrumentId: string, provider: string, items: NewsIt
       provider,
       headline: item.title,
       url: item.url,
+      category: classifyNews(item.title),
+      relevance: numToStr(scoreRelevance(item.title)),
+      sentiment: classifySentiment(item.title),
       rawPayload: { ...item },
     });
   }
   return rows;
+}
+
+// Headline-keyword heuristics. Yahoo gives no authoritative taxonomy/sentiment,
+// so these are best-effort signals — null when nothing matches rather than a
+// misleading default. Word-boundary matching keeps "ai" out of "said", etc.
+const CATEGORY_KEYWORDS: { category: NewsCategory; words: RegExp }[] = [
+  { category: 'earnings', words: /\b(earnings|eps|revenue|profit|loss|quarter(ly)?|results|guidance|forecast|outlook)\b/i },
+  { category: 'analyst', words: /\b(analyst|upgrade|downgrade|rating|price target|buy|sell|hold|overweight|underweight|initiat)\b/i },
+  { category: 'regulation', words: /\b(regulat|lawsuit|antitrust|sec|fine|probe|investigation|settlement|sanction|compliance|court)\b/i },
+  { category: 'macro', words: /\b(inflation|fed|interest rate|gdp|economy|recession|tariff|jobs report|central bank|treasury)\b/i },
+];
+
+const POSITIVE = /\b(surge|soar|jump|rally|beat|gain|record|upgrade|growth|profit|win|strong|boost|rise|rises|climb)\b/i;
+const NEGATIVE = /\b(plunge|drop|fall|falls|slump|miss|loss|cut|downgrade|weak|decline|lawsuit|probe|warn|slash|crash|tumble)\b/i;
+
+/** Best-effort category from the headline; defaults to 'company' when nothing else hits. */
+export function classifyNews(headline: string): NewsCategory | null {
+  if (!headline.trim()) return null;
+  for (const { category, words } of CATEGORY_KEYWORDS) {
+    if (words.test(headline)) return category;
+  }
+  return 'company';
+}
+
+/** Best-effort sentiment; null when the headline carries no signal word. */
+export function classifySentiment(headline: string): NewsSentiment | null {
+  const pos = POSITIVE.test(headline);
+  const neg = NEGATIVE.test(headline);
+  if (pos && !neg) return 'positive';
+  if (neg && !pos) return 'negative';
+  if (pos && neg) return 'neutral';
+  return null;
+}
+
+/**
+ * Crude 0..1 relevance: a categorized, sentiment-bearing headline of reasonable
+ * length scores higher. Lets the reader rank/trim without a real relevance model.
+ */
+export function scoreRelevance(headline: string): number {
+  let score = 0.4;
+  if (classifyNews(headline) !== 'company') score += 0.3;
+  if (classifySentiment(headline) !== null) score += 0.2;
+  if (headline.trim().length >= 40) score += 0.1;
+  return Math.min(1, Number(score.toFixed(2)));
 }

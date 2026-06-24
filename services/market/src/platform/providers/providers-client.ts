@@ -19,7 +19,14 @@ export interface ProvidersQuoteDto {
   currency: string | null;
   timestampMs: number | null;
   /** Intraday points (oldest first) for providers with a real intraday feed. */
-  series?: { timeMs: number; close: string }[];
+  series?: ProvidersSeriesPointDto[];
+}
+
+/** One provider series point; `volume` present when the provider supplies it. */
+export interface ProvidersSeriesPointDto {
+  timeMs: number;
+  close: string;
+  volume?: string | null;
 }
 
 /** One (provider × capability) refresh-cadence row, as served by /internal/capability-refresh. */
@@ -37,7 +44,7 @@ export interface ProvidersChartDto {
   previousClose: string | null;
   currency: string | null;
   timestampMs: number | null;
-  series: { timeMs: number; close: string }[];
+  series: ProvidersSeriesPointDto[];
 }
 
 export interface ProvidersSearchResultDto {

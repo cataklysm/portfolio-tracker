@@ -24,6 +24,10 @@ export interface QuoteView {
   currency: string | null;
   latest_at: string | null;
   freshness_status: FreshnessStatus;
+  /** The provider that supplied the latest tick (attribution); null if no quote. */
+  provider: string | null;
+  /** The provider's own timestamp for the latest tick (ISO), when supplied. */
+  provider_timestamp: string | null;
 }
 
 export interface QuoteServiceDeps {
@@ -57,11 +61,13 @@ export class QuoteService {
         currency: pair?.currency ?? null,
         latest_at: pair?.latestAt ? pair.latestAt.toISOString() : null,
         freshness_status: deriveFreshness(pair?.latestAt ?? null, now, this.deps.staleAfterMs),
+        provider: pair?.provider ?? null,
+        provider_timestamp: pair?.providerTimestamp ? pair.providerTimestamp.toISOString() : null,
       };
     });
   }
 
-  getSeries(listingId: string, limit: number): Promise<{ time: Date; price: string }[]> {
+  getSeries(listingId: string, limit: number): Promise<{ time: Date; price: string; volume: string | null }[]> {
     return this.deps.repo.getSeries(listingId, limit);
   }
 
@@ -197,6 +203,7 @@ export class QuoteService {
         time: new Date(point.timeMs),
         provider,
         price: point.close,
+        volume: point.volume,
         currency,
         providerTimestamp,
       });
@@ -209,6 +216,9 @@ export class QuoteService {
         time: providerTimestamp ?? now,
         provider,
         price: quote.price,
+        // The latest tick is the regular-market price; its volume is not part of
+        // the bar series, so it is stored without a volume.
+        volume: null,
         currency,
         providerTimestamp,
       });

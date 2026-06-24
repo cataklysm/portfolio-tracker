@@ -55,6 +55,7 @@
                       "earnings_growth",
                       "shares_outstanding",
                       "net_debt",
+                      "quality",
                       "extra",
                       "as_of"
                     ],
@@ -179,6 +180,16 @@
                         ]
                       },
                       "net_debt": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "quality": {
                         "anyOf": [
                           {
                             "type": "string"

@@ -1,6 +1,9 @@
 "use client"
 import Link from "next/link"
 import { usePathname, useSearchParams } from "next/navigation"
+import { useState } from "react"
+import { Tooltip } from "@mui/material"
+import { CreatePortfolioDialog } from "@/features/portfolios/components/CreatePortfolioDialog"
 import { useTranslations, type MessageKey } from "@/lib/i18n"
 import type { MeData, Portfolio } from "@/lib/types"
 
@@ -53,7 +56,7 @@ export function SidebarNavigation({ collapsed, onToggle, animate, me, unreadCoun
       </Link>
 
       <nav className="flex flex-1 flex-col gap-1 p-2">
-        <NavRow item={{ labelKey: "nav.portfolio", icon: "portfolio", href: "/dashboard" }} active={pathname === "/dashboard" && !selectedPortfolio} collapsed={collapsed} />
+        <PortfolioNavRow active={pathname === "/dashboard" && !selectedPortfolio} collapsed={collapsed} />
         {!collapsed && portfolios.length > 0 ? (
           <div className="mb-1 ml-4 border-l border-[var(--app-border)] pl-2">
             {portfolios.map((portfolio) => (
@@ -121,6 +124,74 @@ function PortfolioSubNavRow({ portfolio, active, settingsActive }: { portfolio: 
         <Icon icon="settings" />
       </Link>
     </div>
+  )
+}
+
+function PortfolioNavRow({ active, collapsed }: { active: boolean; collapsed: boolean }) {
+  const t = useTranslations()
+
+  if (collapsed) {
+    return (
+      <div className="flex flex-col items-center gap-1">
+        <Link
+          href="/dashboard"
+          aria-label={t("nav.portfolio")}
+          className={`relative flex h-9 w-9 items-center justify-center rounded-lg text-xs transition ${
+            active
+              ? "bg-[var(--app-accent-soft)] text-[var(--app-accent)]"
+              : "text-[var(--app-text-muted)] hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text)]"
+          }`}
+        >
+          <Icon icon="portfolio" />
+        </Link>
+        <CreatePortfolioSidebarButton collapsed />
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className={`relative flex items-center rounded-lg text-xs transition ${
+        active
+          ? "bg-[var(--app-accent-soft)] text-[var(--app-accent)]"
+          : "text-[var(--app-text-muted)] hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text)]"
+      }`}
+    >
+      <Link href="/dashboard" className="flex min-w-0 flex-1 items-center gap-3 px-2.5 py-2">
+        <Icon icon="portfolio" />
+        <span className="truncate">{t("nav.portfolio")}</span>
+      </Link>
+      <CreatePortfolioSidebarButton collapsed={false} />
+    </div>
+  )
+}
+
+function CreatePortfolioSidebarButton({ collapsed }: { collapsed: boolean }) {
+  const t = useTranslations()
+  const [open, setOpen] = useState(false)
+
+  return (
+    <>
+      <Tooltip title={t("nav.addPortfolio")} placement="right">
+        <button
+          type="button"
+          aria-label={t("nav.addPortfolio")}
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            setOpen(true)
+          }}
+          className={
+            collapsed
+              ? "flex h-7 w-9 items-center justify-center rounded-md border border-[var(--app-border)] text-[var(--app-text-faint)] transition hover:border-[color-mix(in_srgb,var(--app-accent)_45%,var(--app-border))] hover:bg-[var(--app-accent-soft)] hover:text-[var(--app-accent)]"
+              : "mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-transparent text-[var(--app-text-faint)] transition hover:border-[color-mix(in_srgb,var(--app-accent)_45%,var(--app-border))] hover:bg-[var(--app-accent-soft)] hover:text-[var(--app-accent)]"
+          }
+        >
+          <Icon icon="addPosition" />
+        </button>
+      </Tooltip>
+      <CreatePortfolioDialog open={open} onClose={() => setOpen(false)} />
+    </>
   )
 }
 

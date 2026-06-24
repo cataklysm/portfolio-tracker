@@ -56,7 +56,7 @@ export function PageMetricGrid({
         display: "grid",
         gap: 2,
         gridTemplateColumns: columns,
-        "& > .MuiCard-root": {
+        "& > .MuiCard-root, & > [data-metric-bar]": {
           minHeight: 88,
         },
       }}

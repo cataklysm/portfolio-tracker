@@ -5,11 +5,11 @@ import type { InstrumentWithListings } from "@/lib/types"
 
 /** Searches the instrument catalog (instruments service) for the add flow. */
 export async function searchInstrumentsAction(query: string): Promise<InstrumentWithListings[]> {
-  const q = query.trim()
-  if (q.length === 0) return []
-  const resp = await apiFetch(`/instruments/search?q=${encodeURIComponent(q)}`, { cache: "no-store" })
-  if (!resp.ok) return []
-  return (await resp.json()) as InstrumentWithListings[]
+  const trimmedQuery = query.trim()
+  if (trimmedQuery.length === 0) return []
+  const response = await apiFetch(`/instruments/search?q=${encodeURIComponent(trimmedQuery)}`, { cache: "no-store" })
+  if (!response.ok) return []
+  return (await response.json()) as InstrumentWithListings[]
 }
 
 /**
@@ -35,9 +35,9 @@ export async function createPositionAction(
     if (!name || !symbol || !currency || !exchangeMic) {
       return "Name, symbol, currency, and exchange are required to add a new instrument."
     }
-    let createResp: Response
+    let createInstrumentResponse: Response
     try {
-      createResp = await apiFetch("/instruments", {
+      createInstrumentResponse = await apiFetch("/instruments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -48,14 +48,14 @@ export async function createPositionAction(
     } catch {
       return "Cannot reach the gateway."
     }
-    if (!createResp.ok) return problemDetail(createResp, "Failed to create the instrument.")
-    listingId = ((await createResp.json()) as { listingId: string }).listingId
+    if (!createInstrumentResponse.ok) return problemDetail(createInstrumentResponse, "Failed to create the instrument.")
+    listingId = ((await createInstrumentResponse.json()) as { listingId: string }).listingId
   }
 
   const dateOnly = formData.get("effective_at") as string
-  let posResp: Response
+  let positionResponse: Response
   try {
-    posResp = await apiFetch("/positions", {
+    positionResponse = await apiFetch("/positions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -76,7 +76,7 @@ export async function createPositionAction(
   } catch {
     return "Cannot reach the gateway."
   }
-  if (!posResp.ok) return problemDetail(posResp, "Failed to create the position.")
+  if (!positionResponse.ok) return problemDetail(positionResponse, "Failed to create the position.")
 
   const redirectTo = formData.get("redirect_to")
   redirect(typeof redirectTo === "string" && (redirectTo === "/dashboard" || redirectTo.startsWith("/dashboard?")) ? redirectTo : "/dashboard")

@@ -99,7 +99,7 @@ export interface QuoteDto {
    * caller can downsample and store finer-grained history than the poll cadence;
    * latest-only providers (e.g. yahoo's batch endpoint) omit it.
    */
-  series?: { timeMs: number; close: string }[];
+  series?: SeriesPointDto[];
 }
 
 /** Latest price plus a daily-close series for one symbol. */
@@ -108,7 +108,18 @@ export interface ChartDto {
   previousClose: string | null;
   currency: string | null;
   timestampMs: number | null;
-  series: { timeMs: number; close: string }[];
+  series: SeriesPointDto[];
+}
+
+/**
+ * One point of a provider series. `volume` is the traded volume for the bar when
+ * the provider supplies it (Yahoo chart bars do); omitted/null otherwise (e.g.
+ * lstc's history fallback, yahoo's latest-only batch endpoint).
+ */
+export interface SeriesPointDto {
+  timeMs: number;
+  close: string;
+  volume?: string | null;
 }
 
 export interface SearchResultDto {

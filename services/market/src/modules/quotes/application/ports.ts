@@ -3,6 +3,10 @@ export interface StoredQuotePair {
   previous: string | null;
   currency: string | null;
   latestAt: Date | null;
+  /** The provider that supplied the latest tick (for attribution). */
+  provider: string | null;
+  /** The provider's own timestamp for the latest tick, when supplied. */
+  providerTimestamp: Date | null;
 }
 
 export interface NormalizedQuote {
@@ -10,6 +14,8 @@ export interface NormalizedQuote {
   time: Date;
   provider: string;
   price: string;
+  /** Traded volume for this point; null when the provider doesn't supply it. */
+  volume: string | null;
   currency: string;
   providerTimestamp: Date | null;
 }
@@ -18,11 +24,13 @@ export interface NormalizedQuote {
 export interface DailyClose {
   date: string;
   price: string;
+  /** Traded volume of the day's last tick, when available. */
+  volume: string | null;
 }
 
 export interface QuoteRepository {
   getLatestPairs(listingIds: string[]): Promise<Map<string, StoredQuotePair>>;
-  getSeries(listingId: string, limit: number): Promise<{ time: Date; price: string }[]>;
+  getSeries(listingId: string, limit: number): Promise<{ time: Date; price: string; volume: string | null }[]>;
   /**
    * Daily closing prices over `[from, to]` (one per UTC calendar day), prefixed
    * with the most recent close strictly before `from` so a consumer can
@@ -53,7 +61,7 @@ export interface ProviderQuote {
   previousClose: string | null;
   currency: string | null;
   timestampMs: number | null;
-  series: { timeMs: number; close: string }[];
+  series: { timeMs: number; close: string; volume: string | null }[];
 }
 
 /**

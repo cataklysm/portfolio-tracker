@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { searchInstrumentsAction } from "@/app/positions/add/actions"
+import { searchInstrumentsAction } from "@/features/positions/actions"
 import { setPreferredBenchmarkAction } from "@/app/portfolios/[id]/settings/actions"
 import type { InstrumentWithListings } from "@/lib/types"
 

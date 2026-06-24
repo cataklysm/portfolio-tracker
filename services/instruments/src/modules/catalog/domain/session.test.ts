@@ -76,6 +76,39 @@ describe('computeMarketSession', () => {
     assert.equal(s.status, 'open');
   });
 
+  test('last_session_close + next_session_open as UTC instants', () => {
+    // During the Thursday session (12:00 Berlin): last close is Wednesday 17:30
+    // local (16:30Z, winter = UTC+1), next open is Friday 09:00 local (08:00Z).
+    const open = computeMarketSession(new Date('2026-01-08T11:00:00Z'), XETRA);
+    assert.equal(open.last_session_close, '2026-01-07T16:30:00.000Z');
+    assert.equal(open.next_session_open, '2026-01-09T08:00:00.000Z');
+
+    // After today's close: last close is today's 17:30 local (16:30Z); next open Friday.
+    const postClose = computeMarketSession(new Date('2026-01-08T17:00:00Z'), XETRA);
+    assert.equal(postClose.last_session_close, '2026-01-08T16:30:00.000Z');
+    assert.equal(postClose.next_session_open, '2026-01-09T08:00:00.000Z');
+
+    // Pre-open on a trading day: next open is today's open still ahead.
+    const preOpen = computeMarketSession(new Date('2026-01-08T06:00:00Z'), XETRA);
+    assert.equal(preOpen.next_session_open, '2026-01-08T08:00:00.000Z');
+
+    // Weekend: last close was Friday, next open is Monday.
+    const weekend = computeMarketSession(new Date('2026-01-10T12:00:00Z'), XETRA);
+    assert.equal(weekend.last_session_close, '2026-01-09T16:30:00.000Z');
+    assert.equal(weekend.next_session_open, '2026-01-12T08:00:00.000Z');
+  });
+
+  test('session instants are null when the venue has no hours', () => {
+    const s = computeMarketSession(new Date('2026-01-08T11:00:00Z'), {
+      timezone: 'Europe/Berlin',
+      openLocal: null,
+      closeLocal: null,
+      holidays: [],
+    });
+    assert.equal(s.last_session_close, null);
+    assert.equal(s.next_session_open, null);
+  });
+
   test('unknown when there is no exchange or timezone', () => {
     assert.equal(computeMarketSession(new Date(), null).status, 'unknown');
     const s = computeMarketSession(new Date('2026-01-08T11:00:00Z'), {

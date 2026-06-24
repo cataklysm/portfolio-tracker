@@ -14,6 +14,8 @@ export interface PriceQuotesTable {
   time: ColumnType<Date, Date | string, Date | string>;
   provider: string;
   price: Numeric;
+  /** Traded volume for the bar when the provider supplies it; null otherwise. */
+  volume: Numeric | null;
   currency: string;
   provider_timestamp: Date | null;
   retrieved_at: Generated<Date>;

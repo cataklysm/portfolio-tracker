@@ -28,7 +28,7 @@ import {
 } from "@mui/material"
 import { AppBadge, appIconButtonSx } from "@/application/shell/AppBadge"
 import { appTypography, tableHeadSx } from "@/application/shell/appTypography"
-import { ControlBar } from "@/application/shell/ControlBar"
+import { ControlBar } from "@/design/components/ControlBar"
 import { PageShell } from "@/application/shell/PageShell"
 import { selectableRowSx } from "@/application/shell/rowSelection"
 import { useToast } from "@/application/toast/ToastProvider"

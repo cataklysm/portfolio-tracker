@@ -18,7 +18,7 @@ export interface YahooChartResult {
   previousClose: number | null;
   currency: string | null;
   timestampMs: number | null;
-  series: { timeMs: number; close: number }[];
+  series: { timeMs: number; close: number; volume: number | null }[];
 }
 
 /** A single latest-tick quote (no historical series), as returned by `quote`. */
@@ -177,7 +177,7 @@ interface RawChart {
     currency?: string;
     regularMarketTime?: Date | number;
   };
-  quotes?: Array<{ date?: Date | number; close?: number | null }>;
+  quotes?: Array<{ date?: Date | number; close?: number | null; volume?: number | null }>;
 }
 
 interface RawQuote {
@@ -217,11 +217,11 @@ export class YahooClient {
       const price = meta?.regularMarketPrice;
       if (typeof price !== 'number') return null;
 
-      const series: { timeMs: number; close: number }[] = [];
+      const series: { timeMs: number; close: number; volume: number | null }[] = [];
       for (const bar of result?.quotes ?? []) {
         const timeMs = epochMs(bar.date);
         if (timeMs !== null && typeof bar.close === 'number') {
-          series.push({ timeMs, close: bar.close });
+          series.push({ timeMs, close: bar.close, volume: numOrNull(bar.volume) });
         }
       }
 

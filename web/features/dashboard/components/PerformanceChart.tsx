@@ -7,7 +7,7 @@ import { useTranslations } from "@/lib/i18n"
 import type { BenchmarkReport, PerformancePeriod, PerformanceReport } from "@/lib/types"
 import { useDashboardPrivacy } from "./DashboardPrivacy"
 
-interface Props {
+interface PerformanceChartProperties {
   report: PerformanceReport | null
   benchmark?: BenchmarkReport | null
   period: PerformancePeriod
@@ -24,10 +24,10 @@ const CHART_MODE_STORAGE_KEY = "performance-chart-mode"
 const W = 760
 const H = 200
 
-export function PerformanceChart({ report, benchmark, period, portfolioId, latestQuote, currency, locale }: Props) {
+export function PerformanceChart({ report, benchmark, period, portfolioId, latestQuote, currency, locale }: PerformanceChartProperties) {
   const [chartMode, setChartMode] = useState<ChartMode>("portfolio")
   const { hidden, currency: privateCurrency } = useDashboardPrivacy()
-  const t = useTranslations()
+  const translations = useTranslations()
   const points = report?.points ?? []
   const hasBenchmark = !!benchmark && benchmark.series.length >= 2
 
@@ -38,7 +38,7 @@ export function PerformanceChart({ report, benchmark, period, portfolioId, lates
   const returnPct = invested > 0 ? (totalPnl / invested) * 100 : null
   const up = totalPnl >= 0
   const color = up ? "var(--app-positive)" : "var(--app-negative)"
-  const anyPartial = points.some((p) => !p.complete)
+  const anyPartial = points.some((point) => !point.complete)
   const xirr = num(report?.returns?.money_weighted ?? null)
   const twr = num(report?.returns?.time_weighted ?? null)
 
@@ -64,19 +64,19 @@ export function PerformanceChart({ report, benchmark, period, portfolioId, lates
           ) : null}
         </div>
         <div className="flex flex-wrap items-center justify-end gap-3">
-          {latestQuote ? <span className="text-[9px] text-[var(--app-text-faint)]">{t("dashboard.quotesAsOf", { time: new Date(latestQuote).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" }) })}</span> : null}
+          {latestQuote ? <span className="text-[9px] text-[var(--app-text-faint)]">{translations("dashboard.quotesAsOf", { time: new Date(latestQuote).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" }) })}</span> : null}
           <div className="flex gap-1">
-            {PERIODS.map((p) => (
+            {PERIODS.map((performancePeriod) => (
               <Link
-                key={p}
-                href={periodHref(portfolioId, p)}
+                key={performancePeriod}
+                href={periodHref(portfolioId, performancePeriod)}
                 className={`rounded-md border px-2 py-1 text-[10px] font-medium transition-all ${
-                  p === period
+                  performancePeriod === period
                     ? "border-[color-mix(in_srgb,var(--app-accent)_48%,var(--app-border))] bg-[var(--app-accent-soft)] text-[var(--app-accent)]"
                     : "border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-muted)] hover:border-[var(--app-border-strong)] hover:text-[var(--app-text)]"
                 }`}
               >
-                {p}
+                {performancePeriod}
               </Link>
             ))}
           </div>
@@ -86,7 +86,7 @@ export function PerformanceChart({ report, benchmark, period, portfolioId, lates
       <div className="flex flex-wrap items-start justify-between gap-3 px-4 pb-1 pt-3">
         <div>
           <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--app-text-faint)]">
-            {t("dashboard.performance")}
+            {translations("dashboard.performance")}
           </p>
           <p className="mt-0.5 text-xl font-semibold tabular-nums text-[var(--app-text)]">
             {privateCurrency(locale, value, currency)}
@@ -99,24 +99,24 @@ export function PerformanceChart({ report, benchmark, period, portfolioId, lates
         </div>
         <div className="flex gap-4">
           {xirr !== null && (
-            <Metric label={t("dashboard.xirr")} hint={t("dashboard.xirrHint")} value={xirr} />
+            <Metric label={translations("dashboard.xirr")} hint={translations("dashboard.xirrHint")} value={xirr} />
           )}
           {twr !== null && (
-            <Metric label={t("dashboard.twr")} hint={t("dashboard.twrHint")} value={twr} />
+            <Metric label={translations("dashboard.twr")} hint={translations("dashboard.twrHint")} value={twr} />
           )}
         </div>
       </div>
 
       {points.length < 2 ? (
         <p className="px-4 py-10 text-center text-xs text-[var(--app-text-muted)]">
-          {t("dashboard.performanceEmpty")}
+          {translations("dashboard.performanceEmpty")}
         </p>
       ) : (
         <Chart points={points} benchmark={chartMode === "benchmark" ? benchmark : null} color={color} currency={currency} locale={locale} />
       )}
 
       {anyPartial && points.length >= 2 && (
-        <p className="px-4 pb-3 text-[10px] text-[var(--app-text-faint)]">{t("dashboard.performancePartial")}</p>
+        <p className="px-4 pb-3 text-[10px] text-[var(--app-text-faint)]">{translations("dashboard.performancePartial")}</p>
       )}
     </section>
   )
@@ -234,9 +234,9 @@ function AbsoluteChart({
 }) {
   const [hovered, setHovered] = useState<number | null>(null)
   const { currency: privateCurrency } = useDashboardPrivacy()
-  const t = useTranslations()
-  const values = points.map((p) => num(p.value) ?? 0)
-  const invested = points.map((p) => num(p.invested_capital) ?? 0)
+  const translations = useTranslations()
+  const values = points.map((point) => num(point.value) ?? 0)
+  const invested = points.map((point) => num(point.invested_capital) ?? 0)
   const all = [...values, ...invested]
   const min = Math.min(...all)
   const max = Math.max(...all)
@@ -300,8 +300,8 @@ function AbsoluteChart({
         </svg>
         {active ? (
           <ChartTooltip position={tooltipPosition(hovered!, points.length)} title={new Date(`${active.date}T00:00:00Z`).toLocaleDateString(locale, { dateStyle: "medium" })}>
-            <TooltipRow label={t("dashboard.currentValue")} value={privateCurrency(locale, values[hovered!]!, currency)} color={color} />
-            <TooltipRow label={t("dashboard.investedCapital")} value={privateCurrency(locale, invested[hovered!]!, currency)} color="var(--app-text-muted)" />
+            <TooltipRow label={translations("dashboard.currentValue")} value={privateCurrency(locale, values[hovered!]!, currency)} color={color} />
+            <TooltipRow label={translations("dashboard.investedCapital")} value={privateCurrency(locale, invested[hovered!]!, currency)} color="var(--app-text-muted)" />
             <TooltipRow label="Total P&L" value={privateCurrency(locale, num(active.total_pnl) ?? 0, currency)} color={(num(active.total_pnl) ?? 0) >= 0 ? "var(--app-positive)" : "var(--app-negative)"} />
           </ChartTooltip>
         ) : null}
@@ -310,11 +310,11 @@ function AbsoluteChart({
         <span>{fmtDate(locale, points[0]!.date)}</span>
         <span className="flex items-center gap-3">
           <span className="flex items-center gap-1">
-            <span className="inline-block h-0.5 w-3 rounded" style={{ background: color }} /> {t("dashboard.currentValue")}
+            <span className="inline-block h-0.5 w-3 rounded" style={{ background: color }} /> {translations("dashboard.currentValue")}
           </span>
           <span className="flex items-center gap-1">
             <span className="inline-block h-0 w-3 border-t border-dashed border-[var(--app-text-faint)]" />{" "}
-            {t("dashboard.investedCapital")}
+            {translations("dashboard.investedCapital")}
           </span>
         </span>
         <span>{fmtDate(locale, points[points.length - 1]!.date)}</span>

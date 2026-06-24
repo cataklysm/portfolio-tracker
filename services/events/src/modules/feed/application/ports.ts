@@ -89,12 +89,20 @@ export interface CorporateActionRow {
   rawPayload: Record<string, unknown>;
 }
 
+export type NewsSentiment = 'positive' | 'neutral' | 'negative';
+export type NewsCategory = 'earnings' | 'analyst' | 'regulation' | 'macro' | 'company';
+
 export interface NewsRow {
   instrumentId: string;
   publishedAt: string;
   provider: string;
   headline: string;
   url: string | null;
+  /** Heuristic classification derived from the headline at ingest. */
+  category: NewsCategory | null;
+  /** Heuristic 0..1 relevance score derived from the headline at ingest. */
+  relevance: string | null;
+  sentiment: NewsSentiment | null;
   rawPayload: Record<string, unknown>;
 }
 
@@ -136,6 +144,8 @@ export interface StoredNews {
   headline: string;
   url: string | null;
   sentiment: string | null;
+  category: string | null;
+  relevance: string | null;
 }
 
 // ---- Repositories -----------------------------------------------------------

@@ -42,10 +42,12 @@ const QuoteViewSchema = Type.Object({
   currency: Ns,
   latest_at: Ns,
   freshness_status: Type.Union([Type.Literal('fresh'), Type.Literal('stale'), Type.Literal('unavailable')]),
+  provider: Ns,
+  provider_timestamp: Ns,
 });
 
-const SeriesPointSchema = Type.Object({ time: Type.String(), price: Type.String() });
-const DailyCloseSchema = Type.Object({ date: Type.String(), price: Type.String() });
+const SeriesPointSchema = Type.Object({ time: Type.String(), price: Type.String(), volume: Ns });
+const DailyCloseSchema = Type.Object({ date: Type.String(), price: Type.String(), volume: Ns });
 const RebuildResponse = Type.Object({ purged: Type.Integer(), rebuilt: Type.Integer() });
 const PurgeResponse = Type.Object({ purged: Type.Integer() });
 const RefreshedResponse = Type.Object({ refreshed: Type.Integer() });
@@ -75,7 +77,7 @@ export function registerQuoteRoutes(app: FastifyInstance, deps: QuoteRouteDeps):
   r.get('/quotes/:listingId/series', { preHandler: read, schema: { querystring: SeriesQuery, response: { 200: Type.Array(SeriesPointSchema) } } }, async (request) => {
     const { listingId } = request.params as { listingId: string };
     const series = await deps.service.getSeries(listingId, request.query.limit ?? 90);
-    return series.map((point) => ({ time: point.time.toISOString(), price: point.price }));
+    return series.map((point) => ({ time: point.time.toISOString(), price: point.price, volume: point.volume }));
   });
 
   // Daily closing prices over a date range, for historical reporting (the

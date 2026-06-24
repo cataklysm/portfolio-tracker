@@ -31,6 +31,9 @@ export interface ListingSessionView {
   local_date: string | null;
   current_trading_date: string | null;
   previous_trading_date: string | null;
+  minutes_since_close: number | null;
+  last_session_close: string | null;
+  next_session_open: string | null;
 }
 
 export interface CreateInstrumentInput {

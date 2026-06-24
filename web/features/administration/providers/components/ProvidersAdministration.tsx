@@ -34,7 +34,7 @@ import {
   updateAdminProviderAction,
   updateCapabilityRefreshAction,
 } from "@/features/administration/providers/actions"
-import { ControlBar } from "@/application/shell/ControlBar"
+import { ControlBar } from "@/design/components/ControlBar"
 import { PageShell } from "@/application/shell/PageShell"
 import { selectableRowSx } from "@/application/shell/rowSelection"
 import { useToast, type ToastMessage } from "@/application/toast/ToastProvider"

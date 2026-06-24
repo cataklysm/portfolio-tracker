@@ -22,10 +22,12 @@ export class KyselyQuoteRepository implements QuoteRepository {
       time: Date;
       price: string;
       currency: string;
+      provider: string;
+      provider_timestamp: Date | null;
       is_latest: boolean;
     }>`
       WITH base AS (
-        SELECT listing_id, time, price, currency,
+        SELECT listing_id, time, price, currency, provider, provider_timestamp,
                max(time) OVER (PARTITION BY listing_id) AS latest_time
         FROM market.price_quotes
         WHERE listing_id = ANY(${sql.val(listingIds)})
@@ -40,17 +42,21 @@ export class KyselyQuoteRepository implements QuoteRepository {
                ) AS r
         FROM base
       )
-      SELECT listing_id, time, price, currency, is_latest
+      SELECT listing_id, time, price, currency, provider, provider_timestamp, is_latest
       FROM ranked
       WHERE is_latest OR (is_prior_day AND r = 1)
     `.execute(this.db);
 
     for (const row of rows.rows) {
-      const existing = map.get(row.listing_id) ?? { latest: null, previous: null, currency: null, latestAt: null };
+      const existing =
+        map.get(row.listing_id) ??
+        { latest: null, previous: null, currency: null, latestAt: null, provider: null, providerTimestamp: null };
       if (row.is_latest) {
         existing.latest = row.price;
         existing.currency = row.currency;
         existing.latestAt = row.time;
+        existing.provider = row.provider;
+        existing.providerTimestamp = row.provider_timestamp;
       } else {
         existing.previous = row.price;
       }
@@ -59,22 +65,22 @@ export class KyselyQuoteRepository implements QuoteRepository {
     return map;
   }
 
-  async getSeries(listingId: string, limit: number): Promise<{ time: Date; price: string }[]> {
+  async getSeries(listingId: string, limit: number): Promise<{ time: Date; price: string; volume: string | null }[]> {
     const rows = await this.db
       .selectFrom('market.price_quotes')
-      .select(['time', 'price'])
+      .select(['time', 'price', 'volume'])
       .where('listing_id', '=', listingId)
       .orderBy('time', 'desc')
       .limit(limit)
       .execute();
-    return rows.reverse().map((row) => ({ time: row.time, price: row.price }));
+    return rows.reverse().map((row) => ({ time: row.time, price: row.price, volume: row.volume }));
   }
 
   async getDailyCloseSeries(listingId: string, from: string, to: string): Promise<DailyClose[]> {
     // In-range daily closes: the last tick of each UTC calendar day in [from, to].
-    const inRange = await sql<{ date: string; price: string }>`
-      SELECT date::text AS date, price FROM (
-        SELECT (time AT TIME ZONE 'UTC')::date AS date, price,
+    const inRange = await sql<{ date: string; price: string; volume: string | null }>`
+      SELECT date::text AS date, price, volume FROM (
+        SELECT (time AT TIME ZONE 'UTC')::date AS date, price, volume,
                row_number() OVER (
                  PARTITION BY (time AT TIME ZONE 'UTC')::date ORDER BY time DESC
                ) AS rn
@@ -87,8 +93,8 @@ export class KyselyQuoteRepository implements QuoteRepository {
     `.execute(this.db);
 
     // Anchor: the most recent close strictly before the window (forward-fill seed).
-    const anchor = await sql<{ date: string; price: string }>`
-      SELECT (time AT TIME ZONE 'UTC')::date::text AS date, price
+    const anchor = await sql<{ date: string; price: string; volume: string | null }>`
+      SELECT (time AT TIME ZONE 'UTC')::date::text AS date, price, volume
       FROM market.price_quotes
       WHERE listing_id = ${sql.val(listingId)}
         AND (time AT TIME ZONE 'UTC')::date < ${sql.val(from)}::date
@@ -116,6 +122,7 @@ export class KyselyQuoteRepository implements QuoteRepository {
         time: quote.time,
         provider: quote.provider,
         price: quote.price,
+        volume: quote.volume,
         currency: quote.currency,
         provider_timestamp: quote.providerTimestamp,
         freshness_status: 'delayed',
@@ -123,6 +130,7 @@ export class KyselyQuoteRepository implements QuoteRepository {
       .onConflict((oc) =>
         oc.columns(['listing_id', 'time', 'provider']).doUpdateSet({
           price: quote.price,
+          volume: quote.volume,
           currency: quote.currency,
           provider_timestamp: quote.providerTimestamp,
           retrieved_at: new Date(),

@@ -30,6 +30,7 @@ const FundamentalsViewSchema = Type.Object({
   earnings_growth: Ns,
   shares_outstanding: Ns,
   net_debt: Ns,
+  quality: Ns,
   extra: Type.Union([Type.Record(Type.String(), Type.Unknown()), Type.Null()]),
   as_of: Type.String(),
 });

@@ -39,6 +39,9 @@ export class KyselyNewsRepository implements NewsRepository {
           provider: row.provider,
           headline: row.headline,
           url: row.url,
+          sentiment: row.sentiment,
+          category: row.category,
+          relevance: row.relevance,
           raw_payload: JSON.stringify(row.rawPayload),
         })),
       )
@@ -48,7 +51,7 @@ export class KyselyNewsRepository implements NewsRepository {
   async listByInstrument(instrumentId: string, limit: number): Promise<StoredNews[]> {
     const rows = await this.db
       .selectFrom('events.news')
-      .select(['id', 'instrument_id', 'published_at', 'provider', 'headline', 'url', 'sentiment'])
+      .select(['id', 'instrument_id', 'published_at', 'provider', 'headline', 'url', 'sentiment', 'category', 'relevance'])
       .where('instrument_id', '=', instrumentId)
       .orderBy('published_at', 'desc')
       .limit(limit)
@@ -62,6 +65,8 @@ export class KyselyNewsRepository implements NewsRepository {
       headline: row.headline,
       url: row.url,
       sentiment: row.sentiment,
+      category: row.category,
+      relevance: row.relevance,
     }));
   }
 }

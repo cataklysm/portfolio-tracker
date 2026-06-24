@@ -61,6 +61,8 @@ export interface NewsTable {
   headline: string;
   url: string | null;
   sentiment: 'positive' | 'neutral' | 'negative' | null;
+  category: string | null;
+  relevance: Numeric | null;
   summary: string | null;
   raw_payload: Json | null;
   created_at: Generated<Date>;

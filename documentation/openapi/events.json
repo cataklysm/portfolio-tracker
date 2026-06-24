@@ -453,7 +453,9 @@
                       "provider",
                       "headline",
                       "url",
-                      "sentiment"
+                      "sentiment",
+                      "category",
+                      "relevance"
                     ],
                     "properties": {
                       "id": {
@@ -489,6 +491,26 @@
                         ]
                       },
                       "sentiment": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "category": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "relevance": {
                         "anyOf": [
                           {
                             "type": "string"

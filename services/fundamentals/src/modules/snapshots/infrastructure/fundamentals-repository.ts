@@ -51,6 +51,9 @@ export class KyselyFundamentalsRepository implements FundamentalsRepository {
         instrument_id: row.instrumentId,
         effective_date: row.effectiveDate,
         provider: row.provider,
+        currency: row.currency,
+        provider_as_of: row.providerAsOf,
+        quality: row.quality,
         pe_ratio: row.peRatio,
         pb_ratio: row.pbRatio,
         ps_ratio: row.psRatio,
@@ -66,6 +69,9 @@ export class KyselyFundamentalsRepository implements FundamentalsRepository {
       })
       .onConflict((oc) =>
         oc.columns(['instrument_id', 'effective_date', 'provider']).doUpdateSet({
+          currency: row.currency,
+          provider_as_of: row.providerAsOf,
+          quality: row.quality,
           pe_ratio: row.peRatio,
           pb_ratio: row.pbRatio,
           ps_ratio: row.psRatio,
@@ -89,6 +95,9 @@ interface RawRow {
   instrument_id: string;
   effective_date: Date | string;
   provider: string;
+  currency: string | null;
+  provider_as_of: Date | string | null;
+  quality: string | null;
   pe_ratio: string | null;
   pb_ratio: string | null;
   ps_ratio: string | null;
@@ -117,6 +126,9 @@ function toStored(row: RawRow): StoredFundamentals {
     instrument_id: row.instrument_id,
     effective_date: isoDate(row.effective_date),
     provider: row.provider,
+    currency: row.currency,
+    provider_as_of: row.provider_as_of === null ? null : isoTimestamp(row.provider_as_of),
+    quality: row.quality,
     pe_ratio: row.pe_ratio,
     pb_ratio: row.pb_ratio,
     ps_ratio: row.ps_ratio,

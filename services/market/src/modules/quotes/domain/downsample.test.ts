@@ -2,7 +2,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { selectPointsToStore, type SeriesPoint } from './downsample.js';
 
-const pt = (timeMs: number, close = '1'): SeriesPoint => ({ timeMs, close });
+const pt = (timeMs: number, close = '1'): SeriesPoint => ({ timeMs, close, volume: null });
 
 describe('selectPointsToStore', () => {
   test('keeps one point per resolution window, evenly spaced', () => {

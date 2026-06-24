@@ -3,11 +3,15 @@ import { revalidatePath } from "next/cache"
 import { apiFetch, problemDetail } from "@/lib/api"
 import { parsePriceTargetForm } from "@/lib/price-target-validation"
 
+function detailPath(detailContext: string) {
+  return detailContext.startsWith("/") ? detailContext : `/positions/${detailContext}`
+}
+
 /** Computes + stores a DCF fair value for the instrument. */
 export async function createDcfFairValueAction(
   instrumentId: string,
   currency: string,
-  positionId: string,
+  detailContext: string,
   _prevState: string | null,
   formData: FormData,
 ): Promise<string | null> {
@@ -33,18 +37,18 @@ export async function createDcfFairValueAction(
     return "Cannot reach the gateway."
   }
   if (!resp.ok) return problemDetail(resp, "Failed to compute the fair value.")
-  revalidatePath(`/positions/${positionId}`)
+  revalidatePath(detailPath(detailContext))
   return null
 }
 
-export async function deleteFairValueAction(positionId: string, id: string): Promise<string | null> {
+export async function deleteFairValueAction(detailContext: string, id: string): Promise<string | null> {
   try {
     const resp = await apiFetch(`/fair-values/${id}`, { method: "DELETE" })
     if (!resp.ok) return problemDetail(resp, "Failed to delete the fair value.")
   } catch {
     return "Cannot reach the gateway."
   }
-  revalidatePath(`/positions/${positionId}`)
+  revalidatePath(detailPath(detailContext))
   return null
 }
 
@@ -52,7 +56,7 @@ export async function deleteFairValueAction(positionId: string, id: string): Pro
 export async function createPriceTargetAction(
   instrumentId: string,
   currency: string,
-  positionId: string,
+  detailContext: string,
   _prevState: string | null,
   formData: FormData,
 ): Promise<string | null> {
@@ -79,11 +83,11 @@ export async function createPriceTargetAction(
     return "Cannot reach the gateway."
   }
   if (!resp.ok) return problemDetail(resp, "Failed to add the price target.")
-  revalidatePath(`/positions/${positionId}`)
+  revalidatePath(detailPath(detailContext))
   return null
 }
 
-export async function updatePriceTargetAction(positionId: string, id: string, _prevState: string | null, formData: FormData): Promise<string | null> {
+export async function updatePriceTargetAction(detailContext: string, id: string, _prevState: string | null, formData: FormData): Promise<string | null> {
   const parsed = parsePriceTargetForm(formData)
   if (!parsed.ok) return parsed.error
 
@@ -102,17 +106,17 @@ export async function updatePriceTargetAction(positionId: string, id: string, _p
   } catch {
     return "Cannot reach the gateway."
   }
-  revalidatePath(`/positions/${positionId}`)
+  revalidatePath(detailPath(detailContext))
   return null
 }
 
-export async function deletePriceTargetAction(positionId: string, id: string): Promise<string | null> {
+export async function deletePriceTargetAction(detailContext: string, id: string): Promise<string | null> {
   try {
     const resp = await apiFetch(`/price-targets/${id}`, { method: "DELETE" })
     if (!resp.ok) return problemDetail(resp, "Failed to delete the price target.")
   } catch {
     return "Cannot reach the gateway."
   }
-  revalidatePath(`/positions/${positionId}`)
+  revalidatePath(detailPath(detailContext))
   return null
 }

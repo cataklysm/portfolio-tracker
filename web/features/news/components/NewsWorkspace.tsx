@@ -22,7 +22,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material"
-import { ControlBar, type ControlBarFilterBadge } from "@/application/shell/ControlBar"
+import { ControlBar, type ControlBarFilterBadge } from "@/design/components/ControlBar"
 import { PageMetricGrid, PageShell } from "@/application/shell/PageShell"
 import { selectableRowSx } from "@/application/shell/rowSelection"
 import { useToast } from "@/application/toast/ToastProvider"

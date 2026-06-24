@@ -19,6 +19,7 @@ import type {
   PriceTarget,
   Quote,
   RealizationAllocationView,
+  RealizationView,
   SparklinePoint,
   TaxEvent,
   TransactionTaxEvent,
@@ -51,6 +52,8 @@ type TaxAmount = Pick<TransactionTaxEvent, "id" | "direction" | "amount" | "curr
 
 export interface AssetPositionContext {
   allocations: RealizationAllocationView | null
+  /** Authoritative, UI-ready realization rows from the service (theme 3). */
+  realizations: RealizationView | null
   appliedCorporateActions: AppliedCorporateAction[]
   portfolioName: string
   position: PositionDetail
@@ -106,10 +109,23 @@ export interface AttentionItem {
   title: string
 }
 
-/** Empty-state metadata so the UI can explain *why* a section is empty (theme 15). */
+/** Empty-state metadata so the UI can explain *why* a section is empty (themes 4 + 15). */
 export interface SectionStatus {
   status: "ok" | "empty" | "unavailable"
   reason: string | null
+  /** Only meaningful when status is "unavailable": whether a retry might succeed. */
+  retryable: boolean
+}
+
+/**
+ * A fetched block that distinguishes "loaded but empty" from "could not load"
+ * (theme 4). `reachable` is false when the service returned a non-2xx or the
+ * fetch threw; `retryable` flags transient failures (5xx / network).
+ */
+interface Loadable<T> {
+  value: T
+  reachable: boolean
+  retryable: boolean
 }
 
 export interface AssetSections {
@@ -195,13 +211,16 @@ export async function fetchAssetDetailByListingId(listingId: string, portfolioId
     getLocale(),
     apiFetch("/me", { cache: "no-store" }),
     apiFetch("/portfolios", { cache: "no-store" }),
-    apiFetch(portfolioId ? `/positions?portfolio_id=${portfolioId}` : "/positions", { cache: "no-store" }),
+    apiFetch(
+      portfolioId ? `/positions?portfolio_id=${portfolioId}&listing_id=${listingId}` : `/positions?listing_id=${listingId}`,
+      { cache: "no-store" },
+    ),
     apiFetch(`/listings?ids=${listingId}`, { cache: "no-store" }),
   ])
   const profile = profileResponse.ok ? ((await profileResponse.json()) as MeData) : null
   const portfolios = portfoliosResponse.ok ? ((await portfoliosResponse.json()) as Portfolio[]) : []
-  const positionSummaries = positionsResponse.ok ? ((await positionsResponse.json()) as PositionDetail[]) : []
-  const matchingSummaries = positionSummaries.filter((position) => position.listing_id === listingId)
+  // The portfolio service now filters by listing_id, so no client-side filter is needed.
+  const matchingSummaries = positionsResponse.ok ? ((await positionsResponse.json()) as PositionDetail[]) : []
   const listing = listingResponse.ok ? ((await listingResponse.json()) as ListingSummary[])[0] ?? null : null
   const reportingCurrency = profile?.preferences.reporting_currency ?? "EUR"
 
@@ -243,17 +262,23 @@ async function fetchCommonAssetData(
 ): Promise<Omit<AssetDetailModel, "otherPortfolios" | "portfolios" | "positions" | "scope" | "aggregate" | "holdingStatus">> {
   const instrumentId = listing?.instrument_id ?? null
   const chartHistoryTo = new Date().toISOString().slice(0, 10)
-  const [seriesResponse, dailySeriesResponse, sessionsResponse, quoteResponse, fairValues, priceTargets, fundamentals, events, notificationData] = await Promise.all([
+  const [seriesResponse, dailySeriesResponse, sessionsResponse, quoteResponse, fairValuesLoad, priceTargetsLoad, fundamentalsLoad, eventsLoad, notificationLoad] = await Promise.all([
     apiFetch(`/quotes/${listingId}/series?limit=365`, { cache: "no-store" }),
     apiFetch(`/quotes/${listingId}/history?from=2000-01-01&to=${chartHistoryTo}`, { cache: "no-store" }),
     apiFetch(`/listings/sessions?ids=${listingId}`, { cache: "no-store" }),
     apiFetch(`/quotes?listing_ids=${listingId}`, { cache: "no-store" }),
     fetchInsights<FairValueEstimate>(instrumentId, "fair-values"),
-    fetchInsights<PriceTarget>(instrumentId, "price-targets"),
+    fetchPriceTargets(instrumentId, listingId),
     fetchFundamentals(instrumentId),
     fetchEventsData(instrumentId),
     fetchNotificationData(instrumentId),
   ])
+
+  const fairValues = fairValuesLoad.value
+  const priceTargets = priceTargetsLoad.value
+  const fundamentals = fundamentalsLoad.value
+  const events = eventsLoad.value
+  const notificationData = notificationLoad.value
 
   const chartSeries = seriesResponse.ok ? ((await seriesResponse.json()) as SparklinePoint[]) : []
   const dailyChartSeries = dailySeriesResponse.ok
@@ -264,12 +289,12 @@ async function fetchCommonAssetData(
   const quoteStatus = deriveQuoteStatus(quote, session)
   const currentPrice = num(quote?.latest ?? null)
   const sections: AssetSections = {
-    fundamentals: sectionStatus(fundamentals !== null, instrumentId, "Provider liefert keine Fundamentals"),
-    news: sectionStatus(events.news.length > 0, instrumentId, "Noch keine News synchronisiert"),
-    events: sectionStatus(events.earnings.length > 0 || events.corporateActions.length > 0, instrumentId, "Keine Events verfügbar"),
-    priceTargets: sectionStatus(priceTargets.length > 0, instrumentId, "Noch keine Targets angelegt"),
-    fairValues: sectionStatus(fairValues.length > 0, instrumentId, "Noch keine Fair-Value-Schätzung angelegt"),
-    alerts: sectionStatus(notificationData.rules.length > 0, instrumentId, "Noch keine Alerts angelegt"),
+    fundamentals: sectionStatus(fundamentalsLoad, fundamentals !== null, instrumentId, "Provider liefert keine Fundamentals"),
+    news: sectionStatus(eventsLoad.news, events.news.length > 0, instrumentId, "Noch keine News synchronisiert"),
+    events: sectionStatus(eventsLoad.events, events.earnings.length > 0 || events.corporateActions.length > 0, instrumentId, "Keine Events verfügbar"),
+    priceTargets: sectionStatus(priceTargetsLoad, priceTargets.length > 0, instrumentId, "Noch keine Targets angelegt"),
+    fairValues: sectionStatus(fairValuesLoad, fairValues.length > 0, instrumentId, "Noch keine Fair-Value-Schätzung angelegt"),
+    alerts: sectionStatus(notificationLoad, notificationData.rules.length > 0, instrumentId, "Noch keine Alerts angelegt"),
   }
   const attentionItems = buildAttentionItems(quoteStatus, events, priceTargets, currentPrice, locale)
 
@@ -294,11 +319,21 @@ async function fetchCommonAssetData(
   }
 }
 
-/** Empty-state status: unavailable when the instrument can't be queried at all, else ok/empty. */
-function sectionStatus(hasData: boolean, instrumentId: string | null, emptyReason: string): SectionStatus {
-  if (instrumentId === null) return { status: "unavailable", reason: "Kein Instrument verknüpft" }
-  if (hasData) return { status: "ok", reason: null }
-  return { status: "empty", reason: emptyReason }
+/**
+ * Empty-state status that distinguishes "could not load" from "loaded but empty"
+ * (theme 4). Unavailable when there is no instrument to query or the service was
+ * unreachable; otherwise ok/empty based on whether any data came back.
+ */
+function sectionStatus(
+  load: { reachable: boolean; retryable: boolean },
+  hasData: boolean,
+  instrumentId: string | null,
+  emptyReason: string,
+): SectionStatus {
+  if (instrumentId === null) return { status: "unavailable", reason: "Kein Instrument verknüpft", retryable: false }
+  if (!load.reachable) return { status: "unavailable", reason: "Dienst aktuell nicht erreichbar", retryable: load.retryable }
+  if (hasData) return { status: "ok", reason: null, retryable: false }
+  return { status: "empty", reason: emptyReason, retryable: false }
 }
 
 /**
@@ -427,58 +462,105 @@ function sumNullable(values: (number | null)[]): number | null {
 }
 
 async function fetchPositionContext(position: PositionDetail, reportingCurrency: string, portfolios: Portfolio[]): Promise<AssetPositionContext> {
-  const [allocationResponse, appliedCorporateActionsResponse] = await Promise.all([
+  const [allocationResponse, realizationsResponse, appliedCorporateActionsResponse] = await Promise.all([
     apiFetch(`/positions/${position.id}/allocations`, { cache: "no-store" }),
+    apiFetch(`/positions/${position.id}/realizations`, { cache: "no-store" }),
     apiFetch(`/positions/${position.id}/corporate-actions`, { cache: "no-store" }),
   ])
   const realized = num(position.performance.realized_pnl_reporting)
 
   const allocations = allocationResponse.ok ? ((await allocationResponse.json()) as RealizationAllocationView) : null
+  const realizations = realizationsResponse.ok ? ((await realizationsResponse.json()) as RealizationView) : null
 
   return {
     allocations,
+    realizations,
     appliedCorporateActions: appliedCorporateActionsResponse.ok ? ((await appliedCorporateActionsResponse.json()) as AppliedCorporateAction[]) : [],
-    lotsPersisted: allocations !== null && allocations.calculation_version !== null,
+    lotsPersisted: realizations?.source === "persisted" || (allocations !== null && allocations.calculation_version !== null),
     portfolioName: portfolios.find((portfolio) => portfolio.id === position.portfolio_id)?.name ?? "Portfolio",
     position,
     tax: await fetchPositionTaxSummary(position, reportingCurrency, realized),
   }
 }
 
-async function fetchInsights<TItem>(instrumentId: string | null, path: string): Promise<TItem[]> {
-  if (!instrumentId) return []
-  const response = await apiFetch(`/${path}?instrument_id=${instrumentId}`, { cache: "no-store" })
-  return response.ok ? ((await response.json()) as TItem[]) : []
+/** Reachability of an apiFetch Response: non-2xx is unreachable; 5xx is retryable. */
+function reachability(response: { ok: boolean; status: number }): { reachable: boolean; retryable: boolean } {
+  if (response.ok) return { reachable: true, retryable: false }
+  return { reachable: false, retryable: response.status >= 500 || response.status === 0 }
 }
 
-async function fetchFundamentals(instrumentId: string | null): Promise<Fundamentals | null> {
-  if (!instrumentId) return null
-  const response = await apiFetch(`/fundamentals?instrument_ids=${instrumentId}`, { cache: "no-store" })
-  if (!response.ok) return null
-  const rows = (await response.json()) as Fundamentals[]
-  return rows[0] ?? null
-}
+const unreachable = <T>(value: T, retryable = true): Loadable<T> => ({ value, reachable: false, retryable })
 
-async function fetchEventsData(instrumentId: string | null): Promise<EventsData> {
-  if (!instrumentId) return { corporateActions: [], earnings: [], news: [] }
-  const [earningsResponse, corporateActionsResponse, newsResponse] = await Promise.all([
-    apiFetch(`/events/earnings?instrument_id=${instrumentId}`, { cache: "no-store" }),
-    apiFetch(`/events/corporate-actions?instrument_id=${instrumentId}`, { cache: "no-store" }),
-    apiFetch(`/events/news?instrument_id=${instrumentId}&limit=8`, { cache: "no-store" }),
-  ])
-
-  return {
-    corporateActions: corporateActionsResponse.ok ? ((await corporateActionsResponse.json()) as Page<CorporateAction>).items : [],
-    earnings: earningsResponse.ok ? ((await earningsResponse.json()) as Page<EarningsRow>).items : [],
-    news: newsResponse.ok ? ((await newsResponse.json()) as NewsItem[]) : [],
+/** Price targets scoped to the listing: instrument-wide + this listing's zones (theme 5). */
+async function fetchPriceTargets(instrumentId: string | null, listingId: string): Promise<Loadable<PriceTarget[]>> {
+  if (!instrumentId) return { value: [], reachable: true, retryable: false }
+  try {
+    const response = await apiFetch(`/price-targets?instrument_id=${instrumentId}&listing_id=${listingId}`, { cache: "no-store" })
+    return { value: response.ok ? ((await response.json()) as PriceTarget[]) : [], ...reachability(response) }
+  } catch {
+    return unreachable<PriceTarget[]>([])
   }
 }
 
-async function fetchNotificationData(instrumentId: string | null): Promise<NotificationData> {
-  if (!instrumentId) return { notifications: [], rules: [] }
+async function fetchInsights<TItem>(instrumentId: string | null, path: string): Promise<Loadable<TItem[]>> {
+  if (!instrumentId) return { value: [], reachable: true, retryable: false }
+  try {
+    const response = await apiFetch(`/${path}?instrument_id=${instrumentId}`, { cache: "no-store" })
+    return { value: response.ok ? ((await response.json()) as TItem[]) : [], ...reachability(response) }
+  } catch {
+    return unreachable<TItem[]>([])
+  }
+}
+
+async function fetchFundamentals(instrumentId: string | null): Promise<Loadable<Fundamentals | null>> {
+  if (!instrumentId) return { value: null, reachable: true, retryable: false }
+  try {
+    const response = await apiFetch(`/fundamentals?instrument_ids=${instrumentId}`, { cache: "no-store" })
+    if (!response.ok) return { value: null, ...reachability(response) }
+    const rows = (await response.json()) as Fundamentals[]
+    return { value: rows[0] ?? null, reachable: true, retryable: false }
+  } catch {
+    return unreachable<Fundamentals | null>(null)
+  }
+}
+
+/** Events split into "events" (earnings + corporate actions) and "news" reachability. */
+interface EventsLoadable {
+  value: EventsData
+  events: { reachable: boolean; retryable: boolean }
+  news: { reachable: boolean; retryable: boolean }
+}
+
+async function fetchEventsData(instrumentId: string | null): Promise<EventsLoadable> {
+  const ok = { reachable: true, retryable: false }
+  if (!instrumentId) return { value: { corporateActions: [], earnings: [], news: [] }, events: ok, news: ok }
+  try {
+    const [earningsResponse, corporateActionsResponse, newsResponse] = await Promise.all([
+      apiFetch(`/events/earnings?instrument_id=${instrumentId}`, { cache: "no-store" }),
+      apiFetch(`/events/corporate-actions?instrument_id=${instrumentId}`, { cache: "no-store" }),
+      apiFetch(`/events/news?instrument_id=${instrumentId}&limit=8`, { cache: "no-store" }),
+    ])
+    const value: EventsData = {
+      corporateActions: corporateActionsResponse.ok ? ((await corporateActionsResponse.json()) as Page<CorporateAction>).items : [],
+      earnings: earningsResponse.ok ? ((await earningsResponse.json()) as Page<EarningsRow>).items : [],
+      news: newsResponse.ok ? ((await newsResponse.json()) as NewsItem[]) : [],
+    }
+    // "events" reachability is the weaker of the two event endpoints.
+    const events = earningsResponse.ok && corporateActionsResponse.ok
+      ? ok
+      : reachability(earningsResponse.ok ? corporateActionsResponse : earningsResponse)
+    return { value, events, news: reachability(newsResponse) }
+  } catch {
+    return { value: { corporateActions: [], earnings: [], news: [] }, events: { reachable: false, retryable: true }, news: { reachable: false, retryable: true } }
+  }
+}
+
+async function fetchNotificationData(instrumentId: string | null): Promise<Loadable<NotificationData>> {
+  if (!instrumentId) return { value: { notifications: [], rules: [] }, reachable: true, retryable: false }
   try {
     const [rulesResponse, inboxResponse] = await Promise.all([
-      apiFetch("/notifications/rules", { cache: "no-store" }),
+      // Server-side filter: this instrument's rules plus all_holdings rules (theme 6).
+      apiFetch(`/notifications/rules?instrument_id=${instrumentId}`, { cache: "no-store" }),
       apiFetch("/notifications?limit=100", { cache: "no-store" }),
     ])
     const rules = rulesResponse.ok ? ((await rulesResponse.json()) as AlertRule[]) : []
@@ -487,11 +569,16 @@ async function fetchNotificationData(instrumentId: string | null): Promise<Notif
       : { notifications: [], unread_count: 0 }
 
     return {
-      notifications: inbox.notifications.filter((notification) => notification.instrument_id === instrumentId),
-      rules: rules.filter((rule) => rule.instrument_id === instrumentId),
+      value: {
+        notifications: inbox.notifications.filter((notification) => notification.instrument_id === instrumentId),
+        // Server already scoped to this instrument (+ all_holdings); the panel shows
+        // instrument-specific rules, so all_holdings rules aren't editable per-asset.
+        rules: rules.filter((rule) => rule.instrument_id === instrumentId),
+      },
+      ...reachability(rulesResponse),
     }
   } catch {
-    return { notifications: [], rules: [] }
+    return unreachable<NotificationData>({ notifications: [], rules: [] })
   }
 }
 

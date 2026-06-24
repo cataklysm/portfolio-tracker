@@ -128,6 +128,7 @@ export function AssetDetailWorkspace({ model }: AssetDetailWorkspaceProperties) 
                 locale={model.locale}
                 portfolioId={context.position.portfolio_id}
                 positionId={context.position.id}
+                realizations={context.realizations}
                 reportingCurrency={model.reportingCurrency}
                 transactions={context.position.transactions}
               />

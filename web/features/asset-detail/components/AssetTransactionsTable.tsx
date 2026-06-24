@@ -7,7 +7,7 @@ import { TaxEventModal } from "@/components/TaxEventModal"
 import { deleteTaxEventAction } from "@/app/reports/tax-actions"
 import { fmtPrice, fmtQty } from "@/lib/format"
 import { useTranslations } from "@/lib/i18n"
-import type { RealizationAllocationView, TaxComponent, TransactionTaxEvent, TransactionView } from "@/lib/types"
+import type { RealizationAllocationView, RealizationView, TaxComponent, TransactionTaxEvent, TransactionView } from "@/lib/types"
 
 const TAX_COMPONENT_LABEL: Record<TaxComponent, string> = {
   capital_income: "Capital income tax",
@@ -24,8 +24,21 @@ interface AssetTransactionsTableProperties {
   locale: string
   portfolioId: string
   positionId: string
+  realizations?: RealizationView | null
   reportingCurrency: string
   transactions: TransactionView[]
+}
+
+/** Authoritative per-lot fee share keyed by `${sellId}|${buyId}` (theme 3). */
+function lotFeeIndex(realizations: RealizationView | null | undefined): Map<string, number> {
+  const index = new Map<string, number>()
+  for (const sell of realizations?.sells ?? []) {
+    for (const lot of sell.lots) {
+      const fee = (parseFloat(lot.buy_fee_share) || 0) + (parseFloat(lot.sell_fee_share) || 0)
+      index.set(`${sell.sell_transaction_id}|${lot.buy_transaction_id}`, fee)
+    }
+  }
+  return index
 }
 
 export function AssetTransactionsTable({
@@ -35,6 +48,7 @@ export function AssetTransactionsTable({
   locale,
   portfolioId,
   positionId,
+  realizations,
   reportingCurrency,
   transactions,
 }: AssetTransactionsTableProperties) {
@@ -80,6 +94,7 @@ export function AssetTransactionsTable({
   }
 
   const effectiveAllocations = completeAllocations(transactions, allocations)
+  const lotFees = lotFeeIndex(realizations)
   const allocatedBuyIds = new Set(effectiveAllocations.lot_allocations.map((row) => row.buy_transaction_id))
   const fullyConsumedBuyIds = new Set(
     transactions
@@ -192,10 +207,13 @@ export function AssetTransactionsTable({
                     allocations={effectiveAllocations}
                     assetType={assetType}
                     average={average}
+                    currency={currency}
                     locale={locale}
+                    lotFees={lotFees}
                     lots={lotRows}
                     reportingCurrency={reportingCurrency}
                     sell={transaction}
+                    source={realizations?.source ?? null}
                     transactions={transactions}
                   />
                 ) : null}
@@ -213,19 +231,25 @@ function AllocationRows({
   allocations,
   assetType,
   average,
+  currency,
   locale,
+  lotFees,
   lots,
   reportingCurrency,
   sell,
+  source,
   transactions,
 }: {
   allocations: RealizationAllocationView | null
   assetType: string
   average: RealizationAllocationView["average_cost_realizations"][number] | undefined
+  currency: string
   locale: string
+  lotFees: Map<string, number>
   lots: RealizationAllocationView["lot_allocations"]
   reportingCurrency: string
   sell: TransactionView
+  source: "persisted" | "derived" | null
   transactions: TransactionView[]
 }) {
   const byId = new Map(transactions.map((transaction) => [transaction.id, transaction]))
@@ -237,7 +261,7 @@ function AllocationRows({
       <tr className="bg-[color-mix(in_srgb,var(--app-surface-raised)_76%,var(--app-surface-panel))] text-[10.5px] text-[var(--app-text-muted)]">
         <td className="px-4 py-2" colSpan={2}>
           <span className="mr-2 text-[var(--app-accent)]">Average cost pool</span>
-          <span className="text-[var(--app-text-faint)]">{allocations?.calculation_version ? `calculation ${allocations.calculation_version}` : "derived from ledger"}</span>
+          <span className="text-[var(--app-text-faint)]">{source === "persisted" ? `persisted${allocations?.calculation_version ? ` (calc ${allocations.calculation_version})` : ""}` : source === "derived" ? "derived from ledger" : allocations?.calculation_version ? `calculation ${allocations.calculation_version}` : "derived from ledger"}</span>
         </td>
         <td className="px-3 py-2 text-right tabular-nums">{fmtQty(locale, parseFloat(average.quantity), assetType)}</td>
         <td className="px-3 py-2 text-right tabular-nums">{fmtPrice(locale, parseFloat(average.average_cost_basis), sell.currency, assetType)}</td>
@@ -258,13 +282,16 @@ function AllocationRows({
         const buy = byId.get(lot.buy_transaction_id)
         if (!buy) return null
         const allocatedPnl = allocatedPnls[index]
+        const lotFee = lotFees.get(`${lot.sell_transaction_id}|${lot.buy_transaction_id}`)
         return (
           <tr className="bg-[color-mix(in_srgb,var(--app-surface-raised)_76%,var(--app-surface-panel))] text-[10.5px] text-[var(--app-text-muted)]" key={`${lot.sell_transaction_id}-${lot.buy_transaction_id}`}>
             <td className="px-4 py-2 pl-12 tabular-nums">{formatDate(locale, buy.effective_at)}</td>
             <td className="px-3 py-2"><span className="rounded border border-[var(--app-border)] px-1.5 py-0.5 text-[9px] font-semibold uppercase text-[var(--app-text-faint)]">Consumed buy</span></td>
             <td className="px-3 py-2 text-right tabular-nums">{fmtQty(locale, parseFloat(lot.quantity), assetType)}</td>
             <td className="px-3 py-2 text-right tabular-nums">{fmtPrice(locale, parseFloat(buy.price), buy.currency, assetType)}</td>
-            <td className="px-3 py-2 text-right tabular-nums text-[var(--app-text-faint)]" title="The original buy fee is not allocated proportionally to consumed quantities." />
+            <td className="px-3 py-2 text-right tabular-nums text-[var(--app-text-faint)]" title={lotFee !== undefined ? "Proportional buy + sell fee for this consumed lot" : undefined}>
+              {lotFee !== undefined && lotFee > 0 ? `${lotFee.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}` : null}
+            </td>
             <AllocatedPnlCell currency={allocatedPnl?.currency ?? displayedCurrency} locale={locale} total={allocatedPnl?.total ?? null} value={allocatedPnl?.value ?? null} />
             <td />
             <td className="truncate px-3 py-2 text-[var(--app-text-faint)]">{buy.note}</td>

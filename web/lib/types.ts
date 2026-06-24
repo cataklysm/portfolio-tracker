@@ -127,6 +127,40 @@ export interface SparklinePoint {
   volume?: string | null
 }
 
+/** UI-ready realization rows from GET /positions/:id/realizations (theme 3). */
+export interface RealizationLotRow {
+  buy_transaction_id: string
+  acquisition_date: string
+  buy_price: string | null
+  consumed_quantity: string
+  cost_basis: string
+  buy_fee_share: string
+  sell_fee_share: string
+  realized_pnl: string
+}
+
+export interface RealizationSellRow {
+  sell_transaction_id: string
+  disposal_date: string
+  currency: string
+  quantity: string
+  price: string
+  proceeds: string
+  sell_fee: string
+  consumed_cost_basis: string
+  realized_pnl: string
+  average_cost_basis: string | null
+  lots: RealizationLotRow[]
+}
+
+export interface RealizationView {
+  position_id: string
+  accounting_method: "fifo" | "lifo" | "average_cost" | null
+  calculation_version: string | null
+  source: "persisted" | "derived"
+  sells: RealizationSellRow[]
+}
+
 export type PerformancePeriod = "1W" | "1M" | "YTD" | "1Y" | "ALL"
 
 export interface PerformancePoint {

@@ -48,7 +48,7 @@ export class KyselyPositionRepository implements PositionRepository {
     });
   }
 
-  async listPositionsForUser(userId: string, portfolioId?: string): Promise<PositionRecord[]> {
+  async listPositionsForUser(userId: string, portfolioId?: string, listingId?: string): Promise<PositionRecord[]> {
     let query = this.db
       .selectFrom('portfolio.positions as p')
       .innerJoin('portfolio.portfolios as pf', 'pf.id', 'p.portfolio_id')
@@ -56,6 +56,7 @@ export class KyselyPositionRepository implements PositionRepository {
       .where('pf.user_id', '=', userId)
       .where('pf.archived_at', 'is', null);
     if (portfolioId) query = query.where('p.portfolio_id', '=', portfolioId);
+    if (listingId) query = query.where('p.listing_id', '=', listingId);
     return query.orderBy('p.created_at').execute();
   }
 

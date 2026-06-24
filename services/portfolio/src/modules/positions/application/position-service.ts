@@ -1,6 +1,7 @@
 import Decimal from 'decimal.js';
 import { AppError } from '@portfolio/platform';
 import { computeRealization, type AccountingMethod, type RealizationResult, type SplitAdjustment } from '../domain/realization.js';
+import { buildRealizationView, type RealizationView } from '../domain/realization-view.js';
 import type { TransactionPerformanceMetrics } from '../domain/transaction-performance.js';
 import { deriveState } from '../domain/position-state.js';
 import type { CorporateActionReader } from './ports.js';
@@ -118,8 +119,8 @@ const SPARKLINE_POINTS = 60;
 export class PositionService {
   constructor(private readonly deps: PositionServiceDeps) {}
 
-  async listPositions(userId: string, bearerToken: string, portfolioId?: string): Promise<PositionView[]> {
-    const positions = await this.deps.repo.listPositionsForUser(userId, portfolioId);
+  async listPositions(userId: string, bearerToken: string, portfolioId?: string, listingId?: string): Promise<PositionView[]> {
+    const positions = await this.deps.repo.listPositionsForUser(userId, portfolioId, listingId);
     if (positions.length === 0) return [];
 
     const listingIds = [...new Set(positions.map((p) => p.listing_id))];
@@ -518,6 +519,31 @@ export class PositionService {
   async getRealizationAllocations(userId: string, positionId: string): Promise<RealizationAllocationView> {
     await this.requireOwnedPosition(positionId, userId);
     return this.deps.repo.getRealizationAllocations(positionId);
+  }
+
+  /**
+   * UI-ready realization rows for an owned position: each sell with its consumed
+   * buy lots (FIFO/LIFO) or pooled cost basis (average cost), enriched with buy
+   * date/price, per-lot cost basis, fee shares, and realized P&L — derived
+   * authoritatively from the realization engine so the frontend never has to
+   * reconstruct it from the raw ledger. Flags `persisted` vs `derived`.
+   */
+  async getRealizations(userId: string, positionId: string, bearerToken: string): Promise<RealizationView> {
+    await this.requireOwnedPosition(positionId, userId);
+    const { accountingMethod } = await this.deps.settings.getUserSettings(bearerToken);
+    const [transactions, persisted] = await Promise.all([
+      this.deps.repo.listTransactions(positionId),
+      this.deps.repo.getRealizationAllocations(positionId),
+    ]);
+    const splits = (await this.activeSplits([positionId])).get(positionId) ?? [];
+    const result = computeRealization(transactions, accountingMethod, splits, todayIso());
+    return buildRealizationView({
+      positionId,
+      transactions,
+      result,
+      method: accountingMethod,
+      calculationVersion: persisted.calculation_version,
+    });
   }
 
   /**

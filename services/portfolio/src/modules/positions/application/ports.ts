@@ -136,7 +136,7 @@ export interface WholeTransferRecord {
 }
 
 export interface PositionRepository {
-  listPositionsForUser(userId: string, portfolioId?: string): Promise<PositionRecord[]>;
+  listPositionsForUser(userId: string, portfolioId?: string, listingId?: string): Promise<PositionRecord[]>;
   /** Whole-position transfers for the user, ascending — for per-portfolio attribution windows. */
   listWholeTransfersForUser(userId: string): Promise<WholeTransferRecord[]>;
   getOwnedPosition(positionId: string, userId: string): Promise<PositionRecord | null>;

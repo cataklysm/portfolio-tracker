@@ -8,6 +8,7 @@ import {
   PositionViewSchema,
   PositionDetailSchema,
   RealizationAllocationViewSchema,
+  RealizationViewSchema,
   SerializedTransferSchema,
   TransferPositionResultSchema,
   LotTransferResultSchema,
@@ -40,6 +41,7 @@ const CreatePositionBody = Type.Object({
 
 const ListPositionsQuery = Type.Object({
   portfolio_id: Type.Optional(Type.String({ format: 'uuid' })),
+  listing_id: Type.Optional(Type.String({ format: 'uuid' })),
 });
 
 const TransferBody = Type.Object({
@@ -91,7 +93,7 @@ export function registerPositionRoutes(app: FastifyInstance, deps: PositionRoute
   const write = [deps.authenticate, deps.requireScope('portfolio:write')];
 
   r.get('/positions', { preHandler: read, schema: { querystring: ListPositionsQuery, response: { 200: Type.Array(PositionViewSchema) } } }, async (request) =>
-    deps.service.listPositions(userId(request.user?.sub), bearer(request.headers.authorization), request.query.portfolio_id),
+    deps.service.listPositions(userId(request.user?.sub), bearer(request.headers.authorization), request.query.portfolio_id, request.query.listing_id),
   );
 
   r.get('/positions/:id', { preHandler: read, schema: { response: { 200: PositionDetailSchema } } }, async (request) => {
@@ -104,6 +106,14 @@ export function registerPositionRoutes(app: FastifyInstance, deps: PositionRoute
   r.get('/positions/:id/allocations', { preHandler: read, schema: { response: { 200: RealizationAllocationViewSchema } } }, async (request) => {
     const { id } = request.params as { id: string };
     return deps.service.getRealizationAllocations(userId(request.user?.sub), id);
+  });
+
+  // UI-ready realization rows: each sell with its consumed buy lots (FIFO/LIFO)
+  // or pooled cost basis (average cost), enriched with buy date/price, per-lot
+  // cost basis, fee shares, and realized P&L. Derived authoritatively server-side.
+  r.get('/positions/:id/realizations', { preHandler: read, schema: { response: { 200: RealizationViewSchema } } }, async (request) => {
+    const { id } = request.params as { id: string };
+    return deps.service.getRealizations(userId(request.user?.sub), id, bearer(request.headers.authorization));
   });
 
   // Recorded moves of this position between portfolios.

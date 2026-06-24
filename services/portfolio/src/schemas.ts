@@ -180,6 +180,37 @@ export const RealizationAllocationViewSchema = Type.Object({
   })),
 });
 
+export const RealizationLotRowSchema = Type.Object({
+  buy_transaction_id: Type.String(),
+  acquisition_date: Type.String(),
+  buy_price: Ns,
+  consumed_quantity: Type.String(),
+  cost_basis: Type.String(),
+  buy_fee_share: Type.String(),
+  sell_fee_share: Type.String(),
+  realized_pnl: Type.String(),
+});
+
+export const RealizationViewSchema = Type.Object({
+  position_id: Type.String(),
+  accounting_method: Ns,
+  calculation_version: Ns,
+  source: Type.Union([Type.Literal('persisted'), Type.Literal('derived')]),
+  sells: Type.Array(Type.Object({
+    sell_transaction_id: Type.String(),
+    disposal_date: Type.String(),
+    currency: Type.String(),
+    quantity: Type.String(),
+    price: Type.String(),
+    proceeds: Type.String(),
+    sell_fee: Type.String(),
+    consumed_cost_basis: Type.String(),
+    realized_pnl: Type.String(),
+    average_cost_basis: Ns,
+    lots: Type.Array(RealizationLotRowSchema),
+  })),
+});
+
 export const SerializedTransferSchema = Type.Object({
   id: Type.String(),
   position_id: Type.String(),

@@ -86,7 +86,7 @@ export interface AssessmentRepository {
   insertFairValue(input: NewFairValue): Promise<FairValueRecord>;
   deleteFairValue(id: string, userId: string): Promise<boolean>;
 
-  listPriceTargets(instrumentId: string, userId: string): Promise<PriceTargetRecord[]>;
+  listPriceTargets(instrumentId: string, userId: string, listingId?: string): Promise<PriceTargetRecord[]>;
   /** A user's own ('own' source) target zones across many instruments. */
   listOwnTargetsForInstruments(userId: string, instrumentIds: string[]): Promise<PriceTargetRecord[]>;
   insertPriceTarget(input: NewPriceTarget): Promise<PriceTargetRecord>;

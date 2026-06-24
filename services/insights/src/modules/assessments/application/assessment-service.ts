@@ -76,8 +76,8 @@ export class AssessmentService {
 
   // ---- Price targets ------------------------------------------------------
 
-  listPriceTargets(userId: string, instrumentId: string): Promise<PriceTargetRecord[]> {
-    return this.repo.listPriceTargets(instrumentId, userId);
+  listPriceTargets(userId: string, instrumentId: string, listingId?: string): Promise<PriceTargetRecord[]> {
+    return this.repo.listPriceTargets(instrumentId, userId, listingId);
   }
 
   /** A user's own target zones across instruments (for the notifications worker). */

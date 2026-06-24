@@ -16,6 +16,13 @@ const RuleKind = Type.Union([
   Type.Literal('target_zone'),
 ]);
 
+const RulesQuery = Type.Object({
+  // Optional filters. With instrument_id, also includes all_holdings rules (they
+  // apply to every instrument). With listing_id, narrows to that listing.
+  instrument_id: Type.Optional(Type.String({ format: 'uuid' })),
+  listing_id: Type.Optional(Type.String({ format: 'uuid' })),
+});
+
 const CreateRuleBody = Type.Object({
   kind: RuleKind,
   scope: Type.Union([Type.Literal('instrument'), Type.Literal('all_holdings')]),
@@ -142,7 +149,9 @@ export function registerNotificationRoutes(app: FastifyInstance, deps: Notificat
   });
 
   // ---- Alert rules (incl. the pre-seeded default alerts) ------------------
-  r.get('/notifications/rules', { preHandler: read, schema: { response: { 200: Type.Array(AlertRuleSchema) } } }, async (request) => deps.rules.list(uid(request)));
+  r.get('/notifications/rules', { preHandler: read, schema: { querystring: RulesQuery, response: { 200: Type.Array(AlertRuleSchema) } } }, async (request) =>
+    deps.rules.list(uid(request), { instrumentId: request.query.instrument_id, listingId: request.query.listing_id }),
+  );
 
   r.post('/notifications/rules', { preHandler: write, schema: { body: CreateRuleBody, response: { 201: AlertRuleSchema } } }, async (request, reply) => {
     const rule = await deps.rules.create(uid(request), {

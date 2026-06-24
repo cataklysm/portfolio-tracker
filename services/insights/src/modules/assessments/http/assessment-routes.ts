@@ -5,6 +5,12 @@ import { AppError } from '@portfolio/platform';
 import type { AssessmentService } from '../application/assessment-service.js';
 
 const InstrumentQuery = Type.Object({ instrument_id: Type.String({ format: 'uuid' }) });
+const PriceTargetsQuery = Type.Object({
+  instrument_id: Type.String({ format: 'uuid' }),
+  // When set, returns instrument-wide targets (listing_id null) PLUS this listing's
+  // targets, excluding other listings' — the relevant zones for one asset listing.
+  listing_id: Type.Optional(Type.String({ format: 'uuid' })),
+});
 const InternalTargetsQuery = Type.Object({
   user_id: Type.String({ format: 'uuid' }),
   instrument_ids: Type.String({ minLength: 1, maxLength: 4000 }),
@@ -135,8 +141,8 @@ export function registerAssessmentRoutes(app: FastifyInstance, deps: AssessmentR
 
   // ---- Price targets ------------------------------------------------------
 
-  r.get('/price-targets', { preHandler: read, schema: { querystring: InstrumentQuery, response: { 200: Type.Array(PriceTargetRecordSchema) } } }, async (request) =>
-    deps.service.listPriceTargets(uid(request.user?.sub), request.query.instrument_id),
+  r.get('/price-targets', { preHandler: read, schema: { querystring: PriceTargetsQuery, response: { 200: Type.Array(PriceTargetRecordSchema) } } }, async (request) =>
+    deps.service.listPriceTargets(uid(request.user?.sub), request.query.instrument_id, request.query.listing_id),
   );
 
   r.post('/price-targets', { preHandler: write, schema: { body: CreatePriceTargetBody, response: { 201: PriceTargetRecordSchema } } }, async (request, reply) => {

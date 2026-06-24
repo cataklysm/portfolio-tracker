@@ -93,7 +93,7 @@ export interface UpdateAlertRule {
 
 export interface AlertRuleRepository {
   create(input: NewAlertRule): Promise<AlertRule>;
-  listByUser(userId: string): Promise<AlertRule[]>;
+  listByUser(userId: string, filter?: { instrumentId?: string; listingId?: string }): Promise<AlertRule[]>;
   listEnabled(userId: string): Promise<AlertRule[]>;
   update(userId: string, id: string, patch: UpdateAlertRule): Promise<AlertRule | null>;
   delete(userId: string, id: string): Promise<boolean>;

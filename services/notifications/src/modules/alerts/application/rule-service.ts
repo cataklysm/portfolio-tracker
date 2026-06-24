@@ -34,8 +34,8 @@ export class RuleService {
     private readonly alertState: AlertStateRepository,
   ) {}
 
-  list(userId: string): Promise<AlertRule[]> {
-    return this.repo.listByUser(userId);
+  list(userId: string, filter?: { instrumentId?: string; listingId?: string }): Promise<AlertRule[]> {
+    return this.repo.listByUser(userId, filter);
   }
 
   create(userId: string, input: CreateRuleInput): Promise<AlertRule> {

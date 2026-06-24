@@ -37,13 +37,18 @@ export class KyselyAlertRuleRepository implements AlertRuleRepository {
     return toRule(row as RuleRow);
   }
 
-  async listByUser(userId: string): Promise<AlertRule[]> {
-    const rows = await this.db
+  async listByUser(userId: string, filter?: { instrumentId?: string; listingId?: string }): Promise<AlertRule[]> {
+    let query = this.db
       .selectFrom('notifications.alert_rules')
       .selectAll()
-      .where('user_id', '=', userId)
-      .orderBy('created_at', 'desc')
-      .execute();
+      .where('user_id', '=', userId);
+    // instrument_id filter also surfaces all_holdings rules (they apply to every asset).
+    if (filter?.instrumentId) {
+      const instrumentId = filter.instrumentId;
+      query = query.where((eb) => eb.or([eb('instrument_id', '=', instrumentId), eb('scope', '=', 'all_holdings')]));
+    }
+    if (filter?.listingId) query = query.where('listing_id', '=', filter.listingId);
+    const rows = await query.orderBy('created_at', 'desc').execute();
     return rows.map((r) => toRule(r as RuleRow));
   }
 

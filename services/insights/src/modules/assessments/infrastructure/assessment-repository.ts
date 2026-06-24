@@ -54,15 +54,18 @@ export class KyselyAssessmentRepository implements AssessmentRepository {
     return (result.numDeletedRows ?? 0n) > 0n;
   }
 
-  async listPriceTargets(instrumentId: string, userId: string): Promise<PriceTargetRecord[]> {
-    const rows = await this.db
+  async listPriceTargets(instrumentId: string, userId: string, listingId?: string): Promise<PriceTargetRecord[]> {
+    let query = this.db
       .selectFrom('insights.price_targets')
       .selectAll()
       .where('instrument_id', '=', instrumentId)
-      .where((eb) => eb.or([eb('user_id', '=', userId), eb('user_id', 'is', null)]))
-      .orderBy('horizon')
-      .orderBy('updated_at', 'desc')
-      .execute();
+      .where((eb) => eb.or([eb('user_id', '=', userId), eb('user_id', 'is', null)]));
+    // With a listing: instrument-wide targets (listing_id null) + that listing's;
+    // other listings' targets are excluded.
+    if (listingId) {
+      query = query.where((eb) => eb.or([eb('listing_id', 'is', null), eb('listing_id', '=', listingId)]));
+    }
+    const rows = await query.orderBy('horizon').orderBy('updated_at', 'desc').execute();
     return rows.map(toPriceTarget);
   }
 

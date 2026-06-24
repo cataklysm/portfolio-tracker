@@ -57,6 +57,7 @@
                           "body",
                           "instrument_id",
                           "listing_id",
+                          "rule_id",
                           "data",
                           "read_at",
                           "created_at"
@@ -154,6 +155,16 @@
                               }
                             ]
                           },
+                          "rule_id": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "data": {},
                           "read_at": {
                             "anyOf": [
@@ -242,6 +253,26 @@
     },
     "/notifications/rules": {
       "get": {
+        "parameters": [
+          {
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "in": "query",
+            "name": "instrument_id",
+            "required": false
+          },
+          {
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "in": "query",
+            "name": "listing_id",
+            "required": false
+          }
+        ],
         "responses": {
           "200": {
             "description": "Default Response",

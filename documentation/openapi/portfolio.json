@@ -360,6 +360,15 @@
             "in": "query",
             "name": "portfolio_id",
             "required": false
+          },
+          {
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "in": "query",
+            "name": "listing_id",
+            "required": false
           }
         ],
         "responses": {
@@ -1457,6 +1466,187 @@
                           },
                           "quantity": {
                             "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/positions/{id}/realizations": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "position_id",
+                    "accounting_method",
+                    "calculation_version",
+                    "source",
+                    "sells"
+                  ],
+                  "properties": {
+                    "position_id": {
+                      "type": "string"
+                    },
+                    "accounting_method": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "calculation_version": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "persisted"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "derived"
+                          ]
+                        }
+                      ]
+                    },
+                    "sells": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "sell_transaction_id",
+                          "disposal_date",
+                          "currency",
+                          "quantity",
+                          "price",
+                          "proceeds",
+                          "sell_fee",
+                          "consumed_cost_basis",
+                          "realized_pnl",
+                          "average_cost_basis",
+                          "lots"
+                        ],
+                        "properties": {
+                          "sell_transaction_id": {
+                            "type": "string"
+                          },
+                          "disposal_date": {
+                            "type": "string"
+                          },
+                          "currency": {
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "type": "string"
+                          },
+                          "price": {
+                            "type": "string"
+                          },
+                          "proceeds": {
+                            "type": "string"
+                          },
+                          "sell_fee": {
+                            "type": "string"
+                          },
+                          "consumed_cost_basis": {
+                            "type": "string"
+                          },
+                          "realized_pnl": {
+                            "type": "string"
+                          },
+                          "average_cost_basis": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "lots": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "required": [
+                                "buy_transaction_id",
+                                "acquisition_date",
+                                "buy_price",
+                                "consumed_quantity",
+                                "cost_basis",
+                                "buy_fee_share",
+                                "sell_fee_share",
+                                "realized_pnl"
+                              ],
+                              "properties": {
+                                "buy_transaction_id": {
+                                  "type": "string"
+                                },
+                                "acquisition_date": {
+                                  "type": "string"
+                                },
+                                "buy_price": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "consumed_quantity": {
+                                  "type": "string"
+                                },
+                                "cost_basis": {
+                                  "type": "string"
+                                },
+                                "buy_fee_share": {
+                                  "type": "string"
+                                },
+                                "sell_fee_share": {
+                                  "type": "string"
+                                },
+                                "realized_pnl": {
+                                  "type": "string"
+                                }
+                              }
+                            }
                           }
                         }
                       }

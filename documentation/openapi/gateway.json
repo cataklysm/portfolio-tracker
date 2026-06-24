@@ -2360,6 +2360,15 @@
             "in": "query",
             "name": "portfolio_id",
             "required": false
+          },
+          {
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "in": "query",
+            "name": "listing_id",
+            "required": false
           }
         ],
         "responses": {
@@ -3477,6 +3486,192 @@
                           },
                           "quantity": {
                             "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/positions/{id}/realizations": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "position_id",
+                    "accounting_method",
+                    "calculation_version",
+                    "source",
+                    "sells"
+                  ],
+                  "properties": {
+                    "position_id": {
+                      "type": "string"
+                    },
+                    "accounting_method": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "calculation_version": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "persisted"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "derived"
+                          ]
+                        }
+                      ]
+                    },
+                    "sells": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "sell_transaction_id",
+                          "disposal_date",
+                          "currency",
+                          "quantity",
+                          "price",
+                          "proceeds",
+                          "sell_fee",
+                          "consumed_cost_basis",
+                          "realized_pnl",
+                          "average_cost_basis",
+                          "lots"
+                        ],
+                        "properties": {
+                          "sell_transaction_id": {
+                            "type": "string"
+                          },
+                          "disposal_date": {
+                            "type": "string"
+                          },
+                          "currency": {
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "type": "string"
+                          },
+                          "price": {
+                            "type": "string"
+                          },
+                          "proceeds": {
+                            "type": "string"
+                          },
+                          "sell_fee": {
+                            "type": "string"
+                          },
+                          "consumed_cost_basis": {
+                            "type": "string"
+                          },
+                          "realized_pnl": {
+                            "type": "string"
+                          },
+                          "average_cost_basis": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "lots": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "required": [
+                                "buy_transaction_id",
+                                "acquisition_date",
+                                "buy_price",
+                                "consumed_quantity",
+                                "cost_basis",
+                                "buy_fee_share",
+                                "sell_fee_share",
+                                "realized_pnl"
+                              ],
+                              "properties": {
+                                "buy_transaction_id": {
+                                  "type": "string"
+                                },
+                                "acquisition_date": {
+                                  "type": "string"
+                                },
+                                "buy_price": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "consumed_quantity": {
+                                  "type": "string"
+                                },
+                                "cost_basis": {
+                                  "type": "string"
+                                },
+                                "buy_fee_share": {
+                                  "type": "string"
+                                },
+                                "sell_fee_share": {
+                                  "type": "string"
+                                },
+                                "realized_pnl": {
+                                  "type": "string"
+                                }
+                              }
+                            }
                           }
                         }
                       }
@@ -9243,10 +9438,6 @@
                       "isin": {
                         "maxLength": 12,
                         "type": "string"
-                      },
-                      "underlying_identifier": {
-                        "maxLength": 64,
-                        "type": "string"
                       }
                     }
                   },
@@ -9295,6 +9486,52 @@
                         "type": "string"
                       }
                     }
+                  },
+                  "provider_identifiers": {
+                    "maxItems": 16,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "provider",
+                        "provider_identifier"
+                      ],
+                      "properties": {
+                        "provider": {
+                          "minLength": 1,
+                          "maxLength": 64,
+                          "type": "string"
+                        },
+                        "provider_identifier": {
+                          "minLength": 1,
+                          "maxLength": 128,
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "provider_selections": {
+                    "maxItems": 16,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "capability",
+                        "provider"
+                      ],
+                      "properties": {
+                        "capability": {
+                          "minLength": 1,
+                          "maxLength": 32,
+                          "type": "string"
+                        },
+                        "provider": {
+                          "minLength": 1,
+                          "maxLength": 64,
+                          "type": "string"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -9338,86 +9575,236 @@
     },
     "/instruments/admin/symbols": {
       "get": {
+        "parameters": [
+          {
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "equity"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "crypto"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "fund"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "index"
+                  ]
+                }
+              ]
+            },
+            "in": "query",
+            "name": "asset_type",
+            "required": false
+          },
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 120,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "q",
+            "required": false
+          },
+          {
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "type": "integer"
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "in": "query",
+            "name": "offset",
+            "required": false
+          }
+        ],
         "responses": {
           "200": {
             "description": "Default Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "allOf": [
-                      {
-                        "type": "object",
+                  "type": "object",
+                  "required": [
+                    "items",
+                    "total",
+                    "limit",
+                    "offset",
+                    "counts"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
                         "allOf": [
                           {
                             "type": "object",
-                            "required": [
-                              "id",
-                              "instrument_id",
-                              "symbol",
-                              "currency",
-                              "exchange_id",
-                              "exchange_mic",
-                              "active"
-                            ],
-                            "properties": {
-                              "id": {
-                                "type": "string"
-                              },
-                              "instrument_id": {
-                                "type": "string"
-                              },
-                              "symbol": {
-                                "type": "string"
-                              },
-                              "currency": {
-                                "type": "string"
-                              },
-                              "exchange_id": {
-                                "anyOf": [
-                                  {
+                            "allOf": [
+                              {
+                                "type": "object",
+                                "required": [
+                                  "id",
+                                  "instrument_id",
+                                  "symbol",
+                                  "currency",
+                                  "exchange_id",
+                                  "exchange_mic",
+                                  "active"
+                                ],
+                                "properties": {
+                                  "id": {
                                     "type": "string"
                                   },
-                                  {
-                                    "type": "null"
-                                  }
-                                ]
-                              },
-                              "exchange_mic": {
-                                "anyOf": [
-                                  {
+                                  "instrument_id": {
                                     "type": "string"
                                   },
-                                  {
-                                    "type": "null"
+                                  "symbol": {
+                                    "type": "string"
+                                  },
+                                  "currency": {
+                                    "type": "string"
+                                  },
+                                  "exchange_id": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "exchange_mic": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "active": {
+                                    "type": "boolean"
                                   }
-                                ]
+                                }
                               },
-                              "active": {
-                                "type": "boolean"
+                              {
+                                "type": "object",
+                                "required": [
+                                  "provider_identifiers"
+                                ],
+                                "properties": {
+                                  "provider_identifiers": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "required": [
+                                        "provider",
+                                        "provider_identifier"
+                                      ],
+                                      "properties": {
+                                        "provider": {
+                                          "type": "string"
+                                        },
+                                        "provider_identifier": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
                               }
-                            }
+                            ]
                           },
                           {
                             "type": "object",
                             "required": [
-                              "provider_identifiers"
+                              "instrument_name",
+                              "asset_type",
+                              "isin",
+                              "in_use",
+                              "provider_selections"
                             ],
                             "properties": {
-                              "provider_identifiers": {
+                              "instrument_name": {
+                                "type": "string"
+                              },
+                              "asset_type": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "equity"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "crypto"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "fund"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "index"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "isin": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "in_use": {
+                                "type": "boolean"
+                              },
+                              "provider_selections": {
                                 "type": "array",
                                 "items": {
                                   "type": "object",
                                   "required": [
-                                    "provider",
-                                    "provider_identifier"
+                                    "capability",
+                                    "provider"
                                   ],
                                   "properties": {
-                                    "provider": {
+                                    "capability": {
                                       "type": "string"
                                     },
-                                    "provider_identifier": {
+                                    "provider": {
                                       "type": "string"
                                     }
                                   }
@@ -9426,93 +9813,40 @@
                             }
                           }
                         ]
-                      },
-                      {
-                        "type": "object",
-                        "required": [
-                          "instrument_name",
-                          "asset_type",
-                          "isin",
-                          "underlying_identifier",
-                          "in_use",
-                          "provider_selections"
-                        ],
-                        "properties": {
-                          "instrument_name": {
-                            "type": "string"
-                          },
-                          "asset_type": {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "equity"
-                                ]
-                              },
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "crypto"
-                                ]
-                              },
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "fund"
-                                ]
-                              },
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "index"
-                                ]
-                              }
-                            ]
-                          },
-                          "isin": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
-                          "underlying_identifier": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
-                          "in_use": {
-                            "type": "boolean"
-                          },
-                          "provider_selections": {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "required": [
-                                "capability",
-                                "provider"
-                              ],
-                              "properties": {
-                                "capability": {
-                                  "type": "string"
-                                },
-                                "provider": {
-                                  "type": "string"
-                                }
-                              }
-                            }
-                          }
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "offset": {
+                      "type": "integer"
+                    },
+                    "counts": {
+                      "type": "object",
+                      "required": [
+                        "equity",
+                        "crypto",
+                        "fund",
+                        "index"
+                      ],
+                      "properties": {
+                        "equity": {
+                          "type": "integer"
+                        },
+                        "crypto": {
+                          "type": "integer"
+                        },
+                        "fund": {
+                          "type": "integer"
+                        },
+                        "index": {
+                          "type": "integer"
                         }
                       }
-                    ]
+                    }
                   }
                 }
               }
@@ -10400,7 +10734,10 @@
                       "status",
                       "local_date",
                       "current_trading_date",
-                      "previous_trading_date"
+                      "previous_trading_date",
+                      "minutes_since_close",
+                      "last_session_close",
+                      "next_session_open"
                     ],
                     "properties": {
                       "listing_id": {
@@ -10481,6 +10818,36 @@
                         ]
                       },
                       "previous_trading_date": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "minutes_since_close": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "last_session_close": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "next_session_open": {
                         "anyOf": [
                           {
                             "type": "string"
@@ -10857,7 +11224,9 @@
                       "previous",
                       "currency",
                       "latest_at",
-                      "freshness_status"
+                      "freshness_status",
+                      "provider",
+                      "provider_timestamp"
                     ],
                     "properties": {
                       "listing_id": {
@@ -10924,6 +11293,26 @@
                             ]
                           }
                         ]
+                      },
+                      "provider": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "provider_timestamp": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     }
                   }
@@ -10972,7 +11361,8 @@
                     "type": "object",
                     "required": [
                       "time",
-                      "price"
+                      "price",
+                      "volume"
                     ],
                     "properties": {
                       "time": {
@@ -10980,6 +11370,16 @@
                       },
                       "price": {
                         "type": "string"
+                      },
+                      "volume": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     }
                   }
@@ -11036,7 +11436,8 @@
                     "type": "object",
                     "required": [
                       "date",
-                      "price"
+                      "price",
+                      "volume"
                     ],
                     "properties": {
                       "date": {
@@ -11044,6 +11445,16 @@
                       },
                       "price": {
                         "type": "string"
+                      },
+                      "volume": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     }
                   }
@@ -11108,6 +11519,62 @@
                       "type": "integer"
                     },
                     "rebuilt": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/quotes/purge": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "listing_ids",
+                  "confirm"
+                ],
+                "properties": {
+                  "listing_ids": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "format": "uuid",
+                      "type": "string"
+                    }
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "purged"
+                  ],
+                  "properties": {
+                    "purged": {
                       "type": "integer"
                     }
                   }
@@ -11725,6 +12192,15 @@
             "in": "query",
             "name": "instrument_id",
             "required": true
+          },
+          {
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "in": "query",
+            "name": "listing_id",
+            "required": false
           }
         ],
         "responses": {
@@ -12386,6 +12862,7 @@
                       "earnings_growth",
                       "shares_outstanding",
                       "net_debt",
+                      "quality",
                       "extra",
                       "as_of"
                     ],
@@ -12510,6 +12987,16 @@
                         ]
                       },
                       "net_debt": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "quality": {
                         "anyOf": [
                           {
                             "type": "string"
@@ -13047,7 +13534,9 @@
                       "provider",
                       "headline",
                       "url",
-                      "sentiment"
+                      "sentiment",
+                      "category",
+                      "relevance"
                     ],
                     "properties": {
                       "id": {
@@ -13083,6 +13572,26 @@
                         ]
                       },
                       "sentiment": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "category": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "relevance": {
                         "anyOf": [
                           {
                             "type": "string"
@@ -13200,6 +13709,7 @@
                           "body",
                           "instrument_id",
                           "listing_id",
+                          "rule_id",
                           "data",
                           "read_at",
                           "created_at"
@@ -13288,6 +13798,16 @@
                             ]
                           },
                           "listing_id": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "rule_id": {
                             "anyOf": [
                               {
                                 "type": "string"
@@ -13400,6 +13920,26 @@
     },
     "/notifications/rules": {
       "get": {
+        "parameters": [
+          {
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "in": "query",
+            "name": "instrument_id",
+            "required": false
+          },
+          {
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "in": "query",
+            "name": "listing_id",
+            "required": false
+          }
+        ],
         "responses": {
           "200": {
             "description": "Default Response",
@@ -14178,6 +14718,79 @@
         ]
       }
     },
+    "/admin/providers/{provider}/capability-refresh": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "provider",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "settings"
+                  ],
+                  "properties": {
+                    "settings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "provider",
+                          "capability",
+                          "refreshIntervalMs",
+                          "saveResolutionMs",
+                          "enabled"
+                        ],
+                        "properties": {
+                          "provider": {
+                            "type": "string"
+                          },
+                          "capability": {
+                            "type": "string"
+                          },
+                          "refreshIntervalMs": {
+                            "type": "integer"
+                          },
+                          "saveResolutionMs": {
+                            "anyOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "enabled": {
+                            "type": "boolean"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/admin/providers/{provider}/capability-refresh/{capability}": {
       "put": {
         "requestBody": {
@@ -14441,6 +15054,37 @@
                         ]
                       }
                     ]
+                  },
+                  "capability_quality": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "high"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "medium"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "low"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "unknown"
+                          ]
+                        }
+                      ]
+                    }
                   },
                   "max_batch_size": {
                     "anyOf": [

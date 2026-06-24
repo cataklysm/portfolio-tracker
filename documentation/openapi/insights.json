@@ -357,6 +357,15 @@
             "in": "query",
             "name": "instrument_id",
             "required": true
+          },
+          {
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "in": "query",
+            "name": "listing_id",
+            "required": false
           }
         ],
         "responses": {

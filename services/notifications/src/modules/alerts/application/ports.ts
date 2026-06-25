@@ -58,6 +58,34 @@ export interface NotificationEventStore {
   enqueueCreated(input: { notificationId: string; userId: string; type: NotificationType }): Promise<void>;
 }
 
+// ---- Web Push subscriptions (desktop notifications) ------------------------
+
+export interface NewPushSubscription {
+  userId: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  userAgent: string | null;
+}
+
+export interface StoredPushSubscription {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+}
+
+export interface PushSubscriptionRepository {
+  /** Idempotent upsert on (user_id, endpoint). */
+  upsert(input: NewPushSubscription): Promise<void>;
+  /** All push subscriptions for a user (for fan-out). */
+  listForUser(userId: string): Promise<StoredPushSubscription[]>;
+  /** Removes a subscription by endpoint (own subscription / expired). */
+  deleteByEndpoint(userId: string, endpoint: string): Promise<boolean>;
+  /** Removes an expired endpoint regardless of owner (sender cleanup on 404/410). */
+  deleteExpired(endpoint: string): Promise<void>;
+  markSuccess(endpoint: string): Promise<void>;
+}
+
 // ---- User-defined alert rules ----------------------------------------------
 
 export interface AlertRule {

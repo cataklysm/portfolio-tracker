@@ -806,6 +806,153 @@
           }
         }
       }
+    },
+    "/notifications/push/public-key": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "public_key"
+                  ],
+                  "properties": {
+                    "public_key": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notifications/push/subscriptions": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "endpoint",
+                  "keys"
+                ],
+                "properties": {
+                  "endpoint": {
+                    "minLength": 1,
+                    "maxLength": 2000,
+                    "type": "string"
+                  },
+                  "keys": {
+                    "type": "object",
+                    "required": [
+                      "p256dh",
+                      "auth"
+                    ],
+                    "properties": {
+                      "p256dh": {
+                        "minLength": 1,
+                        "maxLength": 255,
+                        "type": "string"
+                      },
+                      "auth": {
+                        "minLength": 1,
+                        "maxLength": 255,
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "user_agent": {
+                    "maxLength": 400,
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "endpoint"
+                ],
+                "properties": {
+                  "endpoint": {
+                    "minLength": 1,
+                    "maxLength": 2000,
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

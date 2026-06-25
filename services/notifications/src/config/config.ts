@@ -31,10 +31,23 @@ export interface NotificationsConfig {
     cleanupIntervalMs: number;
   };
   consumeInterestStream: boolean;
+  /**
+   * Web Push (VAPID) for desktop notifications. `enabled` is true only when both
+   * keys are configured; otherwise the subscription endpoints still store data
+   * but no push is sent and the public-key endpoint returns null.
+   */
+  push: {
+    enabled: boolean;
+    publicKey: string | null;
+    privateKey: string | null;
+    subject: string;
+  };
 }
 
 export function loadConfig(): NotificationsConfig {
   const issuer = optionalEnv('AUTH_JWT_ISSUER') ?? 'http://localhost:3002';
+  const vapidPublicKey = optionalEnv('VAPID_PUBLIC_KEY') ?? null;
+  const vapidPrivateKey = optionalEnv('VAPID_PRIVATE_KEY') ?? null;
   return {
     port: intEnv('NOTIFICATIONS_PORT', 3009),
     environment: optionalEnv('NODE_ENV') ?? 'development',
@@ -62,5 +75,11 @@ export function loadConfig(): NotificationsConfig {
       cleanupIntervalMs: intEnv('NOTIFICATIONS_RETENTION_CLEANUP_INTERVAL_MS', 24 * 60 * 60 * 1000),
     },
     consumeInterestStream: boolEnv('NOTIFICATIONS_CONSUME_INTEREST_STREAM', true),
+    push: {
+      enabled: Boolean(vapidPublicKey && vapidPrivateKey),
+      publicKey: vapidPublicKey,
+      privateKey: vapidPrivateKey,
+      subject: optionalEnv('VAPID_SUBJECT') ?? 'mailto:admin@example.com',
+    },
   };
 }

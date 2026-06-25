@@ -4,6 +4,7 @@ import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import { AppError, HIDE_FROM_OPENAPI } from '@portfolio/platform';
 import type { NotificationService } from '../application/notification-service.js';
 import type { RuleService } from '../application/rule-service.js';
+import type { PushSubscriptionRepository } from '../application/ports.js';
 import type { LiveNotificationHub } from '../live-notifications.js';
 
 const ListQuery = Type.Object({ limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })) });
@@ -86,10 +87,23 @@ const AlertRuleSchema = Type.Object({
 const OkResponse = Type.Object({ ok: Type.Literal(true) });
 const MarkedResponse = Type.Object({ marked: Type.Integer() });
 
+const PublicKeyResponse = Type.Object({ public_key: Type.Union([Type.String(), Type.Null()]) });
+const PushSubscriptionBody = Type.Object({
+  endpoint: Type.String({ minLength: 1, maxLength: 2000 }),
+  keys: Type.Object({
+    p256dh: Type.String({ minLength: 1, maxLength: 255 }),
+    auth: Type.String({ minLength: 1, maxLength: 255 }),
+  }),
+  user_agent: Type.Optional(Type.String({ maxLength: 400 })),
+});
+const DeletePushBody = Type.Object({ endpoint: Type.String({ minLength: 1, maxLength: 2000 }) });
+
 export interface NotificationRouteDeps {
   service: NotificationService;
   rules: RuleService;
   live?: LiveNotificationHub;
+  /** Web Push: the VAPID public key (or null when unconfigured) + subscription store. */
+  push?: { publicKey: string | null; subscriptions: PushSubscriptionRepository };
   authenticate: preHandlerHookHandler;
   requireScope: (scope: string) => preHandlerHookHandler;
 }
@@ -185,6 +199,34 @@ export function registerNotificationRoutes(app: FastifyInstance, deps: Notificat
 
   r.delete('/notifications/rules/:id', { preHandler: write, schema: { response: { 200: OkResponse } } }, async (request) => {
     await deps.rules.delete(uid(request), (request.params as { id: string }).id);
+    return { ok: true as const };
+  });
+
+  // ---- Web Push subscriptions (desktop notifications) ---------------------
+  // The VAPID public key the client passes to PushManager.subscribe(); null when
+  // push is not configured (the client should then skip registration).
+  r.get('/notifications/push/public-key', { preHandler: read, schema: { response: { 200: PublicKeyResponse } } }, async () => ({
+    public_key: deps.push?.publicKey ?? null,
+  }));
+
+  // Register (or refresh) this client's push subscription for the user.
+  r.post('/notifications/push/subscriptions', { preHandler: write, schema: { body: PushSubscriptionBody, response: { 201: OkResponse } } }, async (request, reply) => {
+    if (!deps.push) throw AppError.badRequest('push_unavailable', 'Push notifications are not configured');
+    await deps.push.subscriptions.upsert({
+      userId: uid(request),
+      endpoint: request.body.endpoint,
+      p256dh: request.body.keys.p256dh,
+      auth: request.body.keys.auth,
+      userAgent: request.body.user_agent ?? null,
+    });
+    reply.code(201);
+    return { ok: true as const };
+  });
+
+  // Remove this client's push subscription (e.g. the user disables desktop alerts).
+  r.delete('/notifications/push/subscriptions', { preHandler: write, schema: { body: DeletePushBody, response: { 200: OkResponse } } }, async (request) => {
+    if (!deps.push) throw AppError.badRequest('push_unavailable', 'Push notifications are not configured');
+    await deps.push.subscriptions.deleteByEndpoint(uid(request), request.body.endpoint);
     return { ok: true as const };
   });
 }

@@ -1,6 +1,7 @@
 import type { Logger } from '@portfolio/platform';
 import type { EventEnvelope, RedisClientType } from '@portfolio/platform';
 import type { NotificationService } from './application/notification-service.js';
+import type { PushSender } from './application/push-sender.js';
 import type { StoredNotification } from './application/ports.js';
 
 type NotificationSink = (notification: StoredNotification) => void;
@@ -46,6 +47,8 @@ export class LiveNotificationStream {
       hub: LiveNotificationHub;
       service: NotificationService;
       logger: Logger;
+      /** When set, fired notifications are also delivered via Web Push. */
+      pushSender?: PushSender;
       stream?: string;
       blockMs?: number;
       count?: number;
@@ -96,10 +99,20 @@ export class LiveNotificationStream {
     if (envelope.event_type !== 'notifications.created') return;
     const userId = envelope.payload.user_id;
     const notificationId = envelope.payload.notification_id;
-    if (!userId || !notificationId || !this.options.hub.hasSubscribers(userId)) return;
+    if (!userId || !notificationId) return;
+    const hasLiveClients = this.options.hub.hasSubscribers(userId);
+    const pushSender = this.options.pushSender;
+    // Nothing to deliver to: no open tab and no push configured.
+    if (!hasLiveClients && !pushSender) return;
     const notification = await this.options.service.getNotification(userId, notificationId);
     if (!notification || notification.read_at) return;
-    this.options.hub.publish(userId, notification);
+    if (hasLiveClients) this.options.hub.publish(userId, notification);
+    // Desktop push goes out regardless of an open tab; best-effort.
+    if (pushSender) {
+      await pushSender.sendToUser(userId, notification).catch((err: unknown) => {
+        this.options.logger.warn({ err, error_code: 'push_fanout_failed' }, 'Web push fan-out failed');
+      });
+    }
   }
 }
 

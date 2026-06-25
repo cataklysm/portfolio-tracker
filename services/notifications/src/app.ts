@@ -28,10 +28,12 @@ import {
   KyselyAlertStateRepository,
   KyselyNotificationEventStore,
   KyselyNotificationRepository,
+  KyselyPushSubscriptionRepository,
   LiveNotificationHub,
   LiveNotificationStream,
   NotificationService,
   NotificationRetentionScheduler,
+  PushSender,
   RuleService,
   registerNotificationRoutes,
 } from './modules/alerts/index.js';
@@ -69,6 +71,17 @@ export async function buildApp(config: NotificationsConfig): Promise<BuiltServic
   const liveHub = new LiveNotificationHub();
   const interestService = new InterestService(interests, logger);
 
+  const pushRepo = new KyselyPushSubscriptionRepository(db);
+  const pushSender = config.push.enabled
+    ? new PushSender({
+        repo: pushRepo,
+        logger,
+        publicKey: config.push.publicKey as string,
+        privateKey: config.push.privateKey as string,
+        subject: config.push.subject,
+      })
+    : undefined;
+
   const evaluator = new AlertEvaluator({
     interests,
     notifications: notificationRepo,
@@ -99,6 +112,7 @@ export async function buildApp(config: NotificationsConfig): Promise<BuiltServic
     service: notificationService,
     rules: ruleService,
     live: liveHub,
+    push: { publicKey: config.push.publicKey, subscriptions: pushRepo },
     authenticate: verifier.authenticate,
     requireScope: (scope) => verifier.requireScope(scope),
   });
@@ -125,6 +139,7 @@ export async function buildApp(config: NotificationsConfig): Promise<BuiltServic
     redis,
     hub: liveHub,
     service: notificationService,
+    pushSender,
     logger,
   });
   await liveStream.start();

@@ -81,10 +81,22 @@ export interface AlertRulesTable {
   updated_at: ColumnType<Date, Date | string | undefined, Date | string>;
 }
 
+export interface PushSubscriptionsTable {
+  id: Generated<string>;
+  user_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  user_agent: string | null;
+  created_at: Generated<Date>;
+  last_success_at: ColumnType<Date | null, Date | string | null, Date | string | null>;
+}
+
 export interface NotificationsDatabase {
   'notifications.notifications': NotificationsTable;
   'notifications.user_interests': UserInterestsTable;
   'notifications.alert_state': AlertStateTable;
   'notifications.alert_rules': AlertRulesTable;
+  'notifications.push_subscriptions': PushSubscriptionsTable;
   'notifications.outbox_events': OutboxEventsTable;
 }

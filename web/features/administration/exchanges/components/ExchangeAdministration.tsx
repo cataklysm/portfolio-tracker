@@ -26,11 +26,12 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material"
-import { AppBadge, appIconButtonSx } from "@/application/shell/AppBadge"
-import { appTypography, tableHeadSx } from "@/application/shell/appTypography"
+import { AppBadge, appIconButtonSx } from "@/design/components/AppBadge"
+import { AppIcon } from "@/design/icons/AppIcon"
+import { appTypography, tableHeadSx } from "@/design/tokens/appTypography"
 import { ControlBar } from "@/design/components/ControlBar"
 import { PageShell } from "@/application/shell/PageShell"
-import { selectableRowSx } from "@/application/shell/rowSelection"
+import { selectableRowSx } from "@/design/tokens/rowSelection"
 import { useToast } from "@/application/toast/ToastProvider"
 import {
   AdminInspectorActions,
@@ -604,24 +605,11 @@ function splitDates(value: string): string[] {
 }
 
 function TrashIcon() {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-      <path d="M3 5h14" />
-      <path d="M8 5V3h4v2" />
-      <path d="M6 5l1 12h6l1-12" />
-      <path d="M8.5 8v6" />
-      <path d="M11.5 8v6" />
-    </svg>
-  )
+  return <AppIcon className="h-4 w-4" name="trash" strokeWidth={1.7} />
 }
 
 function RestoreIcon() {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-      <path d="M5 8a6 6 0 1 1 1.8 4.3" />
-      <path d="M5 4v4h4" />
-    </svg>
-  )
+  return <AppIcon className="h-4 w-4" name="restore" strokeWidth={1.7} />
 }
 
 const dialogPaperSlotProps = {

@@ -14,6 +14,14 @@ export interface FxServiceDeps {
 export class FxService {
   constructor(private readonly deps: FxServiceDeps) {}
 
+  async listAvailableCurrencies(): Promise<string[]> {
+    const currencies = new Set(['EUR']);
+    for (const currency of await this.deps.repo.listAvailableQuoteCurrencies()) {
+      currencies.add(currency);
+    }
+    return [...currencies].sort();
+  }
+
   async getEurRates(quoteCurrencies: string[]): Promise<Record<string, string>> {
     const filtered = quoteCurrencies.filter((c) => c !== 'EUR');
     const map = await this.deps.repo.getLatestEurRates(filtered);

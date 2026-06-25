@@ -48,7 +48,7 @@ export function buildDashboardOverviewModel(positions: PositionView[], portfolio
       ? (num(position.performance.realized_pnl_reporting) ?? 0)
       : (num(position.performance.unrealized_pnl_reporting) ?? 0)
     const dailyPct = num(position.performance.daily_change_pct)
-    const dailyAmount = dailyPct === null ? null : value * (dailyPct / 100)
+    const dailyAmount = num(position.performance.daily_change_amount_reporting) ?? (dailyPct === null ? null : value * (dailyPct / 100))
     const key = listing?.instrument_id ?? position.listing_id
     const existing = assetMap.get(key)
     const portfolioValue = existing?.portfolios.find((portfolio) => portfolio.id === position.portfolio_id)
@@ -109,8 +109,8 @@ export function buildDashboardOverviewModel(positions: PositionView[], portfolio
   const dailyAmount = openAssetRows.reduce<number | null>((sum, assetRow) => assetRow.dailyAmount === null ? sum : (sum ?? 0) + assetRow.dailyAmount, null)
   const dailyPct = totalValue > 0 && dailyAmount !== null ? (dailyAmount / totalValue) * 100 : null
   const biggestMover = [...openAssetRows]
-    .filter((assetRow) => assetRow.dailyPct !== null)
-    .sort((firstAssetRow, secondAssetRow) => Math.abs(secondAssetRow.dailyPct ?? 0) - Math.abs(firstAssetRow.dailyPct ?? 0))[0] ?? null
+    .filter((assetRow) => assetRow.dailyAmount !== null)
+    .sort((firstAssetRow, secondAssetRow) => Math.abs(secondAssetRow.dailyAmount ?? 0) - Math.abs(firstAssetRow.dailyAmount ?? 0))[0] ?? null
   const biggestGainer = [...openAssetRows]
     .filter((assetRow) => (assetRow.dailyPct ?? 0) > 0)
     .sort((firstAssetRow, secondAssetRow) => (secondAssetRow.dailyPct ?? 0) - (firstAssetRow.dailyPct ?? 0))[0] ?? null

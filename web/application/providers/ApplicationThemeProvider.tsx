@@ -125,7 +125,7 @@ const muiTheme = createTheme({
   },
 })
 
-export function MuiThemeProvider({ children }: { children: ReactNode }) {
+export function ApplicationThemeProvider({ children }: { children: ReactNode }) {
   return (
     <AppRouterCacheProvider options={{ enableCssLayer: true }}>
       <ThemeProvider theme={muiTheme}>{children}</ThemeProvider>

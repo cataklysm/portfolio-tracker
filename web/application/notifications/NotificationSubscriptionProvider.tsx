@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef } from "react"
-import { useNotificationSnackbar, type NotificationSnackbarSeverity } from "./NotificationSnackbarProvider"
+import { useNotificationMessages, type NotificationMessageSeverity } from "./NotificationMessageProvider"
 import type { NotificationInbox, NotificationItem } from "@/lib/types"
 
 interface NotificationSubscriptionProviderProps {
@@ -11,7 +11,7 @@ interface NotificationSubscriptionProviderProps {
 }
 
 export function NotificationSubscriptionProvider({ children, enabled, onUnreadDelta }: NotificationSubscriptionProviderProps) {
-  const { notify } = useNotificationSnackbar()
+  const { notify } = useNotificationMessages()
   const seenIds = useRef(new Set<string>())
   const readIds = useRef(new Set<string>())
 
@@ -68,7 +68,7 @@ export function NotificationSubscriptionProvider({ children, enabled, onUnreadDe
         id: notification.id,
         title: notification.title,
         message: notification.body,
-        severity: toSnackbarSeverity(notification.severity),
+        severity: toNotificationMessageSeverity(notification.severity),
         source: "Notification",
         href: "/notifications",
         actionLabel: "Open",
@@ -106,7 +106,7 @@ function updateCursor(value: string): void {
   }
 }
 
-function toSnackbarSeverity(severity: NotificationItem["severity"]): NotificationSnackbarSeverity {
+function toNotificationMessageSeverity(severity: NotificationItem["severity"]): NotificationMessageSeverity {
   if (severity === "critical") return "error"
   if (severity === "warning") return "warning"
   return "info"

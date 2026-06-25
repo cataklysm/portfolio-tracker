@@ -6,6 +6,17 @@ import type { FxRatePoint, FxRateRecord, FxRepository } from '../application/por
 export class KyselyFxRepository implements FxRepository {
   constructor(private readonly db: Kysely<MarketDatabase>) {}
 
+  async listAvailableQuoteCurrencies(): Promise<string[]> {
+    const rows = await this.db
+      .selectFrom('market.fx_rates')
+      .select('quote_currency')
+      .where('base_currency', '=', 'EUR')
+      .groupBy('quote_currency')
+      .orderBy('quote_currency')
+      .execute();
+    return rows.map((row) => row.quote_currency);
+  }
+
   async getLatestEurRates(quoteCurrencies: string[]): Promise<Map<string, string>> {
     const map = new Map<string, string>();
     if (quoteCurrencies.length === 0) return map;

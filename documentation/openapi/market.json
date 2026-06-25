@@ -44,6 +44,7 @@
                       "previous",
                       "currency",
                       "latest_at",
+                      "retrieved_at",
                       "freshness_status",
                       "provider",
                       "provider_timestamp"
@@ -83,6 +84,16 @@
                         ]
                       },
                       "latest_at": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "retrieved_at": {
                         "anyOf": [
                           {
                             "type": "string"
@@ -515,6 +526,7 @@
                       "previous",
                       "currency",
                       "latest_at",
+                      "retrieved_at",
                       "freshness_status",
                       "provider",
                       "provider_timestamp"
@@ -554,6 +566,16 @@
                         ]
                       },
                       "latest_at": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "retrieved_at": {
                         "anyOf": [
                           {
                             "type": "string"
@@ -724,7 +746,64 @@
         }
       }
     },
+    "/fx/currencies": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "currencies"
+                  ],
+                  "properties": {
+                    "currencies": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/fx/rates": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "quote_currencies",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/fx/rates": {
       "get": {
         "parameters": [
           {

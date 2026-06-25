@@ -6,12 +6,13 @@ describe("parsePriceTargetForm", () => {
   test("accepts a complete target zone", () => {
     assert.deepEqual(parsePriceTargetForm(form({
       horizon: "short",
+      currency: "usd",
       zone_low: "100.5",
       zone_high: "125",
       note: "  thesis intact  ",
     })), {
       ok: true,
-      value: { horizon: "short", zoneLow: 100.5, zoneHigh: 125, note: "thesis intact" },
+      value: { currency: "USD", horizon: "short", zoneLow: 100.5, zoneHigh: 125, note: "thesis intact" },
     })
   })
 
@@ -47,11 +48,22 @@ describe("parsePriceTargetForm", () => {
   test("defaults a missing horizon to medium but rejects invalid values", () => {
     assert.deepEqual(parsePriceTargetForm(form({ zone_low: "100", zone_high: "125" })), {
       ok: true,
-      value: { horizon: "medium", zoneLow: 100, zoneHigh: 125, note: null },
+      value: { currency: "EUR", horizon: "medium", zoneLow: 100, zoneHigh: 125, note: null },
     })
     assert.deepEqual(parsePriceTargetForm(form({ horizon: "weekly", zone_low: "100", zone_high: "125" })), {
       ok: false,
       error: "Select a valid horizon.",
+    })
+  })
+
+  test("uses a fallback currency and rejects invalid currency codes", () => {
+    assert.deepEqual(parsePriceTargetForm(form({ zone_low: "100", zone_high: "125" }), "chf"), {
+      ok: true,
+      value: { currency: "CHF", horizon: "medium", zoneLow: 100, zoneHigh: 125, note: null },
+    })
+    assert.deepEqual(parsePriceTargetForm(form({ currency: "EURO", zone_low: "100", zone_high: "125" })), {
+      ok: false,
+      error: "Select a valid currency.",
     })
   })
 })

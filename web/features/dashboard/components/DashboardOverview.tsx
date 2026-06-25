@@ -2,11 +2,13 @@
 
 import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
-import { AppBadge } from "@/application/shell/AppBadge"
+import { AppBadge } from "@/design/components/AppBadge"
 import { ControlBar } from "@/design/components/ControlBar"
 import { MetricBar, MetricBarItem, type MetricBarTone } from "@/design/components/MetricBar"
+import { AppIcon, type AppIconName } from "@/design/icons/AppIcon"
 import { fmtPct, fmtPrice, num } from "@/lib/format"
 import type {
+  BenchmarkReport,
   CorporateAction,
   EarningsRow,
   ExchangeView,
@@ -19,6 +21,7 @@ import type {
   PositionView,
 } from "@/lib/types"
 import { AddPositionModal } from "@/features/positions/components/AddPositionModal"
+import { PerformanceChart } from "@/features/dashboard/components/PerformanceChart"
 import { buildDashboardOverviewModel, type DashboardAssetRow as AssetRow, type DashboardDataTone as DataTone, type DashboardOverviewModel as Model } from "@/features/dashboard/model/dashboard-overview-model"
 import { useDashboardPrivacy } from "./DashboardPrivacy"
 
@@ -60,6 +63,7 @@ interface DashboardOverviewProperties {
   exchanges: ExchangeView[]
   selectedPortfolioId?: string
   performance: PerformanceReport | null
+  benchmark?: BenchmarkReport | null
   period: PerformancePeriod
   latestQuote?: string
   reportingCurrency: string
@@ -73,6 +77,7 @@ export function DashboardOverview({
   exchanges,
   selectedPortfolioId,
   performance,
+  benchmark,
   period,
   latestQuote,
   reportingCurrency,
@@ -101,8 +106,21 @@ export function DashboardOverview({
       <MarketSnapshot currency={reportingCurrency} locale={locale} model={model} period={period} />
       <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-3">
-          <PortfolioBreakdown currency={reportingCurrency} locale={locale} model={model} />
-          <AssetsAcrossPortfolios currency={reportingCurrency} locale={locale} model={model} selectedPortfolioId={selectedPortfolioId} />
+          {selectedPortfolioId ? (
+            <PerformanceChart
+              benchmark={benchmark ?? null}
+              currency={reportingCurrency}
+              defaultMode="benchmark"
+              latestQuote={latestQuote}
+              locale={locale}
+              period={period}
+              portfolioId={selectedPortfolioId}
+              report={performance}
+            />
+          ) : (
+            <PortfolioBreakdown currency={reportingCurrency} locale={locale} model={model} />
+          )}
+          <AssetsAcrossPortfolios currency={reportingCurrency} locale={locale} model={model} period={period} selectedPortfolioId={selectedPortfolioId} />
         </div>
         {rail ? <aside className="space-y-3">{rail}</aside> : null}
       </div>
@@ -111,22 +129,25 @@ export function DashboardOverview({
 }
 
 export function PortfolioIntelligence({
-  positions,
-  portfolios,
-  locale,
   currency,
-  intelligence,
-  notifications,
   events,
+  intelligence,
+  locale,
+  notifications,
+  period,
+  portfolios,
+  positions,
+  selectedPortfolioId,
 }: {
-  positions: PositionView[]
-  portfolios: Portfolio[]
-  locale: string
   currency: string
-  intelligence: IntelligenceReport | null
-  notifications: NotificationInbox
-  selectedPortfolioId?: string
   events?: DashboardEvents
+  intelligence: IntelligenceReport | null
+  locale: string
+  notifications: NotificationInbox
+  period: PerformancePeriod
+  portfolios: Portfolio[]
+  positions: PositionView[]
+  selectedPortfolioId?: string
 }) {
   const model = useMemo(() => buildDashboardOverviewModel(positions, portfolios), [positions, portfolios])
   return (
@@ -137,6 +158,8 @@ export function PortfolioIntelligence({
       locale={locale}
       model={model}
       notifications={notifications}
+      period={period}
+      selectedPortfolioId={selectedPortfolioId}
     />
   )
 }
@@ -294,7 +317,7 @@ function MetricBlock({
 }) {
   return (
     <MetricBarItem
-      icon={<OverviewGlyph kind={icon} />}
+      icon={<AppIcon name={overviewIconName(icon)} />}
       label={label}
       primary={primary}
       sub={sub}
@@ -305,9 +328,12 @@ function MetricBlock({
 }
 
 function MarketSnapshot({ currency, locale, model, period }: { currency: string; locale: string; model: Model; period: PerformancePeriod }) {
-  const { currency: privateCurrency } = useDashboardPrivacy()
+  const { hidden, currency: privateCurrency } = useDashboardPrivacy()
   const sentiment = marketSentiment(model)
   const largestType = model.byType[0]
+  const largestImpact = model.biggestMover
+  const largestImpactAmount = largestImpact?.dailyAmount ?? null
+  const largestImpactPct = largestImpactAmount !== null && model.totalValue > 0 ? (largestImpactAmount / model.totalValue) * 100 : null
   return (
     <MetricBar>
       <div className={OVERVIEW_GRID_CLASS}>
@@ -328,10 +354,10 @@ function MarketSnapshot({ currency, locale, model, period }: { currency: string;
         />
         <SnapshotItem
           icon="impact"
-          label="Daily impact"
-          tone={model.dailyAmount !== null && model.dailyAmount < 0 ? "negative" : "positive"}
-          value={model.dailyAmount === null ? "-" : privateCurrency(locale, model.dailyAmount, currency)}
-          sub={model.dailyPct === null ? "No movement" : fmtPct(model.dailyPct)}
+          label="Largest impact"
+          tone={largestImpactAmount !== null && largestImpactAmount < 0 ? "negative" : "positive"}
+          value={largestImpactAmount === null ? "-" : `${!hidden && largestImpactAmount >= 0 ? "+" : ""}${privateCurrency(locale, largestImpactAmount, currency)}`}
+          sub={largestImpactAmount === null ? "No movement" : `${largestImpactPct === null ? "-" : fmtPct(largestImpactPct)} · ${largestImpact?.name ?? "Unknown asset"}`}
         />
         <SnapshotItem icon="sentiment" label="Sentiment" tone={sentiment.tone === "danger" ? "negative" : sentiment.tone === "success" ? "positive" : undefined} value={sentiment.label} sub={`${period} held assets`} />
         <SnapshotItem icon="exposure" label="Main exposure" value={largestType ? ASSET_LABELS[largestType[0]] ?? largestType[0] : "-"} sub={largestType ? privateCurrency(locale, largestType[1], currency) : "No exposure"} />
@@ -351,23 +377,13 @@ function overviewMetricTone(tone?: OverviewTone): MetricBarTone {
   return "accent"
 }
 
-function OverviewGlyph({ kind }: { kind: OverviewIconKind }) {
-  if (kind === "gain") {
-    return <svg aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.9" viewBox="0 0 24 24"><path d="m5 15 5-5 4 4 5-7" /><path d="M14 7h5v5" /></svg>
-  }
-  if (kind === "loss") {
-    return <svg aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.9" viewBox="0 0 24 24"><path d="m5 9 5 5 4-4 5 7" /><path d="M14 17h5v-5" /></svg>
-  }
-  if (kind === "quality") {
-    return <svg aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.9" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" /></svg>
-  }
-  if (kind === "cash") {
-    return <svg aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.9" viewBox="0 0 24 24"><path d="M12 3v18" /><path d="M17 7.5c-.9-1-2.3-1.5-4-1.5-2.2 0-3.5 1-3.5 2.5 0 1.8 1.9 2.2 3.8 2.6s3.7.8 3.7 2.7c0 1.6-1.4 2.7-4.1 2.7-1.8 0-3.4-.6-4.4-1.7" /></svg>
-  }
-  if (kind === "sentiment" || kind === "breadth") {
-    return <svg aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.9" viewBox="0 0 24 24"><path d="M4 16h4" /><path d="M4 8h7" /><path d="M13 16h7" /><path d="M16 8h4" /></svg>
-  }
-  return <svg aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.9" viewBox="0 0 24 24"><path d="M4 18V6" /><path d="M9 18v-5" /><path d="M14 18V9" /><path d="M19 18V4" /></svg>
+function overviewIconName(kind: OverviewIconKind): AppIconName {
+  if (kind === "gain") return "trendUp"
+  if (kind === "loss") return "trendDown"
+  if (kind === "quality") return "check"
+  if (kind === "cash") return "cash"
+  if (kind === "sentiment" || kind === "breadth") return "list"
+  return "value"
 }
 
 function PortfolioBreakdown({ currency, locale, model }: { currency: string; locale: string; model: Model }) {
@@ -405,7 +421,7 @@ function PortfolioBreakdown({ currency, locale, model }: { currency: string; loc
   )
 }
 
-function AssetsAcrossPortfolios({ currency, locale, model, selectedPortfolioId }: { currency: string; locale: string; model: Model; selectedPortfolioId?: string }) {
+function AssetsAcrossPortfolios({ currency, locale, model, period, selectedPortfolioId }: { currency: string; locale: string; model: Model; period: PerformancePeriod; selectedPortfolioId?: string }) {
   const [sortKey, setSortKey] = useState<AssetSortKey>("value")
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
   const [collapsedTypes, setCollapsedTypes] = useState<Set<string>>(() => new Set())
@@ -476,7 +492,7 @@ function AssetsAcrossPortfolios({ currency, locale, model, selectedPortfolioId }
                 <span className="text-right text-[12px] font-semibold tabular-nums text-[var(--app-text-muted)]">{formatGroupValue(locale, currency, rows)}</span>
                 <span className="text-right text-[10.5px] font-medium tabular-nums text-[var(--app-text-faint)]">{formatGroupAllocation(rows)}</span>
               </button>
-              {!collapsedTypes.has(type) ? rows.map((row) => <AssetTableRow currency={currency} key={row.key} locale={locale} row={row} selectedPortfolioId={selectedPortfolioId} />) : null}
+              {!collapsedTypes.has(type) ? rows.map((row) => <AssetTableRow currency={currency} key={row.key} locale={locale} period={period} row={row} selectedPortfolioId={selectedPortfolioId} />) : null}
             </div>
           ))}
         </div>
@@ -513,14 +529,14 @@ function SortButton({
   )
 }
 
-function AssetTableRow({ currency, locale, row, selectedPortfolioId }: { currency: string; locale: string; row: AssetRow; selectedPortfolioId?: string }) {
+function AssetTableRow({ currency, locale, period, row, selectedPortfolioId }: { currency: string; locale: string; period: PerformancePeriod; row: AssetRow; selectedPortfolioId?: string }) {
   const { currency: privateCurrency } = useDashboardPrivacy()
   const positive = row.pnl >= 0
   const dailyPositive = (row.dailyPct ?? 0) >= 0
   return (
     <Link
       className="grid grid-cols-[minmax(250px,1.7fr)_180px_120px_130px_110px_120px_150px] items-center gap-3 border-b border-[var(--app-border)] px-4 py-2.5 transition last:border-b-0 hover:bg-[var(--app-surface-hover)]"
-      href={selectedPortfolioId ? `/assets/${row.listingId}?portfolio=${selectedPortfolioId}` : `/assets/${row.listingId}`}
+      href={assetDetailHref(row.listingId, selectedPortfolioId, period)}
     >
       <span className="flex min-w-0 items-center gap-3">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--app-border)] bg-[var(--app-surface-raised)] text-[10px] font-bold text-[var(--app-accent)]">{row.symbol.slice(0, 3)}</span>
@@ -562,6 +578,8 @@ function DashboardRail({
   locale,
   model,
   notifications,
+  period,
+  selectedPortfolioId,
 }: {
   currency: string
   events: DashboardEvents
@@ -569,37 +587,41 @@ function DashboardRail({
   locale: string
   model: Model
   notifications: NotificationInbox
+  period: PerformancePeriod
+  selectedPortfolioId?: string
 }) {
   const sentiment = marketSentiment(model)
+  const returnHref = dashboardReturnHref(selectedPortfolioId, period)
   return (
     <div className="space-y-3">
       <MarketSentimentRail currency={currency} locale={locale} model={model} sentiment={sentiment} />
-      <NotificationsRail inbox={notifications} model={model} locale={locale} />
-      <EventsRail events={events} locale={locale} />
+      <NotificationsRail inbox={notifications} model={model} locale={locale} returnHref={returnHref} />
+      <EventsRail events={events} locale={locale} returnHref={returnHref} />
       <DataQualityRail intelligence={intelligence} model={model} />
     </div>
   )
 }
 
-function EventsRail({ events, locale }: { events: DashboardEvents; locale: string }) {
+function EventsRail({ events, locale, returnHref }: { events: DashboardEvents; locale: string; returnHref: string }) {
+  const today = new Date().toISOString().slice(0, 10)
   const rows = [
     ...events.earnings
-      .filter((event) => event.report_date)
+      .filter((event) => event.context && event.report_date && event.report_date >= today)
       .map((event) => ({
         date: event.report_date!,
-        href: event.context?.positionId ? `/positions/${event.context.positionId}` : "/events",
+        href: positionDetailHref(event.context!.positionId, returnHref),
         kind: "Earnings",
-        name: event.context?.name ?? event.instrument_id,
-        symbol: event.context?.symbol ?? "",
+        name: event.context!.name,
+        symbol: event.context!.symbol,
       })),
     ...events.corporateActions
-      .filter((event) => event.ex_date)
+      .filter((event) => event.context && event.ex_date >= today)
       .map((event) => ({
         date: event.ex_date,
-        href: event.context?.positionId ? `/positions/${event.context.positionId}` : "/events",
+        href: positionDetailHref(event.context!.positionId, returnHref),
         kind: event.type === "dividend" ? "Dividend" : event.type,
-        name: event.context?.name ?? event.instrument_id,
-        symbol: event.context?.symbol ?? "",
+        name: event.context!.name,
+        symbol: event.context!.symbol,
       })),
   ].sort((a, b) => a.date.localeCompare(b.date)).slice(0, 6)
 
@@ -692,9 +714,11 @@ function SentimentMetric({ label, tone, value }: { label: string; tone?: "positi
   )
 }
 
-function NotificationsRail({ inbox, locale, model }: { inbox: NotificationInbox; locale: string; model: Model }) {
+function NotificationsRail({ inbox, locale, model, returnHref }: { inbox: NotificationInbox; locale: string; model: Model; returnHref: string }) {
   const listingIds = new Set(model.assetRows.map((row) => row.listingId))
   const positionByListing = new Map(model.assetRows.map((row) => [row.listingId, row.positionId]))
+  const assetByListing = new Map(model.assetRows.map((row) => [row.listingId, row]))
+  const assetByInstrument = new Map(model.assetRows.map((row) => [row.key, row]))
   const unread = inbox.notifications
     .filter((item) => item.read_at === null)
     .sort((a, b) => Number(Boolean(b.listing_id && listingIds.has(b.listing_id))) - Number(Boolean(a.listing_id && listingIds.has(a.listing_id))))
@@ -704,7 +728,20 @@ function NotificationsRail({ inbox, locale, model }: { inbox: NotificationInbox;
     <RailCard title="Notifications" subtitle="Unread holding alerts" action={<Link className="text-[10.5px] font-semibold text-[var(--app-accent)] hover:underline" href="/notifications">All</Link>}>
       {unread.length > 0 ? (
         <ul>
-          {unread.map((item) => <NotificationRow item={item} key={item.id} locale={locale} positionId={item.listing_id ? positionByListing.get(item.listing_id) : undefined} />)}
+          {unread.map((item) => {
+            const asset = findNotificationAsset(item, assetByListing, assetByInstrument)
+            return (
+              <NotificationRow
+                assetName={asset?.name ?? item.title}
+                assetSymbol={asset?.symbol}
+                item={item}
+                key={item.id}
+                locale={locale}
+                positionId={item.listing_id ? positionByListing.get(item.listing_id) : asset?.positionId}
+                returnHref={returnHref}
+              />
+            )
+          })}
         </ul>
       ) : (
         <p className="px-3 py-8 text-center text-[11px] font-medium text-[var(--app-text-muted)]">No unread notifications.</p>
@@ -713,20 +750,50 @@ function NotificationsRail({ inbox, locale, model }: { inbox: NotificationInbox;
   )
 }
 
-function NotificationRow({ item, locale, positionId }: { item: NotificationItem; locale: string; positionId?: string }) {
-  const href = positionId ? `/positions/${positionId}` : "/notifications"
+function NotificationRow({
+  assetName,
+  assetSymbol,
+  item,
+  locale,
+  positionId,
+  returnHref,
+}: {
+  assetName: string
+  assetSymbol?: string
+  item: NotificationItem
+  locale: string
+  positionId?: string
+  returnHref: string
+}) {
+  const href = positionId ? positionDetailHref(positionId, returnHref) : "/notifications"
   const tone = item.severity === "critical" ? "danger" : item.severity === "warning" ? "warning" : "accent"
+  const notificationTitle = assetSymbol && item.title.toLowerCase().includes(assetSymbol.toLowerCase()) ? item.title : assetSymbol ? `${assetSymbol} - ${item.title}` : item.title
   return (
     <li className="border-b border-[var(--app-border)] last:border-b-0">
       <Link className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2.5 transition hover:bg-[var(--app-surface-hover)]" href={href}>
         <span className="min-w-0">
-          <span className="block truncate text-[13px] font-semibold leading-tight text-[var(--app-text)]">{item.title}</span>
-          <span className="mt-0.5 block truncate text-[10.5px] font-medium text-[var(--app-text-faint)]">{new Date(item.created_at).toLocaleString(locale, { dateStyle: "short", timeStyle: "short" })}</span>
+          <span className="block truncate text-[13px] font-semibold leading-tight text-[var(--app-text)]">{assetName}</span>
+          <span className="mt-0.5 block truncate text-[10.5px] font-medium text-[var(--app-text-faint)]">
+            {notificationTitle} - {new Date(item.created_at).toLocaleString(locale, { dateStyle: "short", timeStyle: "short" })}
+          </span>
         </span>
         <AppBadge kind="status" label={item.severity} tone={tone} />
       </Link>
     </li>
   )
+}
+
+function findNotificationAsset(
+  item: NotificationItem,
+  assetByListing: Map<string, AssetRow>,
+  assetByInstrument: Map<string, AssetRow>,
+): AssetRow | undefined {
+  if (item.listing_id) {
+    const byListing = assetByListing.get(item.listing_id)
+    if (byListing) return byListing
+  }
+  if (item.instrument_id) return assetByInstrument.get(item.instrument_id)
+  return undefined
 }
 
 function RailCard({ action, children, subtitle, title }: { action?: React.ReactNode; children: React.ReactNode; subtitle?: string; title: string }) {
@@ -801,4 +868,20 @@ function periodHref(portfolioId: string | undefined, period: PerformancePeriod):
   if (portfolioId) params.set("portfolio", portfolioId)
   params.set("period", period)
   return `/dashboard?${params.toString()}`
+}
+
+function dashboardReturnHref(portfolioId: string | undefined, period: PerformancePeriod): string {
+  return periodHref(portfolioId, period)
+}
+
+function assetDetailHref(listingId: string, portfolioId: string | undefined, period: PerformancePeriod): string {
+  const params = new URLSearchParams()
+  if (portfolioId) params.set("portfolio", portfolioId)
+  params.set("returnTo", dashboardReturnHref(portfolioId, period))
+  return `/assets/${listingId}?${params.toString()}`
+}
+
+function positionDetailHref(positionId: string, returnHref: string): string {
+  const params = new URLSearchParams({ returnTo: returnHref })
+  return `/positions/${positionId}?${params.toString()}`
 }

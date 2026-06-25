@@ -18,7 +18,8 @@ import {
   Tooltip,
 } from "@mui/material"
 import type { ReactNode } from "react"
-import { AppBadge } from "@/application/shell/AppBadge"
+import { AppBadge } from "@/design/components/AppBadge"
+import { AppIcon } from "@/design/icons/AppIcon"
 
 export interface ControlBarTab<TValue extends string> {
   value: TValue
@@ -374,28 +375,15 @@ export function ControlBar<TTab extends string, TPeriod extends string = string>
 }
 
 function ReloadIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M20 7v5h-5M4 17v-5h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M18.2 12A6.5 6.5 0 0 0 7.1 7.4L4 12M5.8 12a6.5 6.5 0 0 0 11.1 4.6L20 12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
+  return <AppIcon className="h-4 w-4" name="reload" />
 }
 
 function AddIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
-    </svg>
-  )
+  return <AppIcon className="h-4 w-4" name="plus" />
 }
 
 function ClearFiltersIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M7 7l10 10M17 7 7 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  )
+  return <AppIcon className="h-3.5 w-3.5" name="x" />
 }
 
 function AppSearchField({
@@ -475,9 +463,5 @@ function AppSearchField({
 }
 
 function SearchIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="m21 21-4.4-4.4M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  )
+  return <AppIcon className="h-[18px] w-[18px]" name="search" />
 }

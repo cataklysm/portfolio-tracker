@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { transferPositionAction } from "@/app/positions/[id]/transfer-action"
+import { transferPositionAction } from "@/features/positions/actions"
 
 interface Props {
   positionId: string
@@ -40,9 +40,9 @@ export function TransferPositionControl({ positionId, portfolios }: Props) {
         value={destination}
         onChange={(e) => setDestination(e.target.value)}
         disabled={busy}
-        className="w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-xs text-[var(--app-text)]"
+        className="w-full rounded-md border border-[var(--app-border)] bg-[var(--app-surface-raised)] px-3 py-2 text-[12px] font-semibold text-[var(--app-text)] outline-none transition focus:border-[var(--app-accent)]"
       >
-        <option value="">Select destination portfolio…</option>
+        <option value="">Select destination portfolio...</option>
         {portfolios.map((p) => (
           <option key={p.id} value={p.id}>
             {p.name}
@@ -53,9 +53,9 @@ export function TransferPositionControl({ positionId, portfolios }: Props) {
         type="button"
         onClick={submit}
         disabled={!destination || busy}
-        className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-xs font-medium text-[var(--app-text-muted)] transition hover:text-[var(--app-text)] disabled:opacity-50"
+        className="rounded-md border border-[var(--app-border)] bg-[var(--app-surface-raised)] px-3 py-2 text-[12px] font-semibold text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text)] disabled:opacity-50"
       >
-        {busy ? "Moving…" : "Move position"}
+        {busy ? "Moving..." : "Move position"}
       </button>
       {error && <p className="text-[10px] text-[var(--app-negative)]">{error}</p>}
     </div>

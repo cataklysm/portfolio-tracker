@@ -107,6 +107,7 @@ export class KyselyAssessmentRepository implements AssessmentRepository {
     patch: UpdatePriceTarget,
   ): Promise<PriceTargetRecord | null> {
     const values: Record<string, unknown> = { updated_at: new Date() };
+    if (patch.currency !== undefined) values.currency = patch.currency;
     if (patch.horizon !== undefined) values.horizon = patch.horizon;
     if (patch.zoneLow !== undefined) values.zone_low = patch.zoneLow;
     if (patch.zoneHigh !== undefined) values.zone_high = patch.zoneHigh;

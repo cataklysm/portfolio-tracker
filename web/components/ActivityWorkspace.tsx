@@ -8,7 +8,7 @@ import { fmtCurrency, num } from "@/lib/format"
 import type { ActivityPage, BookingChange, CashFlow, Portfolio, PositionView } from "@/lib/types"
 import { ActivityFeed } from "./ActivityFeed"
 import { CashFlowModal } from "./CashFlowModal"
-import { TaxEventModal } from "./TaxEventModal"
+import { TaxEventModal } from "@/features/reports/components/TaxEventModal"
 
 interface Props {
   tab: "feed" | "cash" | "changes"

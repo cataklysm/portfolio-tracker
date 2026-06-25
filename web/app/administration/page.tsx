@@ -2,7 +2,8 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Box, Breadcrumbs, Card, CardActionArea, Divider, Stack, Typography } from "@mui/material"
 import { PageShell } from "@/application/shell/PageShell"
-import { appTypography } from "@/application/shell/appTypography"
+import { AppIcon, type AppIconName } from "@/design/icons/AppIcon"
+import { appTypography } from "@/design/tokens/appTypography"
 import { apiFetch, fetchMe } from "@/lib/api"
 import type { AdminSymbolsPage, ExchangeView, ProviderSettingsView } from "@/lib/types"
 
@@ -221,15 +222,11 @@ function plural(count: number, singular: string) {
 }
 
 function SectionIcon({ icon }: { icon: (typeof administrationSections)[number]["icon"] }) {
-  const pathByIcon = {
-    symbols: "M4 6h16M4 12h16M4 18h10",
-    providers: "M7 7v4a5 5 0 0 0 10 0V7M9 3v4M15 3v4M12 16v5",
-    exchanges: "M6 3v3m12-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Zm4 8h3m-3 4h6",
-  } as const
+  const iconBySection = {
+    exchanges: "exchange",
+    providers: "provider",
+    symbols: "list",
+  } satisfies Record<typeof icon, AppIconName>
 
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
-      <path d={pathByIcon[icon]} />
-    </svg>
-  )
+  return <AppIcon className="h-6 w-6" name={iconBySection[icon]} strokeWidth={1.7} />
 }

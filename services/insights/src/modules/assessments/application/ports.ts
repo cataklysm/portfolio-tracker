@@ -52,6 +52,7 @@ export interface NewPriceTarget {
 }
 
 export interface UpdatePriceTarget {
+  currency?: string;
   horizon?: 'short' | 'medium' | 'long';
   zoneLow?: string | null;
   zoneHigh?: string | null;

@@ -41,6 +41,7 @@ const QuoteViewSchema = Type.Object({
   previous: Ns,
   currency: Ns,
   latest_at: Ns,
+  retrieved_at: Ns,
   freshness_status: Type.Union([Type.Literal('fresh'), Type.Literal('stale'), Type.Literal('unavailable')]),
   provider: Ns,
   provider_timestamp: Ns,

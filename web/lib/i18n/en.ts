@@ -328,9 +328,7 @@ export const en = {
     kindEarnings: "Earnings lead time",
     kindCost: "% from cost basis",
     kindTargetZone: "Price target reached",
-    scope: "Applies to",
-    scopeInstrument: "One holding",
-    scopeAll: "All holdings",
+    repeat: "When it triggers",
     instrument: "Holding",
     direction: "Direction",
     above: "Above",
@@ -374,12 +372,12 @@ export const en = {
     earningsGrowth: "Earnings growth",
     sharesOutstanding: "Shares outstanding",
     netDebt: "Net debt",
-    asOf: "As of {date} · {provider}",
+    asOf: "As of {date} - {provider}",
   },
 
   fairValue: {
     empty:
-      "No fair-value estimates yet. Add a DCF model with your own assumptions — it's computed transparently and stored with its inputs.",
+      "No fair-value estimates yet. Add a DCF model with your own assumptions - it's computed transparently and stored with its inputs.",
     addEstimate: "+ Add DCF estimate",
     assumptionsTitle: "DCF assumptions ({currency})",
     freeCashFlow: "Free cash flow ({currency})",

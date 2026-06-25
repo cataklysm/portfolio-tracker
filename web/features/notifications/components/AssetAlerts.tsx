@@ -6,7 +6,8 @@ import {
   createAssetAlertAction,
   deleteAssetAlertAction,
   toggleAssetAlertAction,
-} from "@/app/positions/[id]/notification-actions"
+} from "@/features/notifications/actions"
+import { REPEAT_OPTIONS, repeatLabel } from "@/features/notifications/repeat"
 import type { AlertRule, AlertRuleKind, NotificationItem } from "@/lib/types"
 
 const inputClass =
@@ -14,7 +15,7 @@ const inputClass =
 const labelClass = "mb-1 block text-[10px] font-medium text-[var(--app-text-faint)]"
 
 interface Props {
-  positionId: string
+  detailContext: string
   instrumentId: string
   listingId: string
   symbol: string
@@ -23,12 +24,14 @@ interface Props {
   locale: string
   rules: AlertRule[]
   notifications: NotificationItem[]
+  notificationPreviewLimit?: number
 }
 
 export function AssetAlerts(props: Props) {
   const [open, setOpen] = useState(false)
   const [showAllNotifications, setShowAllNotifications] = useState(false)
-  const visibleNotifications = showAllNotifications ? props.notifications : props.notifications.slice(0, 5)
+  const previewLimit = props.notificationPreviewLimit ?? 5
+  const visibleNotifications = showAllNotifications ? props.notifications : props.notifications.slice(0, previewLimit)
 
   return (
     <div className="space-y-4">
@@ -52,7 +55,7 @@ export function AssetAlerts(props: Props) {
           <p className="py-2 text-[11px] leading-4 text-[var(--app-text-faint)]">No alerts configured for this asset.</p>
         ) : (
           <ul className="space-y-2">
-            {props.rules.map((rule) => <AlertRuleRow key={rule.id} rule={rule} positionId={props.positionId} currency={props.currency} />)}
+            {props.rules.map((rule) => <AlertRuleRow key={rule.id} rule={rule} detailContext={props.detailContext} currency={props.currency} />)}
           </ul>
         )}
       </div>
@@ -81,7 +84,7 @@ export function AssetAlerts(props: Props) {
             ))}
           </ul>
         )}
-        {props.notifications.length > 5 ? (
+        {props.notifications.length > previewLimit ? (
           <button
             type="button"
             onClick={() => setShowAllNotifications((value) => !value)}
@@ -95,10 +98,10 @@ export function AssetAlerts(props: Props) {
   )
 }
 
-function CreateAlertForm({ positionId, instrumentId, listingId, symbol, currency, currentPrice, onClose }: Props & { onClose: () => void }) {
+function CreateAlertForm({ detailContext, instrumentId, listingId, symbol, currency, currentPrice, onClose }: Props & { onClose: () => void }) {
   const [kind, setKind] = useState<AlertRuleKind>("price_threshold")
   const [error, formAction, pending] = useActionState(
-    createAssetAlertAction.bind(null, positionId, instrumentId, listingId),
+    createAssetAlertAction.bind(null, detailContext, instrumentId, listingId),
     null,
   )
   const showDirection = kind === "price_threshold" || kind === "cost_basis_move"
@@ -146,6 +149,14 @@ function CreateAlertForm({ positionId, instrumentId, listingId, symbol, currency
         <label htmlFor="asset-alert-label" className={labelClass}>Label (optional)</label>
         <input id="asset-alert-label" name="label" maxLength={100} placeholder="e.g. Review position" className={inputClass} />
       </div>
+      <div>
+        <label htmlFor="asset-alert-repeat" className={labelClass}>When it triggers</label>
+        <select id="asset-alert-repeat" name="repeat" defaultValue="once" className={inputClass}>
+          {REPEAT_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      </div>
       <button type="submit" disabled={pending} className="w-full rounded-lg bg-[var(--app-accent)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50">
         {pending ? "Creating..." : "Create alert"}
       </button>
@@ -162,7 +173,7 @@ function Field({ name, label, ...props }: { name: string; label: string } & Reac
   )
 }
 
-function AlertRuleRow({ rule, positionId, currency }: { rule: AlertRule; positionId: string; currency: string }) {
+function AlertRuleRow({ rule, detailContext, currency }: { rule: AlertRule; detailContext: string; currency: string }) {
   const [pending, startTransition] = useTransition()
   const description = describeRule(rule, currency)
 
@@ -174,10 +185,13 @@ function AlertRuleRow({ rule, positionId, currency }: { rule: AlertRule; positio
           {rule.label ? <p className="mt-0.5 truncate text-[9px] text-[var(--app-text-faint)]">{description}</p> : null}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
+          <span className="rounded-md border border-[var(--app-border)] px-1.5 py-0.5 text-[9px] font-medium text-[var(--app-text-faint)]" title={rule.notify_once ? "Fires once, then disables" : rule.remind_after_minutes ? `Reminds again after ${rule.remind_after_minutes} min` : "Recurring alert"}>
+            {repeatLabel(rule)}
+          </span>
           <button
             type="button"
             disabled={pending}
-            onClick={() => startTransition(async () => void (await toggleAssetAlertAction(positionId, rule.id, !rule.enabled)))}
+            onClick={() => startTransition(async () => void (await toggleAssetAlertAction(detailContext, rule.id, !rule.enabled)))}
             className={`rounded-md border px-1.5 py-0.5 text-[9px] font-semibold disabled:opacity-50 ${rule.enabled ? "border-[var(--app-positive)]/40 text-[var(--app-positive)]" : "border-[var(--app-border)] text-[var(--app-text-faint)]"}`}
           >
             {rule.enabled ? "On" : "Off"}
@@ -188,7 +202,7 @@ function AlertRuleRow({ rule, positionId, currency }: { rule: AlertRule; positio
             aria-label="Delete alert"
             onClick={() => {
               if (confirm("Delete this alert?")) {
-                startTransition(async () => void (await deleteAssetAlertAction(positionId, rule.id)))
+                startTransition(async () => void (await deleteAssetAlertAction(detailContext, rule.id)))
               }
             }}
             className="rounded-md border border-[var(--app-border)] px-1.5 py-0.5 text-[9px] text-[var(--app-text-faint)] hover:border-[var(--app-negative)]/40 hover:text-[var(--app-negative)] disabled:opacity-50"

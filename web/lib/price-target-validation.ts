@@ -1,6 +1,7 @@
 export type PriceTargetHorizon = "short" | "medium" | "long"
 
 export interface ParsedPriceTargetForm {
+  currency: string
   horizon: PriceTargetHorizon
   zoneLow: number
   zoneHigh: number
@@ -13,9 +14,11 @@ export type PriceTargetFormResult =
 
 const HORIZONS = new Set<PriceTargetHorizon>(["short", "medium", "long"])
 
-export function parsePriceTargetForm(formData: Pick<FormData, "get">): PriceTargetFormResult {
+export function parsePriceTargetForm(formData: Pick<FormData, "get">, fallbackCurrency = "EUR"): PriceTargetFormResult {
   const horizon = readHorizon(formData.get("horizon"))
   if (!horizon) return { ok: false, error: "Select a valid horizon." }
+  const currency = readCurrency(formData.get("currency"), fallbackCurrency)
+  if (!currency) return { ok: false, error: "Select a valid currency." }
 
   const low = readRequiredNumber(formData.get("zone_low"), "Zone low")
   if (!low.ok) return low
@@ -30,6 +33,7 @@ export function parsePriceTargetForm(formData: Pick<FormData, "get">): PriceTarg
   return {
     ok: true,
     value: {
+      currency,
       horizon,
       zoneLow: low.value,
       zoneHigh: high.value,
@@ -42,6 +46,12 @@ function readHorizon(raw: FormDataEntryValue | null): PriceTargetHorizon | null 
   if (raw === null) return "medium"
   if (typeof raw !== "string") return null
   return HORIZONS.has(raw as PriceTargetHorizon) ? (raw as PriceTargetHorizon) : null
+}
+
+function readCurrency(raw: FormDataEntryValue | null, fallbackCurrency: string): string | null {
+  const value = typeof raw === "string" && raw.trim() !== "" ? raw.trim() : fallbackCurrency
+  const currency = value.toUpperCase()
+  return /^[A-Z]{3}$/.test(currency) ? currency : null
 }
 
 function readRequiredNumber(raw: FormDataEntryValue | null, label: string): { ok: true; value: number } | { ok: false; error: string } {

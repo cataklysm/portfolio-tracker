@@ -4,12 +4,20 @@ import { fetchAssetDetailByPositionId } from "@/features/asset-detail/model/asse
 
 interface PositionDetailPageProperties {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ returnTo?: string }>
 }
 
-export default async function PositionDetailPage({ params }: PositionDetailPageProperties) {
+export default async function PositionDetailPage({ params, searchParams }: PositionDetailPageProperties) {
   const { id } = await params
+  const { returnTo } = await searchParams
   const model = await fetchAssetDetailByPositionId(id)
   if (!model) notFound()
 
-  return <AssetDetailWorkspace model={model} />
+  return <AssetDetailWorkspace model={model} returnHref={safeReturnHref(returnTo)} />
+}
+
+function safeReturnHref(value: string | undefined): string | undefined {
+  if (!value?.startsWith("/")) return undefined
+  if (value.startsWith("//")) return undefined
+  return value
 }

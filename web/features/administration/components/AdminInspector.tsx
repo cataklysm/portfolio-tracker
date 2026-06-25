@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react"
 import { Box, Stack, Typography } from "@mui/material"
-import { appTypography } from "@/application/shell/appTypography"
+import { appTypography } from "@/design/tokens/appTypography"
 
 export function AdminInspectorHeader({
   detail,

@@ -18,7 +18,7 @@ interface NewsProps {
 
 function eps(value: string | null): string {
   const n = num(value)
-  return n === null ? "—" : n.toFixed(2)
+  return n === null ? "-" : n.toFixed(2)
 }
 
 function formatDate(iso: string, locale: string, withYear = true): string {
@@ -48,7 +48,7 @@ export function EventsSection({ earnings, corporateActions, currency, locale, em
   return (
     <div className="space-y-4">
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(260px,0.85fr)]">
-        <div className="app-muted-panel overflow-hidden rounded-xl">
+        <div className="app-muted-panel overflow-hidden rounded-lg">
           <SectionHeading title="Next earnings" count={upcoming.length} />
           {upcoming.length > 0 ? (
             <UpcomingEarnings item={upcoming[0]} locale={locale} />
@@ -57,7 +57,7 @@ export function EventsSection({ earnings, corporateActions, currency, locale, em
           )}
         </div>
 
-        <div className="app-muted-panel overflow-hidden rounded-xl">
+        <div className="app-muted-panel overflow-hidden rounded-lg">
           <SectionHeading title={t("events.corpActionsTitle")} count={actions.length} />
           {actions.length > 0 ? (
             <ul className="divide-y divide-[var(--app-border)]">
@@ -84,10 +84,10 @@ export function EventsSection({ earnings, corporateActions, currency, locale, em
       </div>
 
       {history.length > 0 ? (
-        <details className="app-muted-panel overflow-hidden rounded-xl">
+        <details className="app-muted-panel overflow-hidden rounded-lg">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-3 py-2.5 hover:bg-[var(--app-surface-hover)]">
             <span className="text-[11px] font-semibold text-[var(--app-text)]">Earnings history</span>
-            <span className="text-[10px] text-[var(--app-text-faint)]">{history.length} reports · expand</span>
+            <span className="text-[10px] text-[var(--app-text-faint)]">{history.length} reports - expand</span>
           </summary>
           <div className="overflow-x-auto border-t border-[var(--app-border)]">
             <table className="min-w-[520px] w-full text-[11px]">
@@ -135,7 +135,7 @@ export function NewsSection({ news, locale, emptyReason }: NewsProps) {
         {recent.map((item, index) => <NewsRow key={item.id} item={item} locale={locale} featured={index === 0} />)}
       </ul>
       {older.length > 0 ? (
-        <details className="app-muted-panel overflow-hidden rounded-xl">
+        <details className="app-muted-panel overflow-hidden rounded-lg">
           <summary className="cursor-pointer list-none px-3 py-2.5 text-[10px] font-semibold text-[var(--app-accent)] hover:bg-[var(--app-surface-hover)]">
             Show {older.length} older headlines
           </summary>
@@ -166,7 +166,7 @@ function UpcomingEarnings({ item, locale }: { item: EarningsRow; locale: string 
           {item.report_date ? formatDate(item.report_date, locale) : "Date not confirmed"}
         </p>
         <p className="mt-1 text-[10px] text-[var(--app-text-faint)]">
-          FY{item.fiscal_year}{item.fiscal_quarter ? ` Q${item.fiscal_quarter}` : ""} · {item.provider}
+          FY{item.fiscal_year}{item.fiscal_quarter ? ` Q${item.fiscal_quarter}` : ""} - {item.provider}
         </p>
       </div>
       <div className="flex gap-5 sm:text-right">
@@ -191,12 +191,12 @@ function EarningsHistoryRow({ item, locale }: { item: EarningsRow; locale: strin
   const tone = surprise === null ? "text-[var(--app-text-muted)]" : surprise >= 0 ? "text-[var(--app-positive)]" : "text-[var(--app-negative)]"
   return (
     <tr>
-      <td className="px-3 py-2 text-[var(--app-text-muted)]">FY{item.fiscal_year} Q{item.fiscal_quarter ?? "—"}</td>
-      <td className="px-3 py-2 text-[var(--app-text-faint)]">{item.report_date ? formatDate(item.report_date, locale) : "—"}</td>
+      <td className="px-3 py-2 text-[var(--app-text-muted)]">FY{item.fiscal_year} Q{item.fiscal_quarter ?? "-"}</td>
+      <td className="px-3 py-2 text-[var(--app-text-faint)]">{item.report_date ? formatDate(item.report_date, locale) : "-"}</td>
       <td className="px-3 py-2 text-right tabular-nums text-[var(--app-text-muted)]">{eps(item.eps_estimate)}</td>
       <td className="px-3 py-2 text-right tabular-nums font-medium text-[var(--app-text)]">{eps(item.eps_actual)}</td>
       <td className={`px-3 py-2 text-right tabular-nums font-medium ${tone}`}>
-        {surprise === null ? "—" : `${surprise >= 0 ? "+" : ""}${(surprise * 100).toFixed(1)}%`}
+        {surprise === null ? "-" : `${surprise >= 0 ? "+" : ""}${(surprise * 100).toFixed(1)}%`}
       </td>
     </tr>
   )
@@ -208,7 +208,7 @@ function CorporateActionRow({ action, currency, locale }: { action: CorporateAct
     <li className="flex items-center justify-between gap-3 px-3 py-2.5">
       <div className="min-w-0">
         <p className="truncate text-[11px] font-medium text-[var(--app-text)]">{actionType(action, t)}</p>
-        <p className="mt-0.5 text-[9px] text-[var(--app-text-faint)]">Ex-date · {formatDate(action.ex_date, locale)}</p>
+        <p className="mt-0.5 text-[9px] text-[var(--app-text-faint)]">Ex-date - {formatDate(action.ex_date, locale)}</p>
       </div>
       <span className="shrink-0 text-[11px] font-semibold tabular-nums text-[var(--app-text)]">{actionValue(action, currency, locale)}</span>
     </li>
@@ -223,8 +223,8 @@ function NewsRow({ item, locale, featured = false }: { item: NewsItem; locale: s
         <div className="min-w-0">
           <p className={`${featured ? "text-sm font-semibold leading-5" : "text-[11px] font-medium leading-4"} text-[var(--app-text)]`}>{item.headline}</p>
           <p className="mt-1 text-[9px] text-[var(--app-text-faint)]">
-            {item.category ? `${capitalize(item.category)} · ` : ""}{item.provider} · {formatDate(item.published_at, locale)}
-            {item.sentiment ? ` · ${capitalize(item.sentiment)}` : ""}
+            {item.category ? `${capitalize(item.category)} - ` : ""}{item.provider} - {formatDate(item.published_at, locale)}
+            {item.sentiment ? ` - ${capitalize(item.sentiment)}` : ""}
           </p>
         </div>
       </div>
@@ -245,7 +245,7 @@ function NewsRow({ item, locale, featured = false }: { item: NewsItem; locale: s
 }
 
 function EmptyState({ text }: { text: string }) {
-  return <div className="app-muted-panel rounded-xl px-4 py-6 text-center text-[11px] text-[var(--app-text-faint)]">{text}</div>
+  return <div className="app-muted-panel rounded-lg px-4 py-6 text-center text-[11px] text-[var(--app-text-faint)]">{text}</div>
 }
 
 function CompactEmpty({ text }: { text: string }) {
@@ -254,7 +254,7 @@ function CompactEmpty({ text }: { text: string }) {
 
 function compactAmount(value: string | null, locale: string): string {
   const amount = num(value)
-  if (amount === null) return "—"
+  if (amount === null) return "-"
   return new Intl.NumberFormat(locale, { notation: "compact", maximumFractionDigits: 1 }).format(amount)
 }
 
@@ -267,11 +267,11 @@ function actionType(action: CorporateAction, t: ReturnType<typeof getTranslation
 function actionValue(action: CorporateAction, currency: string, locale: string): string {
   if (action.type === "dividend") {
     const amount = num(action.dividend_amount)
-    return amount === null ? "—" : fmtCurrency(locale, amount, action.dividend_currency ?? currency)
+    return amount === null ? "-" : fmtCurrency(locale, amount, action.dividend_currency ?? currency)
   }
   const numerator = num(action.ratio_numerator)
   const denominator = num(action.ratio_denominator)
-  return numerator !== null && denominator !== null ? `${numerator}:${denominator}` : "—"
+  return numerator !== null && denominator !== null ? `${numerator}:${denominator}` : "-"
 }
 
 function sentimentClass(sentiment: string | null): string {

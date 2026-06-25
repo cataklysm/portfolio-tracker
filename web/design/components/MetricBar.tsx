@@ -56,7 +56,7 @@ export function MetricBarIcon({
 }) {
   return (
     <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border ${metricToneIconClass(tone)}`}>
-      <span className="flex h-5 w-5 items-center justify-center [&>svg]:h-5 [&>svg]:w-5">
+      <span className="flex h-5 w-5 items-center justify-center text-[20px] [&>.app-icon]:h-5 [&>.app-icon]:w-5 [&>.app-icon]:text-[20px] [&>svg]:h-5 [&>svg]:w-5">
         {children}
       </span>
     </span>

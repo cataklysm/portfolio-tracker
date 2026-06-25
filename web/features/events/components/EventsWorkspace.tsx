@@ -19,8 +19,9 @@ import {
   ToggleButtonGroup,
   Typography,
 } from "@mui/material"
-import { AppBadge } from "@/application/shell/AppBadge"
-import { appTypography } from "@/application/shell/appTypography"
+import { AppBadge } from "@/design/components/AppBadge"
+import { AppIcon, type AppIconName } from "@/design/icons/AppIcon"
+import { appTypography } from "@/design/tokens/appTypography"
 import { ControlBar } from "@/design/components/ControlBar"
 import { MetricBar, MetricBarItem } from "@/design/components/MetricBar"
 import { PageMetricGrid, PageShell } from "@/application/shell/PageShell"
@@ -1423,6 +1424,7 @@ function EventKindBadge({ compact = false, kind }: { compact?: boolean; kind: Ev
 
 function EventKindIcon({ className, contained = true, kind, size = 24 }: { className?: string; contained?: boolean; kind: EventKind; size?: number }) {
   const color = eventColor(kind)
+  const iconName: AppIconName = kind === "dividend" ? "cash" : kind === "split" ? "split" : "calendar"
   return (
     <Box
       className={className}
@@ -1439,7 +1441,7 @@ function EventKindIcon({ className, contained = true, kind, size = 24 }: { class
         width: size,
       }}
     >
-      {kind === "dividend" ? <DollarIcon /> : kind === "split" ? <SplitIcon /> : <CalendarIcon />}
+      <AppIcon className="h-3.5 w-3.5" name={iconName} strokeWidth={1.8} />
     </Box>
   )
 }
@@ -1451,69 +1453,37 @@ function MetricIcon({ icon }: { icon: "calendar" | "report" | "action" }) {
 }
 
 function CalendarIcon({ large = false }: { large?: boolean }) {
-  return (
-    <svg width={large ? 24 : 14} height={large ? 24 : 14} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M7 3v4M17 3v4M4 9h16M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
+  return <AppIcon className={large ? "h-6 w-6" : "h-3.5 w-3.5"} name="calendar" strokeWidth={1.8} />
 }
 
 function ReportIcon() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M7 4h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M8 9h8M8 13h8M8 17h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  )
+  return <AppIcon className="h-6 w-6" name="reports" strokeWidth={1.8} />
 }
 
 function ActionIcon() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 4v8h8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M20 12a8 8 0 1 1-8-8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  )
+  return <AppIcon className="h-6 w-6" name="corporateAction" strokeWidth={1.8} />
 }
 
 function DollarIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 3v18M16 7.5c-.8-.9-2-1.5-3.6-1.5-2.1 0-3.4 1.1-3.4 2.6 0 3.7 7 1.6 7 5.7 0 1.7-1.5 3-3.8 3-1.8 0-3.3-.7-4.2-1.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  )
+  return <AppIcon className="h-3.5 w-3.5" name="cash" strokeWidth={1.8} />
 }
 
 function SplitIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M7 7h10M7 17h10M12 7v10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  )
+  return <AppIcon className="h-3.5 w-3.5" name="split" strokeWidth={1.8} />
 }
 
 function ChevronLeftIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="m15 18-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
+  return <AppIcon className="h-4 w-4" name="chevronLeft" strokeWidth={2} />
 }
 
 function ChevronRightIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="m9 18 6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
+  return <AppIcon className="h-4 w-4" name="chevronRight" strokeWidth={2} />
 }
 
 function CollapseIndicator({ collapsed = false }: { collapsed?: boolean }) {
   return (
     <Box component="span" sx={{ color: "var(--app-text-muted)", display: "inline-flex", transform: collapsed ? "rotate(-90deg)" : "none", transition: "transform 140ms ease" }}>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="m7 10 5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
+      <AppIcon className="h-3.5 w-3.5" name="chevronDown" strokeWidth={2} />
     </Box>
   )
 }
@@ -1521,9 +1491,7 @@ function CollapseIndicator({ collapsed = false }: { collapsed?: boolean }) {
 function BookmarkIcon() {
   return (
     <Box sx={{ color: "var(--app-text-muted)", display: "inline-flex" }}>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M6 4h12v16l-6-3-6 3V4Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
+      <AppIcon className="h-4 w-4" name="bookmark" strokeWidth={1.8} />
     </Box>
   )
 }

@@ -7,7 +7,7 @@ import {
   applyCorporateActionAction,
   reverseCorporateActionAction,
   type AppliedCorporateAction,
-} from "@/app/positions/[id]/corporate-action-actions"
+} from "@/features/positions/actions"
 
 interface Props {
   positionId: string
@@ -64,7 +64,7 @@ export function CorporateActionsManager({ positionId, applied, available, locale
           {applied.map((a) => (
             <li key={a.id} className="flex items-center justify-between gap-2 text-[11px]">
               <span className={a.reversed_at ? "text-[var(--app-text-faint)] line-through" : "text-[var(--app-text)]"}>
-                {ratioLabel(a)} · {a.effective_at.slice(0, 10)}
+                {ratioLabel(a)} - {a.effective_at.slice(0, 10)}
               </span>
               {a.reversed_at ? (
                 <span className="text-[9px] uppercase text-[var(--app-text-faint)]">reversed</span>
@@ -89,7 +89,7 @@ export function CorporateActionsManager({ positionId, applied, available, locale
           {applicable.map((action) => (
             <div key={action.stable_action_id} className="flex items-center justify-between gap-2 text-[11px]">
               <span className="text-[var(--app-text-muted)]">
-                {action.type.replaceAll("_", " ")} {action.ratio_numerator}:{action.ratio_denominator} ·{" "}
+                {action.type.replaceAll("_", " ")} {action.ratio_numerator}:{action.ratio_denominator} -{" "}
                 {new Date(`${action.ex_date.slice(0, 10)}T00:00:00Z`).toLocaleDateString(locale, { dateStyle: "medium" })}
               </span>
               <button

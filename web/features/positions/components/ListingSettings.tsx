@@ -1,6 +1,6 @@
 "use client"
 import { useActionState } from "react"
-import { updateListingAction, refreshQuotesAction } from "@/app/positions/[id]/actions"
+import { refreshQuotesAction, updateListingAction } from "@/features/positions/actions"
 import { useTranslations } from "@/lib/i18n"
 import type { ListingDetail } from "@/lib/types"
 

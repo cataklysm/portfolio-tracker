@@ -110,12 +110,13 @@ export class AssessmentService {
   async updatePriceTarget(
     userId: string,
     id: string,
-    patch: { horizon?: 'short' | 'medium' | 'long'; zoneLow?: number; zoneHigh?: number; note?: string | null },
+    patch: { currency?: string; horizon?: 'short' | 'medium' | 'long'; zoneLow?: number; zoneHigh?: number; note?: string | null },
   ): Promise<PriceTargetRecord> {
     if (patch.zoneLow !== undefined && patch.zoneHigh !== undefined && patch.zoneLow > patch.zoneHigh) {
       throw AppError.badRequest('invalid_target_zone', 'zone_low must be less than or equal to zone_high');
     }
     const update: UpdatePriceTarget = {};
+    if (patch.currency !== undefined) update.currency = patch.currency.toUpperCase();
     if (patch.horizon !== undefined) update.horizon = patch.horizon;
     if (patch.zoneLow !== undefined) update.zoneLow = String(patch.zoneLow);
     if (patch.zoneHigh !== undefined) update.zoneHigh = String(patch.zoneHigh);

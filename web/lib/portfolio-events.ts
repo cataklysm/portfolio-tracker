@@ -32,7 +32,7 @@ interface Page<T> {
 
 export function uniquePortfolioEventContexts(positions: PositionView[]): InstrumentContext[] {
   const map = new Map<string, InstrumentContext>()
-  for (const position of positions) {
+  for (const position of positions.filter((item) => item.state === "open")) {
     const listing = position.listing
     if (!listing || map.has(listing.instrument_id)) continue
     map.set(listing.instrument_id, {

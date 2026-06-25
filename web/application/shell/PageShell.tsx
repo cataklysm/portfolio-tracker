@@ -1,5 +1,4 @@
-import { Box, Card, Stack } from "@mui/material"
-import type { ReactNode } from "react"
+import type { CSSProperties, ReactNode } from "react"
 
 export type PageShellKind = "admin" | "reporting" | "workspace"
 
@@ -8,6 +7,8 @@ const pageShellMaxWidth = {
   reporting: 1640,
   workspace: 1760,
 } satisfies Record<PageShellKind, number>
+
+type ResponsiveColumns = Partial<Record<"xs" | "sm" | "md" | "lg" | "xl", string>>
 
 export function PageShell({
   children,
@@ -19,27 +20,11 @@ export function PageShell({
   maxWidth?: number
 }) {
   return (
-    <Box
-      sx={{
-        mx: "auto",
-        maxWidth: 1760,
-        px: { xs: 2, lg: 4 },
-        py: 2,
-        width: "100%",
-      }}
-    >
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 2,
-          maxWidth: maxWidth ?? pageShellMaxWidth[kind],
-          width: "100%",
-        }}
-      >
+    <div className="mx-auto w-full max-w-[1760px] px-4 py-4 lg:px-8">
+      <div className="flex w-full flex-col gap-4" style={{ maxWidth: maxWidth ?? pageShellMaxWidth[kind] }}>
         {children}
-      </Box>
-    </Box>
+      </div>
+    </div>
   )
 }
 
@@ -48,21 +33,12 @@ export function PageMetricGrid({
   columns,
 }: {
   children: ReactNode
-  columns: Record<string, string>
+  columns: ResponsiveColumns
 }) {
   return (
-    <Box
-      sx={{
-        display: "grid",
-        gap: 2,
-        gridTemplateColumns: columns,
-        "& > .MuiCard-root, & > [data-metric-bar]": {
-          minHeight: 88,
-        },
-      }}
-    >
+    <div className="page-metric-grid" style={gridColumnsStyle(columns)}>
       {children}
-    </Box>
+    </div>
   )
 }
 
@@ -76,18 +52,28 @@ export function PageToolbar({
   right?: ReactNode
 }) {
   return (
-    <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "var(--app-surface-toolbar)", boxShadow: "var(--app-shadow)", p: 1 }}>
-      <Stack direction={{ xs: "column", lg: "row" }} spacing={1.25} sx={{ alignItems: { xs: "stretch", lg: "center" }, justifyContent: "space-between" }}>
-        <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} sx={{ alignItems: { xs: "stretch", md: "center" }, minWidth: 0 }}>
+    <section className="app-panel rounded-lg bg-[var(--app-surface-toolbar)] p-2">
+      <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
+        <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-center">
           {children}
-        </Stack>
+        </div>
         {right || actions ? (
-          <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} sx={{ alignItems: { xs: "stretch", md: "center" }, justifyContent: "flex-end", minWidth: 0 }}>
+          <div className="flex min-w-0 flex-col justify-end gap-3 md:flex-row md:items-center">
             {right}
             {actions}
-          </Stack>
+          </div>
         ) : null}
-      </Stack>
-    </Card>
+      </div>
+    </section>
   )
+}
+
+function gridColumnsStyle(columns: ResponsiveColumns): CSSProperties {
+  return {
+    "--page-metric-grid-xs": columns.xs,
+    "--page-metric-grid-sm": columns.sm,
+    "--page-metric-grid-md": columns.md,
+    "--page-metric-grid-lg": columns.lg,
+    "--page-metric-grid-xl": columns.xl,
+  } as CSSProperties
 }

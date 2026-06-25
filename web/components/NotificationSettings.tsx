@@ -1,10 +1,12 @@
 "use client"
+
 import { useActionState, useState, useTransition } from "react"
 import {
   createRuleAction,
   deleteRuleAction,
   toggleRuleAction,
 } from "@/app/notifications/settings/actions"
+import { REPEAT_OPTIONS, repeatLabel } from "@/features/notifications/repeat"
 import { useTranslations } from "@/lib/i18n"
 import type { AlertRule, AlertRuleKind } from "@/lib/types"
 
@@ -50,7 +52,7 @@ function Card({ title, desc, children }: { title: string; desc: string; children
 function RulesCard({ rules, instruments }: { rules: AlertRule[]; instruments: InstrumentOption[] }) {
   const t = useTranslations()
   const [open, setOpen] = useState(false)
-  const symbolFor = (id: string | null) => instruments.find((i) => i.instrument_id === id)?.name ?? id ?? "—"
+  const symbolFor = (id: string | null) => instruments.find((instrument) => instrument.instrument_id === id)?.name ?? id ?? "-"
 
   return (
     <Card title={t("notificationSettings.rulesTitle")} desc={t("notificationSettings.rulesDesc")}>
@@ -76,19 +78,18 @@ function RulesCard({ rules, instruments }: { rules: AlertRule[]; instruments: In
 }
 
 function describe(rule: AlertRule, symbol: string, t: ReturnType<typeof useTranslations>): string {
-  const p = rule.params as Record<string, unknown>
-  const target = rule.scope === "all_holdings" ? t("notificationSettings.scopeAll") : symbol
+  const params = rule.params as Record<string, unknown>
   switch (rule.kind) {
     case "price_threshold":
-      return `${symbol} ${String(p.direction)} ${String(p.price)}`
+      return `${symbol} ${String(params.direction)} ${String(params.price)}`
     case "daily_move":
-      return `${target} · daily move ≥ ${String(p.threshold_pct)}%`
+      return `${symbol} - daily move >= ${String(params.threshold_pct)}%`
     case "earnings_lead":
-      return `${target} · earnings within ${String(p.days)}d`
+      return `${symbol} - earnings within ${String(params.days)}d`
     case "cost_basis_move":
-      return `${target} · ${String(p.direction)} ${String(p.threshold_pct)}% from cost`
+      return `${symbol} - ${String(params.direction)} ${String(params.threshold_pct)}% from cost`
     case "target_zone":
-      return `${target} · ${t("notificationSettings.kindTargetZone")}`
+      return `${symbol} - ${t("notificationSettings.kindTargetZone")}`
     default:
       return rule.kind
   }
@@ -97,13 +98,20 @@ function describe(rule: AlertRule, symbol: string, t: ReturnType<typeof useTrans
 function RuleRow({ rule, symbol }: { rule: AlertRule; symbol: string }) {
   const t = useTranslations()
   const [pending, start] = useTransition()
+
   return (
     <li className="flex items-center justify-between gap-3 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-raised)] px-3 py-2">
       <div className="min-w-0">
         <p className="truncate text-sm text-[var(--app-text)]">{rule.label || describe(rule, symbol, t)}</p>
-        {rule.label && <p className="truncate text-[11px] text-[var(--app-text-faint)]">{describe(rule, symbol, t)}</p>}
+        {rule.label ? <p className="truncate text-[11px] text-[var(--app-text-faint)]">{describe(rule, symbol, t)}</p> : null}
       </div>
       <div className="flex shrink-0 items-center gap-2">
+        <span
+          className="rounded-md border border-[var(--app-border)] px-2 py-1 text-[10px] font-medium text-[var(--app-text-faint)]"
+          title={repeatTooltip(rule)}
+        >
+          {repeatLabel(rule)}
+        </span>
         <button
           onClick={() => start(async () => void (await toggleRuleAction(rule.id, !rule.enabled)))}
           disabled={pending}
@@ -116,7 +124,7 @@ function RuleRow({ rule, symbol }: { rule: AlertRule; symbol: string }) {
           disabled={pending}
           className="rounded-md border border-[var(--app-border)] px-2 py-1 text-[10px] text-[var(--app-text-faint)] hover:border-[var(--app-negative)]/40 hover:text-[var(--app-negative)] disabled:opacity-50"
         >
-          ✕
+          x
         </button>
       </div>
     </li>
@@ -127,55 +135,39 @@ function CreateRuleForm({ instruments, onClose }: { instruments: InstrumentOptio
   const t = useTranslations()
   const [state, action, pending] = useActionState(createRuleAction, null)
   const [kind, setKind] = useState<AlertRuleKind>("price_threshold")
-  const [scope, setScope] = useState<"instrument" | "all_holdings">("instrument")
 
-  const needsInstrument = kind === "price_threshold" || scope === "instrument"
-  const showScope = kind !== "price_threshold"
   const showDirection = KIND_NEEDS_DIRECTION.includes(kind)
   const error = state && "error" in state ? state.error : null
 
   return (
     <form action={action} className="space-y-3 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-raised)] p-3">
-      {error && <p className="rounded-lg bg-[color-mix(in_srgb,var(--app-negative)_12%,transparent)] px-3 py-2 text-xs text-[var(--app-negative)]">{error}</p>}
-      <div className="grid grid-cols-2 gap-2.5">
-        <div>
-          <label htmlFor="kind" className={labelClass}>{t("notificationSettings.kind")}</label>
-          <select id="kind" name="kind" value={kind} onChange={(e) => setKind(e.target.value as AlertRuleKind)} className={inputClass}>
-            <option value="price_threshold">{t("notificationSettings.kindPrice")}</option>
-            <option value="daily_move">{t("notificationSettings.kindDaily")}</option>
-            <option value="earnings_lead">{t("notificationSettings.kindEarnings")}</option>
-            <option value="cost_basis_move">{t("notificationSettings.kindCost")}</option>
-            <option value="target_zone">{t("notificationSettings.kindTargetZone")}</option>
-          </select>
-        </div>
-        {showScope && (
-          <div>
-            <label htmlFor="scope" className={labelClass}>{t("notificationSettings.scope")}</label>
-            <select id="scope" name="scope" value={scope} onChange={(e) => setScope(e.target.value as "instrument" | "all_holdings")} className={inputClass}>
-              <option value="all_holdings">{t("notificationSettings.scopeAll")}</option>
-              <option value="instrument">{t("notificationSettings.scopeInstrument")}</option>
-            </select>
-          </div>
-        )}
+      {error ? <p className="rounded-lg bg-[color-mix(in_srgb,var(--app-negative)_12%,transparent)] px-3 py-2 text-xs text-[var(--app-negative)]">{error}</p> : null}
+      <div>
+        <label htmlFor="kind" className={labelClass}>{t("notificationSettings.kind")}</label>
+        <select id="kind" name="kind" value={kind} onChange={(event) => setKind(event.target.value as AlertRuleKind)} className={inputClass}>
+          <option value="price_threshold">{t("notificationSettings.kindPrice")}</option>
+          <option value="daily_move">{t("notificationSettings.kindDaily")}</option>
+          <option value="earnings_lead">{t("notificationSettings.kindEarnings")}</option>
+          <option value="cost_basis_move">{t("notificationSettings.kindCost")}</option>
+          <option value="target_zone">{t("notificationSettings.kindTargetZone")}</option>
+        </select>
       </div>
 
-      {needsInstrument && (
-        <div>
-          <label htmlFor="instrument_id" className={labelClass}>{t("notificationSettings.instrument")}</label>
-          <select id="instrument_id" name="instrument_id" className={inputClass} required>
-            <option value="">—</option>
-            {instruments.map((i) => (
-              <option key={i.instrument_id} value={i.instrument_id} data-listing={i.listing_id}>
-                {i.name} · {i.symbol} ({i.currency})
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
+      <div>
+        <label htmlFor="instrument_id" className={labelClass}>{t("notificationSettings.instrument")}</label>
+        <select id="instrument_id" name="instrument_id" className={inputClass} required>
+          <option value="">-</option>
+          {instruments.map((instrument) => (
+            <option key={instrument.instrument_id} value={instrument.instrument_id} data-listing={instrument.listing_id}>
+              {instrument.name} - {instrument.symbol} ({instrument.currency})
+            </option>
+          ))}
+        </select>
+      </div>
 
-      {kind !== "target_zone" && (
+      {kind !== "target_zone" ? (
         <div className="grid grid-cols-2 gap-2.5">
-          {showDirection && (
+          {showDirection ? (
             <div>
               <label htmlFor="direction" className={labelClass}>{t("notificationSettings.direction")}</label>
               <select id="direction" name="direction" className={inputClass} defaultValue="above">
@@ -183,25 +175,26 @@ function CreateRuleForm({ instruments, onClose }: { instruments: InstrumentOptio
                 <option value="below">{t("notificationSettings.below")}</option>
               </select>
             </div>
-          )}
-          {kind === "price_threshold" && (
-            <Field name="price" label={t("notificationSettings.price")} type="number" step="any" min="0" />
-          )}
-          {kind === "daily_move" && (
-            <Field name="threshold_pct" label={t("notificationSettings.thresholdPct")} type="number" step="0.1" min="0.1" />
-          )}
-          {kind === "earnings_lead" && (
-            <Field name="days" label={t("notificationSettings.days")} type="number" step="1" min="1" max="365" />
-          )}
-          {kind === "cost_basis_move" && (
-            <Field name="threshold_pct" label={t("notificationSettings.thresholdPct")} type="number" step="0.1" />
-          )}
+          ) : null}
+          {kind === "price_threshold" ? <Field name="price" label={t("notificationSettings.price")} type="number" step="any" min="0" /> : null}
+          {kind === "daily_move" ? <Field name="threshold_pct" label={t("notificationSettings.thresholdPct")} type="number" step="0.1" min="0.1" /> : null}
+          {kind === "earnings_lead" ? <Field name="days" label={t("notificationSettings.days")} type="number" step="1" min="1" max="365" /> : null}
+          {kind === "cost_basis_move" ? <Field name="threshold_pct" label={t("notificationSettings.thresholdPct")} type="number" step="0.1" /> : null}
         </div>
-      )}
+      ) : null}
 
       <div>
         <label htmlFor="label" className={labelClass}>{t("notificationSettings.label")}</label>
         <input id="label" name="label" className={inputClass} maxLength={100} />
+      </div>
+
+      <div>
+        <label htmlFor="repeat" className={labelClass}>{t("notificationSettings.repeat")}</label>
+        <select id="repeat" name="repeat" defaultValue="once" className={inputClass}>
+          {REPEAT_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
       </div>
 
       <div className="flex items-center gap-3">
@@ -223,4 +216,10 @@ function Field({ name, label, ...rest }: { name: string; label: string } & React
       <input id={name} name={name} required className={inputClass} {...rest} />
     </div>
   )
+}
+
+function repeatTooltip(rule: AlertRule): string {
+  if (rule.notify_once) return "Fires once, then disables this rule."
+  if (rule.remind_after_minutes) return `Reminds again after ${rule.remind_after_minutes} minutes while the condition remains active.`
+  return "Notifies whenever the condition triggers again."
 }

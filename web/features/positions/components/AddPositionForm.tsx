@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useState } from "react"
 import { Box, Button, DialogActions, DialogContent, Stack, Typography } from "@mui/material"
-import { AppBadge } from "@/application/shell/AppBadge"
+import { AppBadge } from "@/design/components/AppBadge"
 import { createPositionAction, searchInstrumentsAction } from "@/features/positions/actions"
 import { useTranslations } from "@/lib/i18n"
 import type { ExchangeView, InstrumentWithListings, Portfolio } from "@/lib/types"

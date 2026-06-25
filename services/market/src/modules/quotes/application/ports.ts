@@ -3,6 +3,8 @@ export interface StoredQuotePair {
   previous: string | null;
   currency: string | null;
   latestAt: Date | null;
+  /** When the latest stored quote row was fetched/stored by this system. */
+  retrievedAt: Date | null;
   /** The provider that supplied the latest tick (for attribution). */
   provider: string | null;
   /** The provider's own timestamp for the latest tick, when supplied. */

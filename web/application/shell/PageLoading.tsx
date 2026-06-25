@@ -1,7 +1,5 @@
-import { Breadcrumbs, Card, Chip, Skeleton, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from "@mui/material"
-import type { ReactNode } from "react"
-import { PageShell, PageToolbar, type PageShellKind } from "@/application/shell/PageShell"
-import { appTypography, tableHeadSx } from "@/application/shell/appTypography"
+import type { CSSProperties, ReactNode } from "react"
+import { PageMetricGrid, PageShell, PageToolbar, type PageShellKind } from "@/application/shell/PageShell"
 
 export function PageLoadingShell({
   breadcrumb,
@@ -16,16 +14,16 @@ export function PageLoadingShell({
 }) {
   return (
     <PageShell kind={kind} maxWidth={maxWidth}>
-      <Breadcrumbs aria-label="breadcrumb">
+      <nav aria-label="breadcrumb" className="flex items-center gap-2">
         {breadcrumb.map((item, index) => {
           const current = index === breadcrumb.length - 1
           return (
-            <Typography key={`${item}-${index}`} sx={current ? appTypography.breadcrumbCurrent : appTypography.breadcrumbParent}>
+            <span className={current ? "text-[12px] font-bold leading-tight text-[var(--app-text)]" : "text-[11.5px] font-semibold leading-tight text-[var(--app-text-faint)]"} key={`${item}-${index}`}>
               {item}
-            </Typography>
+            </span>
           )
         })}
-      </Breadcrumbs>
+      </nav>
       {children}
     </PageShell>
   )
@@ -42,18 +40,18 @@ export function ToolbarSkeleton({
 }) {
   return (
     <PageToolbar
-      right={search ? <Skeleton animation="wave" variant="text" width={420} height={32} sx={{ maxWidth: "100%" }} /> : undefined}
+      right={search ? <SkeletonBlock className="h-8 w-full max-w-[420px]" /> : undefined}
       actions={actions > 0 ? (
-        <Stack direction="row" spacing={0.75}>
-          {Array.from({ length: actions }, (_, index) => <Skeleton key={index} animation="wave" variant="rounded" width={34} height={34} />)}
-        </Stack>
+        <div className="flex gap-2">
+          {Array.from({ length: actions }, (_, index) => <SkeletonBlock className="h-[34px] w-[34px] rounded-md" key={index} />)}
+        </div>
       ) : undefined}
     >
-      <Stack direction="row" spacing={0} sx={{ minHeight: 44 }}>
+      <div className="flex min-h-11">
         {Array.from({ length: tabs }, (_, index) => (
-          <Skeleton key={index} animation="wave" variant="rounded" width={136} height={40} sx={index === 0 ? undefined : { ml: 0.25 }} />
+          <SkeletonBlock className={`h-10 w-[136px] rounded-md ${index === 0 ? "" : "ml-0.5"}`} key={index} />
         ))}
-      </Stack>
+      </div>
     </PageToolbar>
   )
 }
@@ -66,158 +64,125 @@ export function MetricGridSkeleton({
   count: number
 }) {
   return (
-    <Stack
-      sx={{
-        display: "grid",
-        gap: 2,
-        gridTemplateColumns: columns,
-        "& > .MuiCard-root": { minHeight: 88 },
-      }}
-    >
+    <PageMetricGrid columns={columns}>
       {Array.from({ length: count }, (_, index) => (
-        <Card key={index} variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "color-mix(in srgb, var(--app-surface-raised) 92%, transparent)", p: 1.5 }}>
-          <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-            <Skeleton animation="wave" variant="rounded" width={46} height={46} />
-            <Stack spacing={0.5} sx={{ minWidth: 0, flex: 1 }}>
-              <Skeleton animation="wave" variant="text" width="42%" height={18} />
-              <Skeleton animation="wave" variant="text" width={68} height={30} />
-              <Skeleton animation="wave" variant="text" width="60%" height={14} />
-            </Stack>
-          </Stack>
-        </Card>
+        <section className="app-panel min-h-[88px] rounded-lg p-3" key={index}>
+          <div className="flex items-center gap-3">
+            <SkeletonBlock className="h-[46px] w-[46px] rounded-md" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <SkeletonBlock className="h-4 w-[42%]" />
+              <SkeletonBlock className="h-7 w-[68px]" />
+              <SkeletonBlock className="h-3 w-[60%]" />
+            </div>
+          </div>
+        </section>
       ))}
-    </Stack>
+    </PageMetricGrid>
   )
 }
 
 export function EventsWorkspaceSkeleton() {
   return (
-    <Stack sx={{ alignItems: "stretch", display: "grid", gap: 1.5, gridTemplateColumns: { xs: "1fr", xl: "minmax(0, 1fr) 480px" } }}>
-      <Card variant="outlined" sx={{ display: "flex", flexDirection: "column", height: 720, overflow: "hidden", borderColor: "var(--app-border)", bgcolor: "color-mix(in srgb, var(--app-surface) 94%, transparent)" }}>
+    <div className="grid items-stretch gap-3 xl:grid-cols-[minmax(0,1fr)_480px]">
+      <section className="app-panel flex h-[720px] flex-col overflow-hidden rounded-lg">
         <PanelHeaderSkeleton titleWidth={150} />
-        <Stack spacing={0} sx={{ flex: 1, minHeight: 0 }}>
-          {Array.from({ length: 11 }, (_, index) => <TableRowSkeleton key={index} columns={5} />)}
-        </Stack>
-      </Card>
-      <Stack spacing={1.5} sx={{ height: 720, minHeight: 0, width: "100%" }}>
-        <Card variant="outlined" sx={{ display: "flex", flex: 1, flexDirection: "column", overflow: "hidden", borderColor: "var(--app-border)", bgcolor: "color-mix(in srgb, var(--app-surface) 94%, transparent)" }}>
+        <div className="min-h-0 flex-1">
+          {Array.from({ length: 11 }, (_, index) => <TableRowSkeleton columns={5} key={index} />)}
+        </div>
+      </section>
+      <div className="flex h-[720px] min-h-0 w-full flex-col gap-3">
+        <section className="app-panel flex flex-1 flex-col overflow-hidden rounded-lg">
           <PanelHeaderSkeleton titleWidth={120} />
-          <Stack spacing={1.5} sx={{ p: 1.5 }}>
-            <Skeleton animation="wave" variant="text" width="80%" height={28} />
-            <Skeleton animation="wave" variant="rounded" height={96} />
-            <Skeleton animation="wave" variant="rounded" height={96} />
-          </Stack>
-        </Card>
-        <Card variant="outlined" sx={{ overflow: "hidden", borderColor: "var(--app-border)", bgcolor: "color-mix(in srgb, var(--app-surface) 94%, transparent)" }}>
+          <div className="space-y-3 p-3">
+            <SkeletonBlock className="h-7 w-4/5" />
+            <SkeletonBlock className="h-24 w-full rounded-md" />
+            <SkeletonBlock className="h-24 w-full rounded-md" />
+          </div>
+        </section>
+        <section className="app-panel overflow-hidden rounded-lg">
           <PanelHeaderSkeleton titleWidth={170} />
-          {Array.from({ length: 4 }, (_, index) => <TableRowSkeleton key={index} columns={4} />)}
-        </Card>
-        <Card variant="outlined" sx={{ overflow: "hidden", borderColor: "var(--app-border)", bgcolor: "color-mix(in srgb, var(--app-surface) 94%, transparent)" }}>
+          {Array.from({ length: 4 }, (_, index) => <TableRowSkeleton columns={4} key={index} />)}
+        </section>
+        <section className="app-panel overflow-hidden rounded-lg">
           <PanelHeaderSkeleton titleWidth={70} />
-          <Stack direction="row" spacing={2} sx={{ p: 1.5 }}>
-            {Array.from({ length: 3 }, (_, index) => <Skeleton key={index} animation="wave" variant="rounded" width={92} height={24} />)}
-          </Stack>
-        </Card>
-      </Stack>
-    </Stack>
+          <div className="flex gap-4 p-3">
+            {Array.from({ length: 3 }, (_, index) => <SkeletonBlock className="h-6 w-[92px] rounded-md" key={index} />)}
+          </div>
+        </section>
+      </div>
+    </div>
   )
 }
 
 export function NewsWorkspaceSkeleton() {
   return (
-    <Stack sx={{ alignItems: "stretch", display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", lg: "280px minmax(760px, 1fr) 520px" } }}>
-      <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "color-mix(in srgb, var(--app-surface) 94%, transparent)", overflow: "hidden" }}>
+    <div className="grid items-stretch gap-4 lg:grid-cols-[280px_minmax(760px,1fr)_520px]">
+      <section className="app-panel overflow-hidden rounded-lg">
         <PanelHeaderSkeleton titleWidth={80} />
-        <Stack spacing={1.25} sx={{ p: 1.5 }}>
-          {Array.from({ length: 5 }, (_, section) => (
-            <Stack key={section} spacing={0.75}>
-              <Skeleton animation="wave" variant="text" width="38%" height={18} />
-              {Array.from({ length: section === 4 ? 6 : 3 }, (_, row) => (
-                <Stack key={row} direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                  <Skeleton animation="wave" variant="rounded" width={16} height={16} />
-                  <Skeleton animation="wave" variant="text" width="70%" height={18} />
-                  <Skeleton animation="wave" variant="rounded" width={34} height={22} sx={{ ml: "auto" }} />
-                </Stack>
+        <div className="space-y-4 p-3">
+          {Array.from({ length: 5 }, (_, sectionIndex) => (
+            <div className="space-y-2" key={sectionIndex}>
+              <SkeletonBlock className="h-4 w-[38%]" />
+              {Array.from({ length: sectionIndex === 4 ? 6 : 3 }, (_, rowIndex) => (
+                <div className="flex items-center gap-2" key={rowIndex}>
+                  <SkeletonBlock className="h-4 w-4 rounded-md" />
+                  <SkeletonBlock className="h-4 w-[70%]" />
+                  <SkeletonBlock className="ml-auto h-[22px] w-[34px] rounded-md" />
+                </div>
               ))}
-            </Stack>
+            </div>
           ))}
-        </Stack>
-      </Card>
+        </div>
+      </section>
 
-      <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "color-mix(in srgb, var(--app-surface) 94%, transparent)", overflow: "hidden" }}>
+      <section className="app-panel overflow-hidden rounded-lg">
         <PanelHeaderSkeleton titleWidth={130} />
-        {Array.from({ length: 12 }, (_, index) => <TableRowSkeleton key={index} columns={5} />)}
-      </Card>
+        {Array.from({ length: 12 }, (_, index) => <TableRowSkeleton columns={5} key={index} />)}
+      </section>
 
-      <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "color-mix(in srgb, var(--app-surface) 94%, transparent)", overflow: "hidden" }}>
+      <section className="app-panel overflow-hidden rounded-lg">
         <PanelHeaderSkeleton titleWidth={120} />
-        <Stack spacing={1.5} sx={{ p: 1.75 }}>
-          <Skeleton animation="wave" variant="text" width="82%" height={30} />
-          <Skeleton animation="wave" variant="text" width="48%" height={18} />
-          <Skeleton animation="wave" variant="rounded" height={66} />
-          <Skeleton animation="wave" variant="text" width="32%" height={18} />
-          <Skeleton animation="wave" variant="text" width="100%" height={18} />
-          <Skeleton animation="wave" variant="text" width="94%" height={18} />
-          <Skeleton animation="wave" variant="text" width="86%" height={18} />
-        </Stack>
-      </Card>
-    </Stack>
+        <div className="space-y-3 p-4">
+          <SkeletonBlock className="h-7 w-[82%]" />
+          <SkeletonBlock className="h-4 w-[48%]" />
+          <SkeletonBlock className="h-[66px] w-full rounded-md" />
+          <SkeletonBlock className="h-4 w-[32%]" />
+          <SkeletonBlock className="h-4 w-full" />
+          <SkeletonBlock className="h-4 w-[94%]" />
+          <SkeletonBlock className="h-4 w-[86%]" />
+        </div>
+      </section>
+    </div>
   )
 }
 
 export function SettingsCardSkeleton({ count = 2 }: { count?: number }) {
   return (
-    <Card variant="outlined" sx={{ overflow: "hidden", borderColor: "var(--app-border)", bgcolor: "color-mix(in srgb, var(--app-surface) 94%, transparent)", boxShadow: "var(--app-shadow)" }}>
-      <Stack spacing={1.5} sx={{ p: 1.5 }}>
+    <section className="app-panel overflow-hidden rounded-lg">
+      <div className="space-y-3 p-3">
         {Array.from({ length: count }, (_, index) => (
-          <Card key={index} variant="outlined" sx={{ overflow: "hidden", borderColor: "var(--app-border)", bgcolor: "var(--app-surface-raised)" }}>
-            <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", px: 1.5, py: 1.5 }}>
-              <Stack direction="row" spacing={1.25} sx={{ alignItems: "center" }}>
-                <Skeleton animation="wave" variant="rounded" width={58} height={28} />
-                <Skeleton animation="wave" variant="text" width={84} height={24} />
-                <Skeleton animation="wave" variant="rounded" width={92} height={26} />
-                <Skeleton animation="wave" variant="rounded" width={72} height={26} />
-              </Stack>
-              <Skeleton animation="wave" variant="rounded" width={46} height={26} />
-            </Stack>
-            <Stack spacing={1.5} sx={{ borderTop: "1px solid var(--app-border)", p: 1.5 }}>
-              <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
-                <Skeleton animation="wave" variant="rounded" height={56} sx={{ flex: 1 }} />
-                <Skeleton animation="wave" variant="rounded" height={56} sx={{ flex: 1 }} />
-                <Skeleton animation="wave" variant="rounded" height={56} sx={{ flex: 1 }} />
-              </Stack>
-              <Skeleton animation="wave" variant="rounded" height={72} />
-            </Stack>
-          </Card>
+          <div className="overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-raised)]" key={index}>
+            <div className="flex items-center justify-between px-3 py-3">
+              <div className="flex items-center gap-3">
+                <SkeletonBlock className="h-7 w-[58px] rounded-md" />
+                <SkeletonBlock className="h-6 w-[84px]" />
+                <SkeletonBlock className="h-[26px] w-[92px] rounded-md" />
+                <SkeletonBlock className="h-[26px] w-[72px] rounded-md" />
+              </div>
+              <SkeletonBlock className="h-[26px] w-[46px] rounded-md" />
+            </div>
+            <div className="space-y-3 border-t border-[var(--app-border)] p-3">
+              <div className="grid gap-3 md:grid-cols-3">
+                <SkeletonBlock className="h-14 w-full rounded-md" />
+                <SkeletonBlock className="h-14 w-full rounded-md" />
+                <SkeletonBlock className="h-14 w-full rounded-md" />
+              </div>
+              <SkeletonBlock className="h-[72px] w-full rounded-md" />
+            </div>
+          </div>
         ))}
-      </Stack>
-    </Card>
-  )
-}
-
-function PanelHeaderSkeleton({ titleWidth }: { titleWidth: number }) {
-  return (
-    <Stack direction="row" sx={{ alignItems: "center", borderBottom: "1px solid var(--app-border)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
-      <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
-        <Skeleton animation="wave" variant="text" width={titleWidth} height={22} />
-        <Skeleton animation="wave" variant="rounded" width={44} height={24} />
-      </Stack>
-      <Skeleton animation="wave" variant="text" width={104} height={22} />
-    </Stack>
-  )
-}
-
-function TableRowSkeleton({ columns }: { columns: number }) {
-  return (
-    <Stack direction="row" spacing={1.25} sx={{ alignItems: "center", borderBottom: "1px solid var(--app-border)", px: 1.5, py: 1.25 }}>
-      <Stack spacing={0.5} sx={{ flex: 1.4, minWidth: 0 }}>
-        <Skeleton animation="wave" variant="text" width="68%" height={18} />
-        <Skeleton animation="wave" variant="text" width="42%" height={14} />
-      </Stack>
-      {Array.from({ length: Math.max(0, columns - 1) }, (_, index) => (
-        <Skeleton key={index} animation="wave" variant={index === columns - 2 ? "rounded" : "text"} width={index === columns - 2 ? 72 : 92} height={index === columns - 2 ? 24 : 18} />
-      ))}
-    </Stack>
+      </div>
+    </section>
   )
 }
 
@@ -239,50 +204,90 @@ export function TablePanelSkeleton({
   title: string
 }) {
   return (
-    <Card variant="outlined" sx={{ overflow: "hidden", borderColor: "var(--app-border)", bgcolor: "color-mix(in srgb, var(--app-surface) 94%, transparent)", boxShadow: "var(--app-shadow)" }}>
-      <Stack direction="row" sx={{ alignItems: "center", borderBottom: "1px solid var(--app-border)", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
-        <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
-          <Typography component="h2" sx={appTypography.panelTitle}>{title}</Typography>
-          <Chip label="Loading" color="primary" variant="outlined" size="small" />
-        </Stack>
-        {rightLabel ? <Typography sx={appTypography.panelMeta}>{rightLabel}</Typography> : null}
-      </Stack>
+    <section className="app-panel overflow-hidden rounded-lg">
+      <div className="app-panel-header flex min-h-[43px] items-center justify-between gap-3 px-4 py-2.5">
+        <div className="flex items-center gap-2">
+          <h2 className="truncate text-[14px] font-[750] leading-tight text-[var(--app-text)]">{title}</h2>
+          <span className="inline-flex h-[22px] items-center rounded-md border border-[color-mix(in_srgb,var(--app-accent)_30%,var(--app-border))] bg-[var(--app-accent-soft)] px-2 text-[11px] font-extrabold leading-none text-[var(--app-accent)]">Loading</span>
+        </div>
+        {rightLabel ? <span className="text-[11px] font-medium leading-tight text-[var(--app-text-faint)]">{rightLabel}</span> : null}
+      </div>
 
-      <TableContainer>
-        <Table size="small" sx={{ minWidth: 900 }}>
-          <TableHead sx={tableHeadSx}>
-            <TableRow>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[900px] table-fixed text-[12px]">
+          <thead className="bg-[var(--app-surface-inset)]">
+            <tr>
               {columns.map((column) => (
-                <TableCell key={column.label} align={column.align} sx={column.width ? { width: column.width } : undefined}>{column.label}</TableCell>
+                <th
+                  className={`px-3 py-2 text-[10.5px] font-semibold text-[var(--app-text-faint)] ${column.align === "right" ? "text-right" : "text-left"}`}
+                  key={column.label}
+                  style={column.width ? ({ width: column.width } as CSSProperties) : undefined}
+                >
+                  {column.label}
+                </th>
               ))}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {Array.from({ length: rows }, (_, row) => (
-              <TableRow key={row}>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--app-border)]">
+            {Array.from({ length: rows }, (_, rowIndex) => (
+              <tr key={rowIndex}>
                 {columns.map((column, columnIndex) => (
-                  <TableCell key={column.label} align={column.align} sx={column.width ? { width: column.width } : undefined}>
+                  <td
+                    className={`px-3 py-2.5 ${column.align === "right" ? "text-right" : "text-left"}`}
+                    key={column.label}
+                    style={column.width ? ({ width: column.width } as CSSProperties) : undefined}
+                  >
                     <SkeletonCell align={column.align} columnIndex={columnIndex} />
-                  </TableCell>
+                  </td>
                 ))}
-              </TableRow>
+              </tr>
             ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
-    </Card>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
+
+function PanelHeaderSkeleton({ titleWidth }: { titleWidth: number }) {
+  return (
+    <div className="app-panel-header flex min-h-[43px] items-center justify-between gap-3 px-4 py-2.5">
+      <div className="flex items-center gap-2">
+        <SkeletonBlock className="h-[22px]" style={{ width: titleWidth }} />
+        <SkeletonBlock className="h-6 w-11 rounded-md" />
+      </div>
+      <SkeletonBlock className="h-[22px] w-[104px]" />
+    </div>
+  )
+}
+
+function TableRowSkeleton({ columns }: { columns: number }) {
+  return (
+    <div className="flex items-center gap-3 border-b border-[var(--app-border)] px-4 py-3">
+      <div className="min-w-0 flex-[1.4] space-y-1.5">
+        <SkeletonBlock className="h-4 w-[68%]" />
+        <SkeletonBlock className="h-3 w-[42%]" />
+      </div>
+      {Array.from({ length: Math.max(0, columns - 1) }, (_, index) => (
+        <SkeletonBlock className={index === columns - 2 ? "h-6 w-[72px] rounded-md" : "h-4 w-[92px]"} key={index} />
+      ))}
+    </div>
   )
 }
 
 function SkeletonCell({ align = "left", columnIndex }: { align?: "left" | "right"; columnIndex: number }) {
-  const width = columnIndex === 0 ? "42%" : columnIndex === 1 ? 96 : columnIndex === 2 ? 48 : columnIndex === 3 ? 68 : 78
+  const width = columnIndex === 0 ? "42%" : columnIndex === 1 ? "96px" : columnIndex === 2 ? "48px" : columnIndex === 3 ? "68px" : "78px"
   if (columnIndex === 0) {
     return (
-      <Stack spacing={0.75}>
-        <Skeleton animation="wave" variant="text" width="42%" height={18} />
-        <Skeleton animation="wave" variant="text" width="28%" height={14} />
-      </Stack>
+      <div className="space-y-1.5">
+        <SkeletonBlock className="h-4 w-[42%]" />
+        <SkeletonBlock className="h-3 w-[28%]" />
+      </div>
     )
   }
-  return <Skeleton animation="wave" variant={columnIndex >= 2 ? "rounded" : "text"} width={width} height={columnIndex >= 2 ? 24 : 18} sx={align === "right" ? { ml: "auto" } : undefined} />
+  return <SkeletonBlock className={`${columnIndex >= 2 ? "h-6 rounded-md" : "h-4"} ${align === "right" ? "ml-auto" : ""}`} style={{ width }} />
+}
+
+function SkeletonBlock({ className = "", style }: { className?: string; style?: CSSProperties }) {
+  return <span aria-hidden="true" className={`block animate-pulse rounded bg-[color-mix(in_srgb,var(--app-text-faint)_16%,transparent)] ${className}`} style={style} />
 }

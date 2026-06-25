@@ -6,7 +6,7 @@ import { CreatePortfolioForm } from "@/features/portfolios/components/CreatePort
 import { AddPositionModal } from "@/features/positions/components/AddPositionModal"
 import { getTranslations } from "@/lib/i18n"
 import { fetchPortfolioEvents } from "@/lib/portfolio-events"
-import type { ExchangeView, IntelligenceReport, MeData, NotificationInbox, PerformancePeriod, PerformanceReport, Portfolio, PositionView } from "@/lib/types"
+import type { BenchmarkReport, ExchangeView, IntelligenceReport, MeData, NotificationInbox, PerformancePeriod, PerformanceReport, Portfolio, PositionView } from "@/lib/types"
 
 interface DashboardPageProperties {
   searchParams: Promise<{ portfolio?: string; period?: string }>
@@ -45,6 +45,15 @@ async function fetchPerformanceReport(query: string): Promise<PerformanceReport 
   }
 }
 
+async function fetchBenchmarkReport(query: string): Promise<BenchmarkReport | null> {
+  try {
+    const response = await apiFetch(`/reporting/benchmark${query}`, { cache: "no-store" })
+    return response.ok ? ((await response.json()) as BenchmarkReport) : null
+  } catch {
+    return null
+  }
+}
+
 export default async function DashboardPage({ searchParams }: DashboardPageProperties) {
   const translations = getTranslations()
   const { portfolio: selectedRawPortfolioId, period: rawPerformancePeriod } = await searchParams
@@ -74,11 +83,12 @@ export default async function DashboardPage({ searchParams }: DashboardPagePrope
   const selectedPortfolioId = portfolios.find((portfolio) => portfolio.id === selectedRawPortfolioId)?.id
   const positionsQuery = selectedPortfolioId ? `?portfolio_id=${selectedPortfolioId}` : ""
   const performanceQuery = `?period=${performancePeriod}${selectedPortfolioId ? `&portfolio_id=${selectedPortfolioId}` : ""}`
-  const [positionsResponse, intelligence, notifications, performance] = await Promise.all([
+  const [positionsResponse, intelligence, notifications, performance, benchmark] = await Promise.all([
     apiFetch(selectedPortfolioId ? `/positions${positionsQuery}` : "/positions", { cache: "no-store" }),
     fetchPortfolioIntelligence(performanceQuery),
     fetchNotificationInbox(),
     fetchPerformanceReport(performanceQuery),
+    selectedPortfolioId ? fetchBenchmarkReport(performanceQuery) : Promise.resolve(null),
   ])
   const positions = (await positionsResponse.json()) as PositionView[]
   const events = await fetchPortfolioEvents(positions)
@@ -106,11 +116,12 @@ export default async function DashboardPage({ searchParams }: DashboardPagePrope
               exchanges={exchanges}
               selectedPortfolioId={selectedPortfolioId}
               performance={performance}
+              benchmark={benchmark}
               period={performancePeriod}
               latestQuote={latestQuote}
               reportingCurrency={reportingCurrency}
               locale={locale}
-              rail={<PortfolioIntelligence positions={positions} portfolios={portfolios} locale={locale} currency={reportingCurrency} intelligence={intelligence} notifications={notifications} selectedPortfolioId={selectedPortfolioId} events={events} />}
+              rail={<PortfolioIntelligence positions={positions} portfolios={portfolios} locale={locale} currency={reportingCurrency} intelligence={intelligence} notifications={notifications} period={performancePeriod} selectedPortfolioId={selectedPortfolioId} events={events} />}
             />
           </div>
         </DashboardPrivacyProvider>

@@ -11224,6 +11224,7 @@
                       "previous",
                       "currency",
                       "latest_at",
+                      "retrieved_at",
                       "freshness_status",
                       "provider",
                       "provider_timestamp"
@@ -11263,6 +11264,16 @@
                         ]
                       },
                       "latest_at": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "retrieved_at": {
                         "anyOf": [
                           {
                             "type": "string"
@@ -11632,6 +11643,38 @@
                   "properties": {
                     "refreshed": {
                       "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/fx/currencies": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "currencies"
+                  ],
+                  "properties": {
+                    "currencies": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   }
                 }
@@ -12579,6 +12622,11 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "currency": {
+                    "minLength": 3,
+                    "maxLength": 3,
+                    "type": "string"
+                  },
                   "horizon": {
                     "anyOf": [
                       {
@@ -13953,12 +14001,13 @@
                       "id",
                       "user_id",
                       "kind",
-                      "scope",
                       "instrument_id",
                       "listing_id",
                       "params",
                       "label",
                       "enabled",
+                      "notify_once",
+                      "remind_after_minutes",
                       "created_at",
                       "updated_at"
                     ],
@@ -14003,31 +14052,8 @@
                           }
                         ]
                       },
-                      "scope": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "enum": [
-                              "instrument"
-                            ]
-                          },
-                          {
-                            "type": "string",
-                            "enum": [
-                              "all_holdings"
-                            ]
-                          }
-                        ]
-                      },
                       "instrument_id": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ]
+                        "type": "string"
                       },
                       "listing_id": {
                         "anyOf": [
@@ -14055,6 +14081,19 @@
                       },
                       "enabled": {
                         "type": "boolean"
+                      },
+                      "notify_once": {
+                        "type": "boolean"
+                      },
+                      "remind_after_minutes": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       },
                       "created_at": {
                         "type": "string"
@@ -14084,7 +14123,7 @@
                 "type": "object",
                 "required": [
                   "kind",
-                  "scope",
+                  "instrument_id",
                   "params"
                 ],
                 "properties": {
@@ -14122,22 +14161,6 @@
                       }
                     ]
                   },
-                  "scope": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "enum": [
-                          "instrument"
-                        ]
-                      },
-                      {
-                        "type": "string",
-                        "enum": [
-                          "all_holdings"
-                        ]
-                      }
-                    ]
-                  },
                   "instrument_id": {
                     "format": "uuid",
                     "type": "string"
@@ -14153,6 +14176,21 @@
                   "label": {
                     "maxLength": 100,
                     "type": "string"
+                  },
+                  "notify_once": {
+                    "type": "boolean"
+                  },
+                  "remind_after_minutes": {
+                    "anyOf": [
+                      {
+                        "minimum": 5,
+                        "maximum": 1440,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 }
               }
@@ -14170,12 +14208,13 @@
                     "id",
                     "user_id",
                     "kind",
-                    "scope",
                     "instrument_id",
                     "listing_id",
                     "params",
                     "label",
                     "enabled",
+                    "notify_once",
+                    "remind_after_minutes",
                     "created_at",
                     "updated_at"
                   ],
@@ -14220,31 +14259,8 @@
                         }
                       ]
                     },
-                    "scope": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "enum": [
-                            "instrument"
-                          ]
-                        },
-                        {
-                          "type": "string",
-                          "enum": [
-                            "all_holdings"
-                          ]
-                        }
-                      ]
-                    },
                     "instrument_id": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
+                      "type": "string"
                     },
                     "listing_id": {
                       "anyOf": [
@@ -14272,6 +14288,19 @@
                     },
                     "enabled": {
                       "type": "boolean"
+                    },
+                    "notify_once": {
+                      "type": "boolean"
+                    },
+                    "remind_after_minutes": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "created_at": {
                       "type": "string"
@@ -14318,6 +14347,21 @@
                   },
                   "enabled": {
                     "type": "boolean"
+                  },
+                  "notify_once": {
+                    "type": "boolean"
+                  },
+                  "remind_after_minutes": {
+                    "anyOf": [
+                      {
+                        "minimum": 5,
+                        "maximum": 1440,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 }
               }
@@ -14345,12 +14389,13 @@
                     "id",
                     "user_id",
                     "kind",
-                    "scope",
                     "instrument_id",
                     "listing_id",
                     "params",
                     "label",
                     "enabled",
+                    "notify_once",
+                    "remind_after_minutes",
                     "created_at",
                     "updated_at"
                   ],
@@ -14395,31 +14440,8 @@
                         }
                       ]
                     },
-                    "scope": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "enum": [
-                            "instrument"
-                          ]
-                        },
-                        {
-                          "type": "string",
-                          "enum": [
-                            "all_holdings"
-                          ]
-                        }
-                      ]
-                    },
                     "instrument_id": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
+                      "type": "string"
                     },
                     "listing_id": {
                       "anyOf": [
@@ -14448,6 +14470,19 @@
                     "enabled": {
                       "type": "boolean"
                     },
+                    "notify_once": {
+                      "type": "boolean"
+                    },
+                    "remind_after_minutes": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "created_at": {
                       "type": "string"
                     },
@@ -14470,6 +14505,161 @@
         "parameters": [
           {
             "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/notifications/push/public-key": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "public_key"
+                  ],
+                  "properties": {
+                    "public_key": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/notifications/push/subscriptions": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "endpoint",
+                  "keys"
+                ],
+                "properties": {
+                  "endpoint": {
+                    "minLength": 1,
+                    "maxLength": 2000,
+                    "type": "string"
+                  },
+                  "keys": {
+                    "type": "object",
+                    "required": [
+                      "p256dh",
+                      "auth"
+                    ],
+                    "properties": {
+                      "p256dh": {
+                        "minLength": 1,
+                        "maxLength": 255,
+                        "type": "string"
+                      },
+                      "auth": {
+                        "minLength": 1,
+                        "maxLength": 255,
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "user_agent": {
+                    "maxLength": 400,
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/notifications/push/subscriptions/{id}": {
+      "delete": {
+        "parameters": [
+          {
+            "schema": {
+              "pattern": "^[a-f0-9]{64}$",
               "type": "string"
             },
             "in": "path",

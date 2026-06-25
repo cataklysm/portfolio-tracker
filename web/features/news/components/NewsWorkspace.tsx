@@ -23,8 +23,9 @@ import {
   Typography,
 } from "@mui/material"
 import { ControlBar, type ControlBarFilterBadge } from "@/design/components/ControlBar"
+import { AppIcon, type AppIconName } from "@/design/icons/AppIcon"
 import { PageMetricGrid, PageShell } from "@/application/shell/PageShell"
-import { selectableRowSx } from "@/application/shell/rowSelection"
+import { selectableRowSx } from "@/design/tokens/rowSelection"
 import { useToast } from "@/application/toast/ToastProvider"
 import type { PortfolioNews } from "@/lib/portfolio-events"
 
@@ -925,74 +926,38 @@ function capitalize(value: string): string {
 }
 
 function MetricIcon({ icon }: { icon: "mail" | "impact" | "building" | "duplicate" }) {
-  if (icon === "impact") return <FlameIcon />
-  if (icon === "building") return <BuildingIcon />
-  if (icon === "duplicate") return <DuplicateIcon />
-  return <MailIcon large />
+  const iconName: AppIconName = icon === "impact" ? "flame" : icon === "building" ? "building" : icon === "duplicate" ? "duplicate" : "mail"
+  return <AppIcon className="h-6 w-6" name={iconName} strokeWidth={1.8} />
 }
 
 function MailIcon({ large = false }: { large?: boolean }) {
-  return (
-    <svg width={large ? 24 : 16} height={large ? 24 : 16} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M4 6h16v12H4V6Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-      <path d="m4 7 8 6 8-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
+  return <AppIcon className={large ? "h-6 w-6" : "h-4 w-4"} name="mail" strokeWidth={1.8} />
 }
 
 function FlameIcon() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 21c4 0 7-2.8 7-6.8 0-3.2-2-5.4-4.5-8.1-.5 2-1.5 3.2-3 4.2.1-2.4-.8-4.6-2.9-6.3.2 3.1-3.6 5.4-3.6 10.2C5 18.2 8 21 12 21Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
+  return <AppIcon className="h-6 w-6" name="flame" strokeWidth={1.8} />
 }
 
 function BuildingIcon() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M5 20V6l8-3v17M13 8h6v12M8 8h2M8 12h2M8 16h2M16 12h1M16 16h1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
+  return <AppIcon className="h-6 w-6" name="building" strokeWidth={1.8} />
 }
 
 function DuplicateIcon() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M8 8h10v10H8V8Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4h9a2 2 0 0 1 2 2v1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
+  return <AppIcon className="h-6 w-6" name="duplicate" strokeWidth={1.8} />
 }
 
 function SearchIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="m21 21-4.4-4.4M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  )
+  return <AppIcon className="h-4 w-4" name="search" strokeWidth={1.8} />
 }
 
 function BookmarkIcon({ filled = false }: { filled?: boolean }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} aria-hidden="true">
-      <path d="M6 4h12v17l-6-3.5L6 21V4Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
+  return <AppIcon className="h-4 w-4" filled={filled} name="bookmark" strokeWidth={1.8} />
 }
 
 function OpenIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M14 4h6v6M10 14 20 4M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
+  return <AppIcon className="h-4 w-4" name="openExternal" strokeWidth={1.8} />
 }
 
 function ChevronDownIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="m7 10 5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
+  return <AppIcon className="h-3.5 w-3.5" name="chevronDown" strokeWidth={1.8} />
 }

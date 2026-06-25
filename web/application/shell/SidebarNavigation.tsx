@@ -2,25 +2,25 @@
 import Link from "next/link"
 import { usePathname, useSearchParams } from "next/navigation"
 import { useState } from "react"
-import { Tooltip } from "@mui/material"
+import { AppIcon, type AppIconName } from "@/design/icons/AppIcon"
 import { CreatePortfolioDialog } from "@/features/portfolios/components/CreatePortfolioDialog"
 import { useTranslations, type MessageKey } from "@/lib/i18n"
 import type { MeData, Portfolio } from "@/lib/types"
 
 const ICONS = {
-  portfolio: "M4 19V9m5 10V5m5 14v-7m5 7V3",
-  reports: "M5 3h14v18H5zM8 8h8M8 12h8M8 16h5",
-  activity: "M4 12h4l2-7 4 14 2-7h4",
-  watchlist: "m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z",
-  notifications: "M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0v1a3 3 0 1 1-6 0v-1m6 0H9",
-  news: "M5 4h14v16H5zM8 8h8M8 12h8M8 16h5",
-  events: "M6 3v3m12-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z",
-  addPosition: "M12 5v14M5 12h14",
-  administration: "M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM19 12l2-1-2-3-2 .2-1.5-1L15 5H9l-.5 2.2-1.5 1L5 8l-2 3 2 1v2l-2 1 2 3 2-.2 1.5 1L9 21h6l.5-2.2 1.5-1 2 .2 2-3-2-1v-2Z",
-  settings: "M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM19 12l2-1-2-3-2 .2-1.5-1L15 5H9l-.5 2.2-1.5 1L5 8l-2 3 2 1v2l-2 1 2 3 2-.2 1.5 1L9 21h6l.5-2.2 1.5-1 2 .2 2-3-2-1v-2Z",
-  collapse: "m15 18-6-6 6-6",
-  expand: "m9 18 6-6-6-6",
-} as const
+  activity: "activity",
+  addPosition: "plus",
+  administration: "administration",
+  collapse: "collapse",
+  events: "calendar",
+  expand: "expand",
+  news: "news",
+  notifications: "bell",
+  portfolio: "portfolio",
+  reports: "reports",
+  settings: "settings",
+  watchlist: "watchlist",
+} satisfies Record<string, AppIconName>
 
 type IconKey = keyof typeof ICONS
 interface NavItem { labelKey: MessageKey; icon: IconKey; href: string | null }
@@ -35,11 +35,7 @@ const NAV_ITEMS: NavItem[] = [
 ]
 
 function Icon({ icon }: { icon: IconKey }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="h-4.5 w-4.5 shrink-0">
-      <path d={ICONS[icon]} />
-    </svg>
-  )
+  return <AppIcon className="h-4.5 w-4.5 shrink-0" name={ICONS[icon]} strokeWidth={1.6} />
 }
 
 export function SidebarNavigation({ collapsed, onToggle, animate, me, unreadCount = 0, portfolios = [] }: { collapsed: boolean; onToggle: () => void; animate: boolean; me: MeData | null; unreadCount?: number; portfolios?: Portfolio[] }) {
@@ -172,24 +168,23 @@ function CreatePortfolioSidebarButton({ collapsed }: { collapsed: boolean }) {
 
   return (
     <>
-      <Tooltip title={t("nav.addPortfolio")} placement="right">
-        <button
-          type="button"
-          aria-label={t("nav.addPortfolio")}
-          onClick={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            setOpen(true)
-          }}
-          className={
-            collapsed
-              ? "flex h-7 w-9 items-center justify-center rounded-md border border-[var(--app-border)] text-[var(--app-text-faint)] transition hover:border-[color-mix(in_srgb,var(--app-accent)_45%,var(--app-border))] hover:bg-[var(--app-accent-soft)] hover:text-[var(--app-accent)]"
-              : "mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-transparent text-[var(--app-text-faint)] transition hover:border-[color-mix(in_srgb,var(--app-accent)_45%,var(--app-border))] hover:bg-[var(--app-accent-soft)] hover:text-[var(--app-accent)]"
-          }
-        >
-          <Icon icon="addPosition" />
-        </button>
-      </Tooltip>
+      <button
+        type="button"
+        aria-label={t("nav.addPortfolio")}
+        title={t("nav.addPortfolio")}
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          setOpen(true)
+        }}
+        className={
+          collapsed
+            ? "flex h-7 w-9 items-center justify-center rounded-md border border-[var(--app-border)] text-[var(--app-text-faint)] transition hover:border-[color-mix(in_srgb,var(--app-accent)_45%,var(--app-border))] hover:bg-[var(--app-accent-soft)] hover:text-[var(--app-accent)]"
+            : "mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-transparent text-[var(--app-text-faint)] transition hover:border-[color-mix(in_srgb,var(--app-accent)_45%,var(--app-border))] hover:bg-[var(--app-accent-soft)] hover:text-[var(--app-accent)]"
+        }
+      >
+        <Icon icon="addPosition" />
+      </button>
       <CreatePortfolioDialog open={open} onClose={() => setOpen(false)} />
     </>
   )

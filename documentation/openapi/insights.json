@@ -734,6 +734,11 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "currency": {
+                    "minLength": 3,
+                    "maxLength": 3,
+                    "type": "string"
+                  },
                   "horizon": {
                     "anyOf": [
                       {

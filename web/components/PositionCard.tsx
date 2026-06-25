@@ -1,6 +1,7 @@
 "use client"
 import Link from "next/link"
 import type { PositionView } from "@/lib/types"
+import { AppIcon } from "@/design/icons/AppIcon"
 import { useLocale } from "@/lib/locale-context"
 import { useTranslations } from "@/lib/i18n"
 import { fmtCurrency, fmtPrice, fmtQty, num } from "@/lib/format"
@@ -34,16 +35,8 @@ const FALLBACK_THEME: TypeTheme = {
   avatarText: "text-slate-300",
 }
 
-const IconUp = () => (
-  <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M8 12V4M4 8l4-4 4 4" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-)
-const IconDown = () => (
-  <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M8 4v8M4 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-)
+const IconUp = () => <AppIcon className="h-3.5 w-3.5" name="trendUp" strokeWidth={2} />
+const IconDown = () => <AppIcon className="h-3.5 w-3.5" name="trendDown" strokeWidth={2} />
 
 function StatRow({ label, value }: { label: string; value: string }) {
   return (

@@ -13,6 +13,8 @@ export interface FxRatePoint {
 }
 
 export interface FxRepository {
+  /** Distinct quote currencies currently available in stored EUR-based FX rates. */
+  listAvailableQuoteCurrencies(): Promise<string[]>;
   /** Latest stored EUR-based rate per requested quote currency. */
   getLatestEurRates(quoteCurrencies: string[]): Promise<Map<string, string>>;
   /** Most recent EUR-based rate on or before the given date (last-available fallback). */

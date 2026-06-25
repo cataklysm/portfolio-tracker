@@ -2,9 +2,10 @@
 
 import { Fragment, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { EditTransactionModal } from "@/components/EditTransactionModal"
-import { TaxEventModal } from "@/components/TaxEventModal"
-import { deleteTaxEventAction } from "@/app/reports/tax-actions"
+import { AppIcon } from "@/design/icons/AppIcon"
+import { EditTransactionModal } from "@/features/positions/components/EditTransactionModal"
+import { deleteTaxEventAction } from "@/features/reports/actions"
+import { TaxEventModal } from "@/features/reports/components/TaxEventModal"
 import { fmtPrice, fmtQty } from "@/lib/format"
 import { useTranslations } from "@/lib/i18n"
 import type { RealizationAllocationView, RealizationView, TaxComponent, TransactionTaxEvent, TransactionView } from "@/lib/types"
@@ -16,6 +17,15 @@ const TAX_COMPONENT_LABEL: Record<TaxComponent, string> = {
   generic: "Broker tax / correction",
   solidarity: "Solidarity surcharge",
 }
+
+const tableActionButtonClass =
+  "inline-flex h-7 w-7 items-center justify-center rounded-md border border-[color-mix(in_srgb,var(--app-accent)_28%,var(--app-border))] bg-[color-mix(in_srgb,var(--app-accent)_8%,transparent)] text-[var(--app-accent)] transition hover:bg-[color-mix(in_srgb,var(--app-accent)_14%,var(--app-surface-hover))] hover:text-[var(--app-accent)] disabled:opacity-50"
+
+const tableNeutralButtonClass =
+  "inline-flex h-7 w-7 items-center justify-center rounded-md border border-[var(--app-border)] text-[var(--app-text-faint)] transition hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text)] disabled:opacity-50"
+
+const tableDangerButtonClass =
+  "inline-flex h-7 w-7 items-center justify-center rounded-md border border-[color-mix(in_srgb,var(--app-negative)_30%,var(--app-border))] text-[var(--app-negative)] transition hover:bg-[color-mix(in_srgb,var(--app-negative)_10%,var(--app-surface-hover))] disabled:opacity-50"
 
 interface AssetTransactionsTableProperties {
   allocations: RealizationAllocationView | null
@@ -140,7 +150,7 @@ export function AssetTransactionsTable({
                     {hasChildren ? (
                       <button
                         aria-expanded={!collapsed}
-                        className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded border border-[var(--app-border)] text-[var(--app-text-faint)] transition hover:border-[var(--app-border-strong)] hover:text-[var(--app-text)]"
+                        className={`${tableNeutralButtonClass} mr-2`}
                         onClick={() => toggleSell(transaction.id)}
                         title={collapsed ? "Show consumed lots" : "Hide consumed lots"}
                         type="button"
@@ -148,7 +158,7 @@ export function AssetTransactionsTable({
                         <ChevronIcon collapsed={collapsed} />
                       </button>
                     ) : (
-                      <span className="mr-2 inline-flex h-5 w-5" />
+                      <span className="mr-2 inline-flex h-7 w-7" />
                     )}
                     {formatDate(locale, transaction.effective_at)}
                   </td>
@@ -197,8 +207,22 @@ export function AssetTransactionsTable({
                   </td>
                   <td className="px-3 py-2.5 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <TaxEventModal currency={transaction.currency} portfolioId={portfolioId} positionId={positionId} transactionId={transaction.id} />
-                      <EditTransactionModal currency={currency} positionId={positionId} transaction={transaction} />
+                      <TaxEventModal
+                        currency={transaction.currency}
+                        portfolioId={portfolioId}
+                        positionId={positionId}
+                        transactionId={transaction.id}
+                        triggerClassName={tableActionButtonClass}
+                        triggerContent={<TaxIcon />}
+                        triggerTitle="Record broker tax"
+                      />
+                      <EditTransactionModal
+                        currency={currency}
+                        positionId={positionId}
+                        transaction={transaction}
+                        triggerClassName={tableNeutralButtonClass}
+                        triggerContent={<EditIcon />}
+                      />
                     </div>
                   </td>
                 </tr>
@@ -348,16 +372,19 @@ function TaxEventRows({ events, locale, positionId }: { events: TransactionTaxEv
                       note: event.note,
                       position_id: positionId,
                     }}
+                    triggerClassName={tableNeutralButtonClass}
+                    triggerContent={<EditIcon />}
+                    triggerTitle="Edit tax event"
                   />
                   <button
                     aria-label="Delete tax event"
-                    className="text-[var(--app-text-faint)] transition hover:text-[var(--app-negative)] disabled:opacity-50"
+                    className={tableDangerButtonClass}
                     disabled={busy === event.id}
                     onClick={() => remove(event.id)}
                     title="Delete tax event"
                     type="button"
                   >
-                    x
+                    <DeleteIcon />
                   </button>
                 </div>
               </li>
@@ -416,6 +443,18 @@ function AllocatedPnlCell({ currency, locale, total, value }: { currency: string
       {fraction !== null ? <span className="mt-0.5 block text-[8px] text-[var(--app-text-faint)]">{fraction.toLocaleString(locale, { maximumFractionDigits: 1 })}% of sell P&L</span> : null}
     </td>
   )
+}
+
+function TaxIcon() {
+  return <AppIcon className="h-3.5 w-3.5" name="tax" strokeWidth={1.8} />
+}
+
+function EditIcon() {
+  return <AppIcon className="h-3.5 w-3.5" name="edit" strokeWidth={1.8} />
+}
+
+function DeleteIcon() {
+  return <AppIcon className="h-3.5 w-3.5" name="trash" strokeWidth={1.8} />
 }
 
 function completeAllocations(transactions: TransactionView[], persisted: RealizationAllocationView | null): RealizationAllocationView {
@@ -521,9 +560,5 @@ function formatDate(locale: string, value: string): string {
 }
 
 function ChevronIcon({ collapsed }: { collapsed: boolean }) {
-  return (
-    <svg aria-hidden="true" className="h-3 w-3" fill="none" viewBox="0 0 16 16">
-      <path d={collapsed ? "M6 3.5 10.5 8 6 12.5" : "M3.5 6 8 10.5 12.5 6"} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
-    </svg>
-  )
+  return <AppIcon className="h-3 w-3" name={collapsed ? "chevronRight" : "chevronDown"} strokeWidth={1.8} />
 }

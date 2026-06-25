@@ -439,6 +439,7 @@ export interface Quote {
   previous: string | null
   currency: string | null
   latest_at: string | null
+  retrieved_at: string | null
   freshness_status: "fresh" | "stale" | "unavailable"
   provider: string | null
   provider_timestamp: string | null
@@ -740,6 +741,16 @@ export interface PriceTarget {
   updated_at: string
 }
 
+export type PriceTargetFxStatus = "same_currency" | "converted" | "unavailable"
+
+export interface ConvertedPriceTarget extends PriceTarget {
+  display_currency: string
+  display_zone_low: string | null
+  display_zone_high: string | null
+  fx_rate_date: string | null
+  fx_status: PriceTargetFxStatus
+}
+
 /** Personal access token metadata (the secret is never included here). */
 export interface ApiToken {
   id: string
@@ -762,12 +773,15 @@ export interface AlertRule {
   id: string
   user_id: string
   kind: AlertRuleKind
-  scope: "instrument" | "all_holdings"
-  instrument_id: string | null
+  instrument_id: string
   listing_id: string | null
   params: Record<string, unknown>
   label: string | null
   enabled: boolean
+  /** When true, the rule disables itself after firing once. */
+  notify_once: boolean
+  /** "Remind me later" cooldown in minutes (5..1440); null = no cooldown. */
+  remind_after_minutes: number | null
   created_at: string
   updated_at: string
 }

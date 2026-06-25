@@ -24,10 +24,11 @@ export class KyselyQuoteRepository implements QuoteRepository {
       currency: string;
       provider: string;
       provider_timestamp: Date | null;
+      retrieved_at: Date;
       is_latest: boolean;
     }>`
       WITH base AS (
-        SELECT listing_id, time, price, currency, provider, provider_timestamp,
+        SELECT listing_id, time, price, currency, provider, provider_timestamp, retrieved_at,
                max(time) OVER (PARTITION BY listing_id) AS latest_time
         FROM market.price_quotes
         WHERE listing_id = ANY(${sql.val(listingIds)})
@@ -42,7 +43,7 @@ export class KyselyQuoteRepository implements QuoteRepository {
                ) AS r
         FROM base
       )
-      SELECT listing_id, time, price, currency, provider, provider_timestamp, is_latest
+      SELECT listing_id, time, price, currency, provider, provider_timestamp, retrieved_at, is_latest
       FROM ranked
       WHERE is_latest OR (is_prior_day AND r = 1)
     `.execute(this.db);
@@ -50,11 +51,12 @@ export class KyselyQuoteRepository implements QuoteRepository {
     for (const row of rows.rows) {
       const existing =
         map.get(row.listing_id) ??
-        { latest: null, previous: null, currency: null, latestAt: null, provider: null, providerTimestamp: null };
+        { latest: null, previous: null, currency: null, latestAt: null, retrievedAt: null, provider: null, providerTimestamp: null };
       if (row.is_latest) {
         existing.latest = row.price;
         existing.currency = row.currency;
         existing.latestAt = row.time;
+        existing.retrievedAt = row.retrieved_at;
         existing.provider = row.provider;
         existing.providerTimestamp = row.provider_timestamp;
       } else {

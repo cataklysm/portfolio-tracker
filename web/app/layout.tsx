@@ -1,8 +1,8 @@
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
-import { NotificationSnackbarProvider } from "@/application/notifications/NotificationSnackbarProvider"
-import { MuiThemeProvider } from "@/application/providers/MuiThemeProvider"
+import { NotificationMessageProvider } from "@/application/notifications/NotificationMessageProvider"
+import { ApplicationThemeProvider } from "@/application/providers/ApplicationThemeProvider"
 import { AppShell } from "@/application/shell/AppShell"
 import { ToastProvider } from "@/application/toast/ToastProvider"
 import { apiFetch, fetchMe } from "@/lib/api"
@@ -59,6 +59,9 @@ export default async function RootLayout({
   return (
     <html lang={locale} suppressHydrationWarning>
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..500,0..1,0&display=block" rel="stylesheet" />
         <script
           dangerouslySetInnerHTML={{
             __html:
@@ -69,15 +72,15 @@ export default async function RootLayout({
       <body
         className={`${inter.variable} h-screen font-sans antialiased`}
       >
-        <MuiThemeProvider>
+        <ApplicationThemeProvider>
           <LocaleProvider locale={locale}>
             <ToastProvider>
-              <NotificationSnackbarProvider>
+              <NotificationMessageProvider>
                 <AppShell me={me} unreadCount={unreadCount} positions={positions} portfolios={portfolios}>{children}</AppShell>
-              </NotificationSnackbarProvider>
+              </NotificationMessageProvider>
             </ToastProvider>
           </LocaleProvider>
-        </MuiThemeProvider>
+        </ApplicationThemeProvider>
       </body>
     </html>
   )

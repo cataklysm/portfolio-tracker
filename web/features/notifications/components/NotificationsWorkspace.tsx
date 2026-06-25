@@ -21,8 +21,10 @@ import {
 import { markAllNotificationsReadAction, markNotificationReadAction } from "@/app/notifications/actions"
 import { deleteRuleAction, toggleRuleAction } from "@/app/notifications/settings/actions"
 import { ControlBar, type ControlBarFilterBadge } from "@/design/components/ControlBar"
+import { AppIcon } from "@/design/icons/AppIcon"
 import { PageMetricGrid, PageShell } from "@/application/shell/PageShell"
 import { useToast } from "@/application/toast/ToastProvider"
+import { repeatLabel } from "@/features/notifications/repeat"
 import type { AlertRule, AlertRuleKind, ListingSummary, NotificationInbox, NotificationItem, PositionView } from "@/lib/types"
 
 type NotificationTab = "all" | "unread" | "price_moves" | "thresholds" | "earnings"
@@ -630,6 +632,7 @@ function RuleCard({ onDelete, onToggle, pending, rule, triggered }: { onDelete: 
           <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
             <Typography noWrap sx={{ color: "var(--app-text)", fontSize: 13, fontWeight: 900 }}>{rule.label ?? ruleKindLabels[rule.kind]}</Typography>
             <Chip label={rule.enabled ? "Active" : triggered ? "Triggered" : "Disabled"} color={rule.enabled ? "success" : triggered ? "primary" : "default"} size="small" variant="outlined" />
+            <Chip label={repeatLabel(rule)} size="small" variant="outlined" sx={{ borderColor: "var(--app-border)", color: "var(--app-text-muted)" }} />
           </Stack>
           <Typography noWrap sx={{ color: "var(--app-text-muted)", fontSize: 11 }}>{describeRule(rule)}</Typography>
         </Box>
@@ -684,7 +687,7 @@ function resolveAsset(item: NotificationItem, byListing: Map<string, AssetContex
 }
 
 function rulesForAsset(rules: AlertRule[], asset: AssetContext): AlertRule[] {
-  return rules.filter((rule) => rule.scope === "all_holdings" || rule.instrument_id === asset.instrument_id || rule.listing_id === asset.listing_id)
+  return rules.filter((rule) => rule.instrument_id === asset.instrument_id || rule.listing_id === asset.listing_id)
 }
 
 function findTriggeredRule(notification: NotificationItem, asset: AssetContext, rules: AlertRule[]): AlertRule | null {
@@ -693,7 +696,7 @@ function findTriggeredRule(notification: NotificationItem, asset: AssetContext, 
     if (directMatch) return directMatch
   }
   const kind = notificationTypeToRuleKind(notification.type)
-  const candidates = rules.filter((rule) => rule.kind === kind && (rule.scope === "all_holdings" || rule.instrument_id === asset.instrument_id || rule.listing_id === asset.listing_id))
+  const candidates = rules.filter((rule) => rule.kind === kind && (rule.instrument_id === asset.instrument_id || rule.listing_id === asset.listing_id))
   return candidates.find((rule) => !rule.enabled && ruleMatchesData(rule, notification.data)) ?? candidates[0] ?? null
 }
 
@@ -713,12 +716,11 @@ function ruleMatchesData(rule: AlertRule, data: unknown): boolean {
 
 function describeRule(rule: AlertRule): string {
   const params = rule.params
-  const scope = rule.scope === "all_holdings" ? "all holdings" : "asset"
   if (rule.kind === "price_threshold") return `Price ${String(params.direction)} ${String(params.price)}`
-  if (rule.kind === "daily_move") return `Daily move above ${String(params.threshold_pct)}% for ${scope}`
+  if (rule.kind === "daily_move") return `Daily move above ${String(params.threshold_pct)}%`
   if (rule.kind === "earnings_lead") return `Earnings ${String(params.days)} day(s) before report`
   if (rule.kind === "cost_basis_move") return `Cost basis ${String(params.direction)} ${String(params.threshold_pct)}%`
-  if (rule.kind === "target_zone") return `Target zone for ${scope}`
+  if (rule.kind === "target_zone") return "Target zone"
   return rule.kind
 }
 
@@ -793,23 +795,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function SearchIcon({ small = false }: { small?: boolean }) {
-  const size = small ? 14 : 16
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="m21 21-4.4-4.4M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  )
+  return <AppIcon className={small ? "h-3.5 w-3.5" : "h-4 w-4"} name="search" strokeWidth={1.8} />
 }
 
 
 function MailIcon() {
-  return <Box component="span" sx={{ color: "var(--app-text-muted)", fontSize: 14, lineHeight: 1 }}>□</Box>
+  return <AppIcon className="h-4 w-4" name="mail" strokeWidth={1.8} />
 }
 
 function OpenIcon() {
-  return <Box component="span" sx={{ color: "var(--app-text-muted)", fontSize: 14, lineHeight: 1 }}>↗</Box>
+  return <AppIcon className="h-4 w-4" name="openExternal" strokeWidth={1.8} />
 }
 
 function TrashIcon() {
-  return <Box component="span" sx={{ color: "var(--app-text-muted)", fontSize: 14, lineHeight: 1 }}>⌫</Box>
+  return <AppIcon className="h-4 w-4" name="trash" strokeWidth={1.8} />
 }

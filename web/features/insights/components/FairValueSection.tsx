@@ -1,29 +1,35 @@
 "use client"
 import { useActionState, useState, useTransition } from "react"
-import { createDcfFairValueAction, deleteFairValueAction } from "@/app/positions/[id]/insights-actions"
+import { createDcfFairValueAction, deleteFairValueAction } from "@/features/insights/actions"
 import { useLocale } from "@/lib/locale-context"
 import { useTranslations } from "@/lib/i18n"
 import { fmtCurrency, num } from "@/lib/format"
 import type { FairValueEstimate } from "@/lib/types"
 
 const inputClass =
-  "w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-raised)] px-2.5 py-1.5 text-sm text-[var(--app-text)] placeholder-[var(--app-text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--app-accent)]"
+  "w-full rounded-md border border-[var(--app-border)] bg-[var(--app-surface-raised)] px-2.5 py-1.5 text-[12px] font-semibold text-[var(--app-text)] placeholder:text-[var(--app-text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--app-accent)]"
 const labelClass = "mb-1 block text-[11px] text-[var(--app-text-faint)]"
+const primaryButtonClass =
+  "rounded-md border border-[color-mix(in_srgb,var(--app-accent)_42%,var(--app-border))] bg-[var(--app-accent)] px-3 py-1.5 text-[12px] font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+const secondaryButtonClass =
+  "rounded-md border border-[color-mix(in_srgb,var(--app-accent)_30%,var(--app-border))] bg-[var(--app-accent-soft)] px-3 py-1.5 text-[12px] font-semibold text-[var(--app-accent)] transition hover:bg-[color-mix(in_srgb,var(--app-accent)_14%,transparent)]"
+const ghostButtonClass =
+  "rounded-md border border-[var(--app-border)] px-2 py-1 text-[11px] font-semibold text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text)] disabled:opacity-50"
 
 interface Props {
-  positionId: string
+  detailContext: string
   instrumentId: string
   currency: string
   currentPrice: number | null
   items: FairValueEstimate[]
 }
 
-export function FairValueSection({ positionId, instrumentId, currency, currentPrice, items }: Props) {
+export function FairValueSection({ detailContext, instrumentId, currency, currentPrice, items }: Props) {
   const locale = useLocale()
   const t = useTranslations()
   const [open, setOpen] = useState(false)
   const [error, formAction, pending] = useActionState(
-    createDcfFairValueAction.bind(null, instrumentId, currency, positionId),
+    createDcfFairValueAction.bind(null, instrumentId, currency, detailContext),
     null,
   )
 
@@ -34,7 +40,7 @@ export function FairValueSection({ positionId, instrumentId, currency, currentPr
       ) : (
         <ul className="space-y-2">
           {items.map((fv) => (
-            <FairValueRow key={fv.id} fv={fv} positionId={positionId} currency={currency} currentPrice={currentPrice} locale={locale} />
+            <FairValueRow key={fv.id} fv={fv} detailContext={detailContext} currency={currency} currentPrice={currentPrice} locale={locale} />
           ))}
         </ul>
       )}
@@ -42,19 +48,19 @@ export function FairValueSection({ positionId, instrumentId, currency, currentPr
       {!open ? (
         <button
           onClick={() => setOpen(true)}
-          className="rounded-lg border border-[var(--app-border-strong)] bg-[var(--app-accent-soft)] px-3 py-1.5 text-sm font-medium text-[var(--app-accent)]"
+          className={secondaryButtonClass}
         >
           {t("fairValue.addEstimate")}
         </button>
       ) : (
-        <form action={formAction} className="app-muted-panel rounded-xl p-3">
+        <form action={formAction} className="app-muted-panel rounded-lg p-3">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-xs font-medium text-[var(--app-text-muted)]">{t("fairValue.assumptionsTitle", { currency })}</span>
             <button type="button" onClick={() => setOpen(false)} className="text-xs text-[var(--app-text-faint)] hover:text-[var(--app-text)]">
               {t("common.close")}
             </button>
           </div>
-          {error && <p className="mb-2 rounded-lg bg-rose-950/50 px-3 py-2 text-xs text-rose-400">{error}</p>}
+          {error && <p className="mb-2 rounded-md bg-[color-mix(in_srgb,var(--app-negative)_12%,transparent)] px-3 py-2 text-xs text-[var(--app-negative)]">{error}</p>}
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
             <Field name="base_cash_flow" label={t("fairValue.freeCashFlow", { currency })} placeholder="e.g. 1000000000" />
             <Field name="growth_rate" label={t("fairValue.growthRate")} defaultValue="8" />
@@ -67,7 +73,7 @@ export function FairValueSection({ positionId, instrumentId, currency, currentPr
           <button
             type="submit"
             disabled={pending}
-            className="mt-3 w-full rounded-lg bg-sky-600 py-2 text-sm font-semibold text-white hover:bg-sky-500 disabled:opacity-50"
+            className={`mt-3 w-full ${primaryButtonClass}`}
           >
             {pending ? t("fairValue.computing") : t("fairValue.computeSave")}
           </button>
@@ -111,13 +117,13 @@ function Field({
 
 function FairValueRow({
   fv,
-  positionId,
+  detailContext,
   currency,
   currentPrice,
   locale,
 }: {
   fv: FairValueEstimate
-  positionId: string
+  detailContext: string
   currency: string
   currentPrice: number | null
   locale: string
@@ -132,14 +138,14 @@ function FairValueRow({
 
   return (
     <li className="app-muted-panel flex items-center gap-3 rounded-lg px-3 py-2">
-      <span className={`rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${fv.method === "dcf" ? "border-sky-500/40 bg-sky-500/10 text-sky-300" : "border-[var(--app-border)] bg-[var(--app-surface-raised)] text-[var(--app-text-muted)]"}`}>
+      <span className={`rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${fv.method === "dcf" ? "border-[color-mix(in_srgb,var(--app-accent)_36%,var(--app-border))] bg-[var(--app-accent-soft)] text-[var(--app-accent)]" : "border-[var(--app-border)] bg-[var(--app-surface-raised)] text-[var(--app-text-muted)]"}`}>
         {fv.method === "dcf" ? t("fairValue.methodDcf") : t("fairValue.methodAnalyst")}
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold tabular-nums text-[var(--app-text)]">
-          {value !== null ? fmtCurrency(locale, value, fv.currency) : "—"}
+          {value !== null ? fmtCurrency(locale, value, fv.currency) : "-"}
           {upside !== null && (
-            <span className={`ml-2 text-xs font-medium ${upside >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+            <span className={`ml-2 text-xs font-medium ${upside >= 0 ? "text-[var(--app-positive)]" : "text-[var(--app-negative)]"}`}>
               {t("fairValue.upsideSuffix", { value: `${upside >= 0 ? "+" : ""}${upside.toFixed(1)}%` })}
             </span>
           )}
@@ -147,19 +153,19 @@ function FairValueRow({
         <p className="truncate text-[11px] text-[var(--app-text-faint)]">
           {fv.effective_date}
           {a && fv.method === "dcf" && (
-            <> · g {pct(a.growth_rate)} · disc {pct(a.discount_rate)} · {a.projection_years}y</>
+            <> - g {pct(a.growth_rate)} - disc {pct(a.discount_rate)} - {a.projection_years}y</>
           )}
-          {fv.source && <> · {fv.source}</>}
+          {fv.source && <> - {fv.source}</>}
         </p>
       </div>
       {isOwn && (
         <button
-          onClick={() => startDelete(async () => void (await deleteFairValueAction(positionId, fv.id)))}
+          onClick={() => startDelete(async () => void (await deleteFairValueAction(detailContext, fv.id)))}
           disabled={isDeleting}
           title={t("fairValue.deleteTitle")}
-          className="rounded-md border border-[var(--app-border)] px-2 py-1 text-xs text-[var(--app-text-muted)] hover:border-rose-500/40 hover:text-rose-300 disabled:opacity-50"
+          className={ghostButtonClass}
         >
-          {isDeleting ? "…" : "✕"}
+          {isDeleting ? "..." : "x"}
         </button>
       )}
     </li>
@@ -167,5 +173,5 @@ function FairValueRow({
 }
 
 function pct(value: number | undefined): string {
-  return value === undefined ? "—" : `${(value * 100).toFixed(1)}%`
+  return value === undefined ? "-" : `${(value * 100).toFixed(1)}%`
 }

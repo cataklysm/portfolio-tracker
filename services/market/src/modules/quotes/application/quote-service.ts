@@ -23,6 +23,7 @@ export interface QuoteView {
   previous: string | null;
   currency: string | null;
   latest_at: string | null;
+  retrieved_at: string | null;
   freshness_status: FreshnessStatus;
   /** The provider that supplied the latest tick (attribution); null if no quote. */
   provider: string | null;
@@ -60,6 +61,7 @@ export class QuoteService {
         previous: pair?.previous ?? null,
         currency: pair?.currency ?? null,
         latest_at: pair?.latestAt ? pair.latestAt.toISOString() : null,
+        retrieved_at: pair?.retrievedAt ? pair.retrievedAt.toISOString() : null,
         freshness_status: deriveFreshness(pair?.latestAt ?? null, now, this.deps.staleAfterMs),
         provider: pair?.provider ?? null,
         provider_timestamp: pair?.providerTimestamp ? pair.providerTimestamp.toISOString() : null,

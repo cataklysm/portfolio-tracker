@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import { Fragment, useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
@@ -28,8 +28,9 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material"
-import { AppBadge, appIconButtonSx } from "@/application/shell/AppBadge"
-import { appTypography, tableHeadSx } from "@/application/shell/appTypography"
+import { AppBadge, appIconButtonSx } from "@/design/components/AppBadge"
+import { AppIcon } from "@/design/icons/AppIcon"
+import { appTypography, tableHeadSx } from "@/design/tokens/appTypography"
 import {
   createAdminSymbolAction,
   deactivateAdminSymbolAction,
@@ -44,7 +45,7 @@ import {
 } from "@/features/administration/symbols/actions"
 import { ControlBar } from "@/design/components/ControlBar"
 import { PageShell } from "@/application/shell/PageShell"
-import { selectableRowSx } from "@/application/shell/rowSelection"
+import { selectableRowSx } from "@/design/tokens/rowSelection"
 import { useToast } from "@/application/toast/ToastProvider"
 import {
   AdminInspectorActions,
@@ -943,38 +944,15 @@ function Field({
 }
 
 function PurgeIcon() {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-      <path d="M4 5h12" />
-      <path d="M8 5V3h4v2" />
-      <path d="M6.5 5 7.2 15.5A1.5 1.5 0 0 0 8.7 17h2.6a1.5 1.5 0 0 0 1.5-1.5L13.5 5" />
-      <path d="m8.5 9 3 3" />
-      <path d="m11.5 9-3 3" />
-    </svg>
-  )
+  return <AppIcon className="h-4 w-4" name="purge" strokeWidth={1.7} />
 }
 
 function RebuildIcon() {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-      <path d="M15.5 6.5A6 6 0 0 0 5 5.8" />
-      <path d="M5 3v2.8h2.8" />
-      <path d="M4.5 13.5A6 6 0 0 0 15 14.2" />
-      <path d="M15 17v-2.8h-2.8" />
-    </svg>
-  )
+  return <AppIcon className="h-4 w-4" name="rebuild" strokeWidth={1.7} />
 }
 
 function TrashIcon() {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-      <path d="M3 5h14" />
-      <path d="M8 5V3h4v2" />
-      <path d="M6 5l1 12h6l1-12" />
-      <path d="M8.5 8v6" />
-      <path d="M11.5 8v6" />
-    </svg>
-  )
+  return <AppIcon className="h-4 w-4" name="trash" strokeWidth={1.7} />
 }
 
 const dialogPaperSlotProps = {

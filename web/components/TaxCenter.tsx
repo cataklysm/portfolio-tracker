@@ -3,8 +3,8 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { fmtCurrency, num } from "@/lib/format"
 import type { TaxComponent, TaxEvent, TaxReport } from "@/lib/types"
-import { createTaxEventAction, deleteTaxEventAction } from "@/app/reports/tax-actions"
-import { TaxEventModal } from "./TaxEventModal"
+import { createTaxEventAction, deleteTaxEventAction } from "@/features/reports/actions"
+import { TaxEventModal } from "@/features/reports/components/TaxEventModal"
 
 const COMPONENT_LABEL: Record<TaxComponent, string> = {
   capital_income: "Capital income tax",

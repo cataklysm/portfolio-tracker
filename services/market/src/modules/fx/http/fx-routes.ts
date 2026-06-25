@@ -17,6 +17,7 @@ const RateSeriesQuery = Type.Object({
 const RefreshBody = Type.Object({ history: Type.Optional(Type.Boolean()) });
 
 const RatePointSchema = Type.Object({ date: Type.String(), rate: Type.String() });
+const CurrenciesResponse = Type.Object({ currencies: Type.Array(Type.String()) });
 const FxRateForDateResponse = Type.Object({
   quote_currency: Type.String(),
   date: Type.String(),
@@ -38,7 +39,21 @@ export function registerFxRoutes(app: FastifyInstance, deps: FxRouteDeps): void 
   const r = app.withTypeProvider<TypeBoxTypeProvider>();
   const read = [deps.authenticate, deps.requireScope('market:read')];
 
+  r.get('/fx/currencies', { preHandler: read, schema: { response: { 200: CurrenciesResponse } } }, async () => ({
+    currencies: await deps.service.listAvailableCurrencies(),
+  }));
+
   r.get('/fx/rates', { preHandler: read, schema: { querystring: RatesQuery, response: { 200: Type.Record(Type.String(), Type.String()) } } }, async (request) => {
+    const currencies = request.query.quote_currencies
+      .split(',')
+      .map((c) => c.trim().toUpperCase())
+      .filter((c) => c.length === 3);
+    return deps.service.getEurRates(currencies);
+  });
+
+  // Internal: latest stored EUR-based rates for background workers that do not
+  // have a user token (for example notification target-zone evaluation).
+  r.get('/internal/fx/rates', { schema: { querystring: RatesQuery, response: { 200: Type.Record(Type.String(), Type.String()) } } }, async (request) => {
     const currencies = request.query.quote_currencies
       .split(',')
       .map((c) => c.trim().toUpperCase())

@@ -25,8 +25,8 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material"
-import { AppBadge } from "@/application/shell/AppBadge"
-import { appTypography, tableHeadSx } from "@/application/shell/appTypography"
+import { AppBadge } from "@/design/components/AppBadge"
+import { appTypography, tableHeadSx } from "@/design/tokens/appTypography"
 import {
   listAdminProviderConfigurationAction,
   listAdminProviderCadenceAction,
@@ -36,7 +36,7 @@ import {
 } from "@/features/administration/providers/actions"
 import { ControlBar } from "@/design/components/ControlBar"
 import { PageShell } from "@/application/shell/PageShell"
-import { selectableRowSx } from "@/application/shell/rowSelection"
+import { selectableRowSx } from "@/design/tokens/rowSelection"
 import { useToast, type ToastMessage } from "@/application/toast/ToastProvider"
 import {
   AdminInspectorActions,

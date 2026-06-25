@@ -2,16 +2,17 @@
 
 import { revalidatePath } from "next/cache"
 import { apiFetch, problemDetail } from "@/lib/api"
+import { parseRepeat } from "@/features/notifications/repeat"
 import type { AlertRuleKind } from "@/lib/types"
 
-type Result = string | null
+type ActionResult = string | null
 
-function detailPath(detailContext: string) {
-  return detailContext.startsWith("/") ? detailContext : `/positions/${detailContext}`
+function revalidateDetailPath(detailContext: string) {
+  revalidatePath(detailContext.startsWith("/") ? detailContext : `/positions/${detailContext}`)
 }
 
 function revalidateNotifications(detailContext: string) {
-  revalidatePath(detailPath(detailContext))
+  revalidateDetailPath(detailContext)
   revalidatePath("/notifications")
   revalidatePath("/notifications/settings")
   revalidatePath("/", "layout")
@@ -21,25 +22,25 @@ export async function createAssetAlertAction(
   detailContext: string,
   instrumentId: string,
   listingId: string,
-  _prevState: Result,
+  _previousState: ActionResult,
   formData: FormData,
-): Promise<Result> {
+): Promise<ActionResult> {
   const kind = formData.get("kind") as AlertRuleKind
-  const number = (key: string) => Number(formData.get(key))
+  const numberValue = (key: string) => Number(formData.get(key))
 
   let params: Record<string, unknown>
   switch (kind) {
     case "price_threshold":
-      params = { direction: formData.get("direction"), price: number("price") }
+      params = { direction: formData.get("direction"), price: numberValue("price") }
       break
     case "daily_move":
-      params = { threshold_pct: number("threshold_pct") }
+      params = { threshold_pct: numberValue("threshold_pct") }
       break
     case "earnings_lead":
-      params = { days: number("days") }
+      params = { days: numberValue("days") }
       break
     case "cost_basis_move":
-      params = { direction: formData.get("direction"), threshold_pct: number("threshold_pct") }
+      params = { direction: formData.get("direction"), threshold_pct: numberValue("threshold_pct") }
       break
     case "target_zone":
       params = {}
@@ -48,23 +49,25 @@ export async function createAssetAlertAction(
       return "Unknown alert type."
   }
 
+  const repeat = parseRepeat(formData.get("repeat"))
   const body: Record<string, unknown> = {
     kind,
-    scope: "instrument",
     instrument_id: instrumentId,
     listing_id: listingId,
     params,
+    notify_once: repeat.notifyOnce,
+    remind_after_minutes: repeat.remindAfterMinutes,
   }
   const label = (formData.get("label") as string)?.trim()
   if (label) body.label = label
 
   try {
-    const resp = await apiFetch("/notifications/rules", {
+    const response = await apiFetch("/notifications/rules", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     })
-    if (!resp.ok) return problemDetail(resp, "Failed to create the alert.")
+    if (!response.ok) return problemDetail(response, "Failed to create the alert.")
   } catch {
     return "Cannot reach the gateway."
   }
@@ -73,14 +76,14 @@ export async function createAssetAlertAction(
   return null
 }
 
-export async function toggleAssetAlertAction(detailContext: string, id: string, enabled: boolean): Promise<Result> {
+export async function toggleAssetAlertAction(detailContext: string, id: string, enabled: boolean): Promise<ActionResult> {
   try {
-    const resp = await apiFetch(`/notifications/rules/${id}`, {
+    const response = await apiFetch(`/notifications/rules/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ enabled }),
     })
-    if (!resp.ok) return problemDetail(resp, "Failed to update the alert.")
+    if (!response.ok) return problemDetail(response, "Failed to update the alert.")
   } catch {
     return "Cannot reach the gateway."
   }
@@ -89,10 +92,10 @@ export async function toggleAssetAlertAction(detailContext: string, id: string, 
   return null
 }
 
-export async function deleteAssetAlertAction(detailContext: string, id: string): Promise<Result> {
+export async function deleteAssetAlertAction(detailContext: string, id: string): Promise<ActionResult> {
   try {
-    const resp = await apiFetch(`/notifications/rules/${id}`, { method: "DELETE" })
-    if (!resp.ok) return problemDetail(resp, "Failed to delete the alert.")
+    const response = await apiFetch(`/notifications/rules/${id}`, { method: "DELETE" })
+    if (!response.ok) return problemDetail(response, "Failed to delete the alert.")
   } catch {
     return "Cannot reach the gateway."
   }

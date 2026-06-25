@@ -48,6 +48,7 @@ const CreatePriceTargetBody = Type.Object({
 });
 
 const UpdatePriceTargetBody = Type.Object({
+  currency: Type.Optional(Type.String({ minLength: 3, maxLength: 3 })),
   horizon: Type.Optional(Horizon),
   zone_low: Type.Optional(Type.Number({ minimum: 0 })),
   zone_high: Type.Optional(Type.Number({ minimum: 0 })),
@@ -162,6 +163,7 @@ export function registerAssessmentRoutes(app: FastifyInstance, deps: AssessmentR
 
   r.patch('/price-targets/:id', { preHandler: write, schema: { body: UpdatePriceTargetBody, response: { 200: PriceTargetRecordSchema } } }, async (request) =>
     deps.service.updatePriceTarget(uid(request.user?.sub), (request.params as { id: string }).id, {
+      currency: request.body.currency,
       horizon: request.body.horizon,
       zoneLow: request.body.zone_low,
       zoneHigh: request.body.zone_high,

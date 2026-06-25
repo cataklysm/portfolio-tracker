@@ -13,11 +13,12 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material"
-import { AppBadge, appIconButtonSx } from "@/application/shell/AppBadge"
-import { appTypography } from "@/application/shell/appTypography"
+import { AppBadge, appIconButtonSx } from "@/design/components/AppBadge"
+import { appTypography } from "@/design/tokens/appTypography"
 import { PageMetricGrid, PageShell } from "@/application/shell/PageShell"
 import { ControlBar } from "@/design/components/ControlBar"
 import { MetricBar, MetricBarItem, type MetricBarTone } from "@/design/components/MetricBar"
+import { AppIcon } from "@/design/icons/AppIcon"
 import { AddToWatchlistDialog } from "@/features/watchlist/components/AddToWatchlistDialog"
 import { removeFromWatchlistAction } from "@/features/watchlist/actions"
 import { fmtPrice, num } from "@/lib/format"
@@ -72,9 +73,9 @@ export function WatchlistWorkspace({ locale, watchlistItems }: WatchlistWorkspac
       </Breadcrumbs>
 
       <PageMetricGrid columns={{ xs: "1fr", md: "repeat(3, minmax(0, 1fr))" }}>
-        <WatchlistMetric icon={<BookmarkIcon />} label="Tracked assets" value={metrics.total} sub="Not included in portfolio totals" tone="accent" />
-        <WatchlistMetric icon={<TrendUpIcon />} label="Positive today" value={metrics.positiveToday} sub={`${metrics.negativeToday} down / ${metrics.unchangedToday} flat`} tone="positive" />
-        <WatchlistMetric icon={<QuoteIcon />} label="Priced assets" value={`${metrics.pricedAssets}/${metrics.total}`} sub={metrics.unavailableAssets > 0 ? `${metrics.unavailableAssets} without quote` : "Current quote coverage"} tone={metrics.unavailableAssets > 0 ? "warning" : "positive"} />
+        <WatchlistMetric icon={<AppIcon name="bookmark" />} label="Tracked assets" value={metrics.total} sub="Not included in portfolio totals" tone="accent" />
+        <WatchlistMetric icon={<AppIcon name="trendUp" />} label="Positive today" value={metrics.positiveToday} sub={`${metrics.negativeToday} down / ${metrics.unchangedToday} flat`} tone="positive" />
+        <WatchlistMetric icon={<AppIcon name="value" />} label="Priced assets" value={`${metrics.pricedAssets}/${metrics.total}`} sub={metrics.unavailableAssets > 0 ? `${metrics.unavailableAssets} without quote` : "Current quote coverage"} tone={metrics.unavailableAssets > 0 ? "warning" : "positive"} />
       </PageMetricGrid>
 
       <ControlBar
@@ -204,7 +205,7 @@ function WatchlistRow({ item, locale }: { item: WatchlistItemView; locale: strin
     <Box
       className="grid grid-cols-[minmax(270px,1.7fr)_120px_130px_110px_150px_minmax(180px,1fr)_54px] items-center gap-3 border-b border-[var(--app-border)] px-4 py-2.5 transition last:border-b-0 hover:bg-[var(--app-surface-hover)]"
     >
-      <Link className="flex min-w-0 items-center gap-3 rounded-md transition hover:text-[var(--app-accent)]" href={`/assets/${item.listing_id}`}>
+      <Link className="flex min-w-0 items-center gap-3 rounded-md transition hover:text-[var(--app-accent)]" href={watchlistAssetHref(item.listing_id)}>
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--app-border)] bg-[var(--app-surface-raised)] text-[10px] font-bold text-[var(--app-accent)]">
           {symbol.slice(0, 3)}
         </span>
@@ -274,6 +275,11 @@ function buildWatchlistMetrics(watchlistItems: WatchlistItemView[]) {
   }
 }
 
+function watchlistAssetHref(listingId: string): string {
+  const params = new URLSearchParams({ returnTo: "/watchlist" })
+  return `/assets/${listingId}?${params.toString()}`
+}
+
 function countTabs(watchlistItems: WatchlistItemView[]): Record<InstrumentAssetType, number> {
   return watchlistItems.reduce<Record<InstrumentAssetType, number>>((counts, item) => {
     if (item.listing?.asset_type) counts[item.listing.asset_type] += 1
@@ -310,18 +316,6 @@ function formatQuoteLabel(value: string | null, locale: string): { label: string
   }
 }
 
-function BookmarkIcon() {
-  return <svg aria-hidden="true" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.9" viewBox="0 0 24 24"><path d="M6 4h12v16l-6-3-6 3V4Z" /></svg>
-}
-
-function QuoteIcon() {
-  return <svg aria-hidden="true" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.9" viewBox="0 0 24 24"><path d="M4 18V6" /><path d="M9 18v-5" /><path d="M14 18V9" /><path d="M19 18V4" /></svg>
-}
-
-function TrendUpIcon() {
-  return <svg aria-hidden="true" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.9" viewBox="0 0 24 24"><path d="m5 15 5-5 4 4 5-7" /><path d="M14 7h5v5" /></svg>
-}
-
 function TrashIcon() {
-  return <svg aria-hidden="true" fill="none" height="15" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.9" viewBox="0 0 24 24" width="15"><path d="M4 7h16" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M6 7l1 14h10l1-14" /><path d="M9 7V4h6v3" /></svg>
+  return <AppIcon className="h-[15px] w-[15px]" name="trash" />
 }

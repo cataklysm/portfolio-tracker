@@ -3,6 +3,7 @@ import { getLocale } from "@/lib/locale"
 import { num } from "@/lib/format"
 import type {
   AlertRule,
+  ConvertedPriceTarget,
   CorporateAction,
   EarningsRow,
   FairValueEstimate,
@@ -24,7 +25,7 @@ import type {
   TaxEvent,
   TransactionTaxEvent,
 } from "@/lib/types"
-import type { AppliedCorporateAction } from "@/app/positions/[id]/corporate-action-actions"
+import type { AppliedCorporateAction } from "@/features/positions/actions"
 
 interface Page<TItem> {
   items: TItem[]
@@ -81,6 +82,7 @@ export interface QuoteStatus {
   tone: "positive" | "neutral" | "warning" | "critical"
   explanation: string
   quoteAsOf: string | null
+  lastUpdatedAt: string | null
   marketStatus: MarketStatus
   dataQuality: QuoteDataQuality
   isActionRequired: boolean
@@ -138,7 +140,8 @@ export interface AssetSections {
 }
 
 export interface AssetDetailModel {
-  actionContextPath: string
+  availableCurrencies: string[]
+  detailContext: string
   chartSeries: SparklinePoint[]
   dailyChartSeries: SparklinePoint[]
   events: EventsData
@@ -151,7 +154,7 @@ export interface AssetDetailModel {
   otherPortfolios: { id: string; name: string }[]
   portfolios: Portfolio[]
   positions: AssetPositionContext[]
-  priceTargets: PriceTarget[]
+  priceTargets: ConvertedPriceTarget[]
   reportingCurrency: string
   scope: {
     kind: "position" | "portfolio" | "all" | "watchlist"
@@ -258,15 +261,16 @@ async function fetchCommonAssetData(
   listing: ListingSummary | null,
   locale: string,
   reportingCurrency: string,
-  actionContextPath: string,
+  detailContext: string,
 ): Promise<Omit<AssetDetailModel, "otherPortfolios" | "portfolios" | "positions" | "scope" | "aggregate" | "holdingStatus">> {
   const instrumentId = listing?.instrument_id ?? null
   const chartHistoryTo = new Date().toISOString().slice(0, 10)
-  const [seriesResponse, dailySeriesResponse, sessionsResponse, quoteResponse, fairValuesLoad, priceTargetsLoad, fundamentalsLoad, eventsLoad, notificationLoad] = await Promise.all([
+  const [seriesResponse, dailySeriesResponse, sessionsResponse, quoteResponse, currenciesLoad, fairValuesLoad, priceTargetsLoad, fundamentalsLoad, eventsLoad, notificationLoad] = await Promise.all([
     apiFetch(`/quotes/${listingId}/series?limit=365`, { cache: "no-store" }),
     apiFetch(`/quotes/${listingId}/history?from=2000-01-01&to=${chartHistoryTo}`, { cache: "no-store" }),
     apiFetch(`/listings/sessions?ids=${listingId}`, { cache: "no-store" }),
     apiFetch(`/quotes?listing_ids=${listingId}`, { cache: "no-store" }),
+    fetchAvailableCurrencies(),
     fetchInsights<FairValueEstimate>(instrumentId, "fair-values"),
     fetchPriceTargets(instrumentId, listingId),
     fetchFundamentals(instrumentId),
@@ -275,10 +279,12 @@ async function fetchCommonAssetData(
   ])
 
   const fairValues = fairValuesLoad.value
-  const priceTargets = priceTargetsLoad.value
+  const displayCurrency = listing?.currency ?? reportingCurrency
+  const priceTargets = await enrichPriceTargets(priceTargetsLoad.value, displayCurrency, chartHistoryTo)
   const fundamentals = fundamentalsLoad.value
   const events = eventsLoad.value
   const notificationData = notificationLoad.value
+  const availableCurrencies = ensureCurrency(currenciesLoad.value, displayCurrency)
 
   const chartSeries = seriesResponse.ok ? ((await seriesResponse.json()) as SparklinePoint[]) : []
   const dailyChartSeries = dailySeriesResponse.ok
@@ -299,7 +305,8 @@ async function fetchCommonAssetData(
   const attentionItems = buildAttentionItems(quoteStatus, events, priceTargets, currentPrice, locale)
 
   return {
-    actionContextPath,
+    availableCurrencies,
+    detailContext,
     attentionItems,
     chartSeries,
     dailyChartSeries,
@@ -345,8 +352,9 @@ function sectionStatus(
 export function deriveQuoteStatus(quote: Quote | null, session: ListingSession | null): QuoteStatus {
   const marketStatus: MarketStatus = session?.status ?? "unknown"
   const quoteAsOf = quote?.latest_at ?? quote?.provider_timestamp ?? null
+  const lastUpdatedAt = quote?.retrieved_at ?? quoteAsOf
   const provider = quote?.provider ?? null
-  const base = { quoteAsOf, marketStatus, provider }
+  const base = { quoteAsOf, lastUpdatedAt, marketStatus, provider }
 
   if (!quote || quote.latest === null) {
     return { ...base, label: "No quote", tone: "critical", explanation: "No usable quote is available for this asset.", dataQuality: "missing", isActionRequired: true }
@@ -380,7 +388,7 @@ export function deriveQuoteStatus(quote: Quote | null, session: ListingSession |
 export function buildAttentionItems(
   quoteStatus: QuoteStatus,
   events: EventsData,
-  priceTargets: PriceTarget[],
+  priceTargets: ConvertedPriceTarget[],
   currentPrice: number | null,
   locale: string,
 ): AttentionItem[] {
@@ -400,8 +408,9 @@ export function buildAttentionItems(
 
   if (currentPrice !== null) {
     const nearZone = priceTargets.some((target) => {
-      const low = num(target.zone_low)
-      const high = num(target.zone_high)
+      if (target.fx_status === "unavailable") return false
+      const low = num(target.display_zone_low)
+      const high = num(target.display_zone_high)
       if (low === null && high === null) return false
       const lo = low ?? high!
       const hi = high ?? low!
@@ -491,6 +500,24 @@ function reachability(response: { ok: boolean; status: number }): { reachable: b
 
 const unreachable = <T>(value: T, retryable = true): Loadable<T> => ({ value, reachable: false, retryable })
 
+async function fetchAvailableCurrencies(): Promise<Loadable<string[]>> {
+  try {
+    const response = await apiFetch("/fx/currencies", { cache: "no-store" })
+    if (!response.ok) return { value: ["EUR"], ...reachability(response) }
+    const body = (await response.json()) as { currencies?: unknown }
+    const currencies = Array.isArray(body.currencies)
+      ? body.currencies.filter((currency): currency is string => typeof currency === "string" && /^[A-Z]{3}$/.test(currency))
+      : []
+    return { value: currencies, reachable: true, retryable: false }
+  } catch {
+    return unreachable<string[]>(["EUR"])
+  }
+}
+
+function ensureCurrency(currencies: string[], currency: string): string[] {
+  return [...new Set([...currencies, currency.toUpperCase(), "EUR"])].sort()
+}
+
 /** Price targets scoped to the listing: instrument-wide + this listing's zones (theme 5). */
 async function fetchPriceTargets(instrumentId: string | null, listingId: string): Promise<Loadable<PriceTarget[]>> {
   if (!instrumentId) return { value: [], reachable: true, retryable: false }
@@ -500,6 +527,70 @@ async function fetchPriceTargets(instrumentId: string | null, listingId: string)
   } catch {
     return unreachable<PriceTarget[]>([])
   }
+}
+
+interface FxRate {
+  date: string | null
+  rate: number
+}
+
+async function enrichPriceTargets(targets: PriceTarget[], displayCurrency: string, rateDate: string): Promise<ConvertedPriceTarget[]> {
+  const normalizedDisplayCurrency = displayCurrency.toUpperCase()
+  const currencies = [...new Set(targets.map((target) => target.currency.toUpperCase()).concat(normalizedDisplayCurrency))]
+  const rates = await fetchLatestFxRates(currencies, rateDate)
+
+  return targets.map((target) => {
+    const sourceCurrency = target.currency.toUpperCase()
+    const low = num(target.zone_low)
+    const high = num(target.zone_high)
+    const convertedLow = convertCurrencyValue(low, sourceCurrency, normalizedDisplayCurrency, rates)
+    const convertedHigh = convertCurrencyValue(high, sourceCurrency, normalizedDisplayCurrency, rates)
+    const sourceRate = rates.get(sourceCurrency)
+    const displayRate = rates.get(normalizedDisplayCurrency)
+    const sameCurrency = sourceCurrency === normalizedDisplayCurrency
+    const fxAvailable = sameCurrency || (sourceRate !== undefined && displayRate !== undefined && (low === null || convertedLow !== null) && (high === null || convertedHigh !== null))
+
+    return {
+      ...target,
+      currency: sourceCurrency,
+      display_currency: normalizedDisplayCurrency,
+      display_zone_low: fxAvailable ? formatNumericString(convertedLow) : null,
+      display_zone_high: fxAvailable ? formatNumericString(convertedHigh) : null,
+      fx_rate_date: sameCurrency ? null : sourceRate?.date ?? displayRate?.date ?? null,
+      fx_status: sameCurrency ? "same_currency" : fxAvailable ? "converted" : "unavailable",
+    }
+  })
+}
+
+async function fetchLatestFxRates(currencies: string[], date: string): Promise<Map<string, FxRate>> {
+  const uniqueCurrencies = [...new Set(currencies.map((currency) => currency.toUpperCase()).filter((currency) => /^[A-Z]{3}$/.test(currency)))]
+  const entries = await Promise.all(uniqueCurrencies.map(async (currency): Promise<[string, FxRate] | null> => {
+    if (currency === "EUR") return [currency, { date, rate: 1 }]
+    try {
+      const response = await apiFetch(`/fx/rate?quote=${currency}&date=${date}`, { cache: "no-store" })
+      if (!response.ok) return null
+      const body = (await response.json()) as { date: string; rate: string }
+      const rate = num(body.rate)
+      return rate !== null && rate > 0 ? [currency, { date: body.date, rate }] : null
+    } catch {
+      return null
+    }
+  }))
+  return new Map(entries.filter((entry): entry is [string, FxRate] => entry !== null))
+}
+
+function convertCurrencyValue(value: number | null, fromCurrency: string, toCurrency: string, rates: Map<string, FxRate>): number | null {
+  if (value === null) return null
+  if (fromCurrency === toCurrency) return value
+  const fromRate = rates.get(fromCurrency)?.rate ?? null
+  const toRate = rates.get(toCurrency)?.rate ?? null
+  if (fromRate === null || toRate === null || fromRate <= 0 || toRate <= 0) return null
+  return (value / fromRate) * toRate
+}
+
+function formatNumericString(value: number | null): string | null {
+  if (value === null || !Number.isFinite(value)) return null
+  return value.toFixed(8).replace(/\.?0+$/, "")
 }
 
 async function fetchInsights<TItem>(instrumentId: string | null, path: string): Promise<Loadable<TItem[]>> {
@@ -559,7 +650,7 @@ async function fetchNotificationData(instrumentId: string | null): Promise<Loada
   if (!instrumentId) return { value: { notifications: [], rules: [] }, reachable: true, retryable: false }
   try {
     const [rulesResponse, inboxResponse] = await Promise.all([
-      // Server-side filter: this instrument's rules plus all_holdings rules (theme 6).
+      // Server-side filter: this instrument's rules (rules are instrument-scoped).
       apiFetch(`/notifications/rules?instrument_id=${instrumentId}`, { cache: "no-store" }),
       apiFetch("/notifications?limit=100", { cache: "no-store" }),
     ])
@@ -571,9 +662,7 @@ async function fetchNotificationData(instrumentId: string | null): Promise<Loada
     return {
       value: {
         notifications: inbox.notifications.filter((notification) => notification.instrument_id === instrumentId),
-        // Server already scoped to this instrument (+ all_holdings); the panel shows
-        // instrument-specific rules, so all_holdings rules aren't editable per-asset.
-        rules: rules.filter((rule) => rule.instrument_id === instrumentId),
+        rules,
       },
       ...reachability(rulesResponse),
     }

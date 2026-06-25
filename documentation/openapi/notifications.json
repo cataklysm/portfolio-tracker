@@ -907,28 +907,21 @@
             }
           }
         }
-      },
+      }
+    },
+    "/notifications/push/subscriptions/{id}": {
       "delete": {
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "endpoint"
-                ],
-                "properties": {
-                  "endpoint": {
-                    "minLength": 1,
-                    "maxLength": 2000,
-                    "type": "string"
-                  }
-                }
-              }
-            }
+        "parameters": [
+          {
+            "schema": {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
           }
-        },
+        ],
         "responses": {
           "200": {
             "description": "Default Response",

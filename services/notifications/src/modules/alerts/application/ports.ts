@@ -79,8 +79,8 @@ export interface PushSubscriptionRepository {
   upsert(input: NewPushSubscription): Promise<void>;
   /** All push subscriptions for a user (for fan-out). */
   listForUser(userId: string): Promise<StoredPushSubscription[]>;
-  /** Removes a subscription by endpoint (own subscription / expired). */
-  deleteByEndpoint(userId: string, endpoint: string): Promise<boolean>;
+  /** Removes the user's subscription identified by sha256(endpoint) hex. */
+  deleteByHash(userId: string, endpointHash: string): Promise<boolean>;
   /** Removes an expired endpoint regardless of owner (sender cleanup on 404/410). */
   deleteExpired(endpoint: string): Promise<void>;
   markSuccess(endpoint: string): Promise<void>;

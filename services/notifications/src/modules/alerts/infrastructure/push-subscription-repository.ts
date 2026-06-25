@@ -1,6 +1,12 @@
+import { createHash } from 'node:crypto';
 import { sql, type Kysely } from 'kysely';
 import type { NotificationsDatabase } from '../../../platform/database/schema.js';
 import type { NewPushSubscription, PushSubscriptionRepository, StoredPushSubscription } from '../application/ports.js';
+
+/** The deterministic public handle for a subscription: sha256(endpoint) as hex. */
+export function pushEndpointHash(endpoint: string): string {
+  return createHash('sha256').update(endpoint).digest('hex');
+}
 
 /** Kysely adapter for `notifications.push_subscriptions` (Web Push endpoints). */
 export class KyselyPushSubscriptionRepository implements PushSubscriptionRepository {
@@ -12,6 +18,7 @@ export class KyselyPushSubscriptionRepository implements PushSubscriptionReposit
       .values({
         user_id: input.userId,
         endpoint: input.endpoint,
+        endpoint_hash: pushEndpointHash(input.endpoint),
         p256dh: input.p256dh,
         auth: input.auth,
         user_agent: input.userAgent,
@@ -35,11 +42,11 @@ export class KyselyPushSubscriptionRepository implements PushSubscriptionReposit
     return rows;
   }
 
-  async deleteByEndpoint(userId: string, endpoint: string): Promise<boolean> {
+  async deleteByHash(userId: string, endpointHash: string): Promise<boolean> {
     const result = await this.db
       .deleteFrom('notifications.push_subscriptions')
       .where('user_id', '=', userId)
-      .where('endpoint', '=', endpoint)
+      .where('endpoint_hash', '=', endpointHash)
       .executeTakeFirst();
     return (result.numDeletedRows ?? 0n) > 0n;
   }

@@ -85,6 +85,8 @@ export interface PushSubscriptionsTable {
   id: Generated<string>;
   user_id: string;
   endpoint: string;
+  /** sha256(endpoint) hex — the deterministic public handle used for deletes. */
+  endpoint_hash: string;
   p256dh: string;
   auth: string;
   user_agent: string | null;

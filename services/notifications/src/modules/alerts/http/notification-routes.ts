@@ -96,7 +96,7 @@ const PushSubscriptionBody = Type.Object({
   }),
   user_agent: Type.Optional(Type.String({ maxLength: 400 })),
 });
-const DeletePushBody = Type.Object({ endpoint: Type.String({ minLength: 1, maxLength: 2000 }) });
+const PushSubscriptionParams = Type.Object({ id: Type.String({ pattern: '^[a-f0-9]{64}$' }) });
 
 export interface NotificationRouteDeps {
   service: NotificationService;
@@ -223,10 +223,12 @@ export function registerNotificationRoutes(app: FastifyInstance, deps: Notificat
     return { ok: true as const };
   });
 
-  // Remove this client's push subscription (e.g. the user disables desktop alerts).
-  r.delete('/notifications/push/subscriptions', { preHandler: write, schema: { body: DeletePushBody, response: { 200: OkResponse } } }, async (request) => {
+  // Remove this client's push subscription. `:id` is sha256(endpoint) hex — the
+  // deterministic handle the client computes, so the endpoint URL stays out of
+  // the request URL and logs.
+  r.delete('/notifications/push/subscriptions/:id', { preHandler: write, schema: { params: PushSubscriptionParams, response: { 200: OkResponse } } }, async (request) => {
     if (!deps.push) throw AppError.badRequest('push_unavailable', 'Push notifications are not configured');
-    await deps.push.subscriptions.deleteByEndpoint(uid(request), request.body.endpoint);
+    await deps.push.subscriptions.deleteByHash(uid(request), request.params.id);
     return { ok: true as const };
   });
 }

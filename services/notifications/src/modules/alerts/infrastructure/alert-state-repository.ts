@@ -7,15 +7,16 @@ import type { AlertStateRepository } from '../application/ports.js';
 export class KyselyAlertStateRepository implements AlertStateRepository {
   constructor(private readonly db: Kysely<NotificationsDatabase>) {}
 
-  async get(userId: string, listingId: string, alertType: string): Promise<string | null> {
+  async getState(userId: string, listingId: string, alertType: string): Promise<{ signature: string; firedAt: Date } | null> {
     const row = await this.db
       .selectFrom('notifications.alert_state')
-      .select('dedupe_key')
+      .select(['dedupe_key', 'fired_at'])
       .where('user_id', '=', userId)
       .where('listing_id', '=', listingId)
       .where('alert_type', '=', alertType)
       .executeTakeFirst();
-    return row?.dedupe_key ?? null;
+    if (!row) return null;
+    return { signature: row.dedupe_key, firedAt: row.fired_at instanceof Date ? row.fired_at : new Date(row.fired_at) };
   }
 
   async set(userId: string, listingId: string, alertType: string, dedupeKey: string): Promise<void> {

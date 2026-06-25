@@ -17,25 +17,30 @@ const RuleKind = Type.Union([
 ]);
 
 const RulesQuery = Type.Object({
-  // Optional filters. With instrument_id, also includes all_holdings rules (they
-  // apply to every instrument). With listing_id, narrows to that listing.
+  // Optional filters scoping the list to one instrument and/or listing.
   instrument_id: Type.Optional(Type.String({ format: 'uuid' })),
   listing_id: Type.Optional(Type.String({ format: 'uuid' })),
 });
 
 const CreateRuleBody = Type.Object({
   kind: RuleKind,
-  scope: Type.Union([Type.Literal('instrument'), Type.Literal('all_holdings')]),
-  instrument_id: Type.Optional(Type.String({ format: 'uuid' })),
+  // Rules are always instrument-scoped; an instrument is required.
+  instrument_id: Type.String({ format: 'uuid' }),
   listing_id: Type.Optional(Type.String({ format: 'uuid' })),
   params: Type.Record(Type.String(), Type.Unknown()),
   label: Type.Optional(Type.String({ maxLength: 100 })),
+  // Defaults to true (fire once then disable); set false for a recurring alert.
+  notify_once: Type.Optional(Type.Boolean()),
+  // "Remind me later" cooldown in minutes (5..1440) for recurring rules; null = none.
+  remind_after_minutes: Type.Optional(Type.Union([Type.Integer({ minimum: 5, maximum: 1440 }), Type.Null()])),
 });
 
 const UpdateRuleBody = Type.Object({
   params: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
   label: Type.Optional(Type.Union([Type.String({ maxLength: 100 }), Type.Null()])),
   enabled: Type.Optional(Type.Boolean()),
+  notify_once: Type.Optional(Type.Boolean()),
+  remind_after_minutes: Type.Optional(Type.Union([Type.Integer({ minimum: 5, maximum: 1440 }), Type.Null()])),
 });
 
 const StoredNotificationSchema = Type.Object({
@@ -67,12 +72,13 @@ const AlertRuleSchema = Type.Object({
   id: Type.String(),
   user_id: Type.String(),
   kind: RuleKind,
-  scope: Type.Union([Type.Literal('instrument'), Type.Literal('all_holdings')]),
-  instrument_id: Type.Union([Type.String(), Type.Null()]),
+  instrument_id: Type.String(),
   listing_id: Type.Union([Type.String(), Type.Null()]),
   params: Type.Record(Type.String(), Type.Unknown()),
   label: Type.Union([Type.String(), Type.Null()]),
   enabled: Type.Boolean(),
+  notify_once: Type.Boolean(),
+  remind_after_minutes: Type.Union([Type.Integer(), Type.Null()]),
   created_at: Type.String(),
   updated_at: Type.String(),
 });
@@ -148,7 +154,7 @@ export function registerNotificationRoutes(app: FastifyInstance, deps: Notificat
     return { marked };
   });
 
-  // ---- Alert rules (incl. the pre-seeded default alerts) ------------------
+  // ---- Alert rules (user-defined, instrument-scoped) ----------------------
   r.get('/notifications/rules', { preHandler: read, schema: { querystring: RulesQuery, response: { 200: Type.Array(AlertRuleSchema) } } }, async (request) =>
     deps.rules.list(uid(request), { instrumentId: request.query.instrument_id, listingId: request.query.listing_id }),
   );
@@ -156,11 +162,12 @@ export function registerNotificationRoutes(app: FastifyInstance, deps: Notificat
   r.post('/notifications/rules', { preHandler: write, schema: { body: CreateRuleBody, response: { 201: AlertRuleSchema } } }, async (request, reply) => {
     const rule = await deps.rules.create(uid(request), {
       kind: request.body.kind,
-      scope: request.body.scope,
-      instrumentId: request.body.instrument_id ?? null,
+      instrumentId: request.body.instrument_id,
       listingId: request.body.listing_id ?? null,
       params: request.body.params,
       label: request.body.label ?? null,
+      notifyOnce: request.body.notify_once,
+      remindAfterMinutes: request.body.remind_after_minutes ?? null,
     });
     reply.code(201);
     return rule;
@@ -171,6 +178,8 @@ export function registerNotificationRoutes(app: FastifyInstance, deps: Notificat
       params: request.body.params,
       label: request.body.label,
       enabled: request.body.enabled,
+      notifyOnce: request.body.notify_once,
+      remindAfterMinutes: request.body.remind_after_minutes,
     }),
   );
 

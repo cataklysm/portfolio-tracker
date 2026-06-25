@@ -19,8 +19,3 @@ export interface UserInterestRepository {
   /** Distinct active (user, listing) pairs across all users. */
   listActiveInterests(): Promise<ActiveInterest[]>;
 }
-
-/** Seeds a user's default alert rules the first time we see them. */
-export interface UserSeeder {
-  ensureDefaults(userId: string): Promise<void>;
-}

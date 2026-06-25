@@ -4,6 +4,7 @@ import type {
   InsightsTargetsClient,
   LatestQuote,
   ListingResolverClient,
+  MarketFxClient,
   MarketQuotesClient,
   OwnTarget,
   PortfolioPositionsClient,
@@ -34,6 +35,7 @@ export interface AlertEvaluatorDeps {
   events: NotificationEventStore;
   rules: AlertRuleRepository;
   resolver: ListingResolverClient;
+  fx: MarketFxClient;
   quotes: MarketQuotesClient;
   earnings: EventsEarningsClient;
   targets: InsightsTargetsClient;
@@ -118,14 +120,16 @@ export class AlertEvaluator {
     const targetsByInstrument = rules.some((r) => r.kind === 'target_zone')
       ? await this.deps.targets.fetchOwnTargets(userId, userInstrumentIds)
       : new Map<string, OwnTarget[]>();
+    const fxRates = targetsByInstrument.size > 0
+      ? await this.deps.fx.fetchRates(collectTargetCurrencies(targetsByInstrument, resolved, userListings))
+      : new Map<string, number>([['EUR', 1]]);
     const costByListing = rules.some((r) => r.kind === 'cost_basis_move')
       ? await this.deps.positions.fetchCostBases(userId)
       : new Map<string, number>();
 
     for (const rule of rules) {
-      const targetListings = rule.scope === 'all_holdings'
-        ? userListings
-        : userListings.filter((l) => resolved.get(l)?.instrumentId === rule.instrument_id);
+      // Rules are instrument-scoped: evaluate the user's listings of that instrument.
+      const targetListings = userListings.filter((l) => resolved.get(l)?.instrumentId === rule.instrument_id);
       for (const listingId of targetListings) {
         const r = resolved.get(listingId);
         if (!r) continue;
@@ -136,13 +140,16 @@ export class AlertEvaluator {
           price: quote?.latest ?? null,
           reportDate: upcoming.get(r.instrumentId),
           avgCost: costByListing.get(listingId),
-          targets: targetsByInstrument.get(r.instrumentId) ?? [],
+          targets: convertTargets(targetsByInstrument.get(r.instrumentId) ?? [], r.currency, fxRates),
           currency: r.currency,
           today: todayIso,
         };
+        const remindAfterMs = rule.remind_after_minutes !== null ? rule.remind_after_minutes * 60_000 : null;
         const fired = await this.maybeFire(userId, listingId, r.instrumentId, rule.id, RULE_TO_TYPE[rule.kind], `rule:${rule.id}`,
-          evaluateRule(rule, ctx), RULE_CLEARS_ON_EMPTY[rule.kind]);
-        if (fired) {
+          evaluateRule(rule, ctx), RULE_CLEARS_ON_EMPTY[rule.kind], remindAfterMs);
+        // A one-shot rule disables itself after firing; recurring rules keep
+        // running and rely on the per-signature dedup to avoid repeat spam.
+        if (fired && rule.notify_once) {
           await this.deps.rules.update(userId, rule.id, { enabled: false });
           break;
         }
@@ -164,13 +171,19 @@ export class AlertEvaluator {
     alertType: string,
     candidate: AlertCandidate | null,
     clearOnEmpty: boolean,
+    remindAfterMs: number | null,
   ): Promise<boolean> {
-    const previous = await this.deps.alertState.get(userId, listingId, alertType);
+    const previous = await this.deps.alertState.getState(userId, listingId, alertType);
     if (candidate === null) {
       if (clearOnEmpty && previous !== null) await this.deps.alertState.clear(userId, listingId, alertType);
       return false;
     }
-    if (previous === candidate.signature) return false;
+    if (previous !== null && previous.signature === candidate.signature) {
+      // Same condition still holds. Without a cooldown we never re-notify; with a
+      // "remind me later" cooldown we re-notify once the interval has elapsed.
+      if (remindAfterMs === null) return false;
+      if (Date.now() - previous.firedAt.getTime() < remindAfterMs) return false;
+    }
 
     const id = await this.deps.notifications.insert({
       userId,
@@ -212,6 +225,48 @@ function evaluateRule(rule: AlertRule, ctx: RuleContext): AlertCandidate | null 
     default:
       return null;
   }
+}
+
+function collectTargetCurrencies(
+  targetsByInstrument: Map<string, OwnTarget[]>,
+  resolved: Awaited<ReturnType<ListingResolverClient['resolve']>>,
+  listingIds: string[],
+): string[] {
+  const currencies = new Set<string>(['EUR']);
+  for (const target of targetsByInstrument.values()) {
+    for (const item of target) currencies.add(item.currency.toUpperCase());
+  }
+  for (const listingId of listingIds) {
+    const currency = resolved.get(listingId)?.currency;
+    if (currency) currencies.add(currency.toUpperCase());
+  }
+  return [...currencies];
+}
+
+function convertTargets(targets: OwnTarget[], toCurrency: string, rates: Map<string, number>): OwnTarget[] {
+  const normalizedToCurrency = toCurrency.toUpperCase();
+  return targets
+    .map((target) => {
+      const sourceCurrency = target.currency.toUpperCase();
+      if (sourceCurrency === normalizedToCurrency) return { ...target, currency: normalizedToCurrency };
+      const zoneLow = convertCurrencyValue(target.zoneLow, sourceCurrency, normalizedToCurrency, rates);
+      const zoneHigh = convertCurrencyValue(target.zoneHigh, sourceCurrency, normalizedToCurrency, rates);
+      const lowAvailable = target.zoneLow === null || zoneLow !== null;
+      const highAvailable = target.zoneHigh === null || zoneHigh !== null;
+      return lowAvailable && highAvailable
+        ? { ...target, zoneLow, zoneHigh, currency: normalizedToCurrency }
+        : null;
+    })
+    .filter((target): target is OwnTarget => target !== null);
+}
+
+function convertCurrencyValue(value: number | null, fromCurrency: string, toCurrency: string, rates: Map<string, number>): number | null {
+  if (value === null) return null;
+  if (fromCurrency === toCurrency) return value;
+  const fromRate = rates.get(fromCurrency);
+  const toRate = rates.get(toCurrency);
+  if (fromRate === undefined || toRate === undefined || fromRate <= 0 || toRate <= 0) return null;
+  return (value / fromRate) * toRate;
 }
 
 function groupByUser(interests: ActiveInterest[]): Map<string, string[]> {

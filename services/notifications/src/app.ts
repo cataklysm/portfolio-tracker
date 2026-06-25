@@ -17,18 +17,17 @@ import {
   EventsEarningsClient,
   InsightsTargetsClient,
   ListingResolverClient,
+  MarketFxClient,
   MarketQuotesClient,
   PortfolioPositionsClient,
 } from './platform/clients.js';
 import {
   AlertEvaluator,
-  DefaultRuleSeeder,
   EvaluationScheduler,
   KyselyAlertRuleRepository,
   KyselyAlertStateRepository,
   KyselyNotificationEventStore,
   KyselyNotificationRepository,
-  KyselySeedRepository,
   LiveNotificationHub,
   LiveNotificationStream,
   NotificationService,
@@ -64,13 +63,11 @@ export async function buildApp(config: NotificationsConfig): Promise<BuiltServic
   const notificationRepo = new KyselyNotificationRepository(db);
   const alertState = new KyselyAlertStateRepository(db);
   const ruleRepo = new KyselyAlertRuleRepository(db);
-  const seedRepo = new KyselySeedRepository(db);
 
   const notificationService = new NotificationService(notificationRepo);
   const ruleService = new RuleService(ruleRepo, alertState);
   const liveHub = new LiveNotificationHub();
-  const seeder = new DefaultRuleSeeder(ruleRepo, seedRepo, logger);
-  const interestService = new InterestService(interests, seeder, logger);
+  const interestService = new InterestService(interests, logger);
 
   const evaluator = new AlertEvaluator({
     interests,
@@ -79,6 +76,7 @@ export async function buildApp(config: NotificationsConfig): Promise<BuiltServic
     events: new KyselyNotificationEventStore(db),
     rules: ruleRepo,
     resolver: new ListingResolverClient(config.instrumentsBaseUrl, logger),
+    fx: new MarketFxClient(config.marketBaseUrl, logger),
     quotes: new MarketQuotesClient(config.marketBaseUrl, logger),
     earnings: new EventsEarningsClient(config.eventsBaseUrl, logger),
     targets: new InsightsTargetsClient(config.insightsBaseUrl, logger),

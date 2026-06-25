@@ -6,12 +6,13 @@ interface RuleRow {
   id: string;
   user_id: string;
   kind: AlertRule['kind'];
-  scope: AlertRule['scope'];
-  instrument_id: string | null;
+  instrument_id: string;
   listing_id: string | null;
   params: unknown;
   label: string | null;
   enabled: boolean;
+  notify_once: boolean;
+  remind_after_minutes: number | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -26,11 +27,12 @@ export class KyselyAlertRuleRepository implements AlertRuleRepository {
       .values({
         user_id: input.userId,
         kind: input.kind,
-        scope: input.scope,
         instrument_id: input.instrumentId,
         listing_id: input.listingId,
         params: JSON.stringify(input.params),
         label: input.label,
+        notify_once: input.notifyOnce,
+        remind_after_minutes: input.remindAfterMinutes,
       })
       .returningAll()
       .executeTakeFirstOrThrow();
@@ -42,11 +44,7 @@ export class KyselyAlertRuleRepository implements AlertRuleRepository {
       .selectFrom('notifications.alert_rules')
       .selectAll()
       .where('user_id', '=', userId);
-    // instrument_id filter also surfaces all_holdings rules (they apply to every asset).
-    if (filter?.instrumentId) {
-      const instrumentId = filter.instrumentId;
-      query = query.where((eb) => eb.or([eb('instrument_id', '=', instrumentId), eb('scope', '=', 'all_holdings')]));
-    }
+    if (filter?.instrumentId) query = query.where('instrument_id', '=', filter.instrumentId);
     if (filter?.listingId) query = query.where('listing_id', '=', filter.listingId);
     const rows = await query.orderBy('created_at', 'desc').execute();
     return rows.map((r) => toRule(r as RuleRow));
@@ -67,6 +65,8 @@ export class KyselyAlertRuleRepository implements AlertRuleRepository {
     if (patch.params !== undefined) values.params = JSON.stringify(patch.params);
     if (patch.label !== undefined) values.label = patch.label;
     if (patch.enabled !== undefined) values.enabled = patch.enabled;
+    if (patch.notifyOnce !== undefined) values.notify_once = patch.notifyOnce;
+    if (patch.remindAfterMinutes !== undefined) values.remind_after_minutes = patch.remindAfterMinutes;
 
     const row = await this.db
       .updateTable('notifications.alert_rules')
@@ -93,12 +93,13 @@ function toRule(row: RuleRow): AlertRule {
     id: row.id,
     user_id: row.user_id,
     kind: row.kind,
-    scope: row.scope,
     instrument_id: row.instrument_id,
     listing_id: row.listing_id,
     params: (row.params ?? {}) as Record<string, unknown>,
     label: row.label,
     enabled: row.enabled,
+    notify_once: row.notify_once,
+    remind_after_minutes: row.remind_after_minutes,
     created_at: iso(row.created_at),
     updated_at: iso(row.updated_at),
   };

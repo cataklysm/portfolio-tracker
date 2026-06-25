@@ -286,12 +286,13 @@
                       "id",
                       "user_id",
                       "kind",
-                      "scope",
                       "instrument_id",
                       "listing_id",
                       "params",
                       "label",
                       "enabled",
+                      "notify_once",
+                      "remind_after_minutes",
                       "created_at",
                       "updated_at"
                     ],
@@ -336,31 +337,8 @@
                           }
                         ]
                       },
-                      "scope": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "enum": [
-                              "instrument"
-                            ]
-                          },
-                          {
-                            "type": "string",
-                            "enum": [
-                              "all_holdings"
-                            ]
-                          }
-                        ]
-                      },
                       "instrument_id": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ]
+                        "type": "string"
                       },
                       "listing_id": {
                         "anyOf": [
@@ -389,6 +367,19 @@
                       "enabled": {
                         "type": "boolean"
                       },
+                      "notify_once": {
+                        "type": "boolean"
+                      },
+                      "remind_after_minutes": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
                       "created_at": {
                         "type": "string"
                       },
@@ -412,7 +403,7 @@
                 "type": "object",
                 "required": [
                   "kind",
-                  "scope",
+                  "instrument_id",
                   "params"
                 ],
                 "properties": {
@@ -450,22 +441,6 @@
                       }
                     ]
                   },
-                  "scope": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "enum": [
-                          "instrument"
-                        ]
-                      },
-                      {
-                        "type": "string",
-                        "enum": [
-                          "all_holdings"
-                        ]
-                      }
-                    ]
-                  },
                   "instrument_id": {
                     "format": "uuid",
                     "type": "string"
@@ -481,6 +456,21 @@
                   "label": {
                     "maxLength": 100,
                     "type": "string"
+                  },
+                  "notify_once": {
+                    "type": "boolean"
+                  },
+                  "remind_after_minutes": {
+                    "anyOf": [
+                      {
+                        "minimum": 5,
+                        "maximum": 1440,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 }
               }
@@ -498,12 +488,13 @@
                     "id",
                     "user_id",
                     "kind",
-                    "scope",
                     "instrument_id",
                     "listing_id",
                     "params",
                     "label",
                     "enabled",
+                    "notify_once",
+                    "remind_after_minutes",
                     "created_at",
                     "updated_at"
                   ],
@@ -548,31 +539,8 @@
                         }
                       ]
                     },
-                    "scope": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "enum": [
-                            "instrument"
-                          ]
-                        },
-                        {
-                          "type": "string",
-                          "enum": [
-                            "all_holdings"
-                          ]
-                        }
-                      ]
-                    },
                     "instrument_id": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
+                      "type": "string"
                     },
                     "listing_id": {
                       "anyOf": [
@@ -600,6 +568,19 @@
                     },
                     "enabled": {
                       "type": "boolean"
+                    },
+                    "notify_once": {
+                      "type": "boolean"
+                    },
+                    "remind_after_minutes": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "created_at": {
                       "type": "string"
@@ -641,6 +622,21 @@
                   },
                   "enabled": {
                     "type": "boolean"
+                  },
+                  "notify_once": {
+                    "type": "boolean"
+                  },
+                  "remind_after_minutes": {
+                    "anyOf": [
+                      {
+                        "minimum": 5,
+                        "maximum": 1440,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 }
               }
@@ -668,12 +664,13 @@
                     "id",
                     "user_id",
                     "kind",
-                    "scope",
                     "instrument_id",
                     "listing_id",
                     "params",
                     "label",
                     "enabled",
+                    "notify_once",
+                    "remind_after_minutes",
                     "created_at",
                     "updated_at"
                   ],
@@ -718,31 +715,8 @@
                         }
                       ]
                     },
-                    "scope": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "enum": [
-                            "instrument"
-                          ]
-                        },
-                        {
-                          "type": "string",
-                          "enum": [
-                            "all_holdings"
-                          ]
-                        }
-                      ]
-                    },
                     "instrument_id": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
+                      "type": "string"
                     },
                     "listing_id": {
                       "anyOf": [
@@ -770,6 +744,19 @@
                     },
                     "enabled": {
                       "type": "boolean"
+                    },
+                    "notify_once": {
+                      "type": "boolean"
+                    },
+                    "remind_after_minutes": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "created_at": {
                       "type": "string"

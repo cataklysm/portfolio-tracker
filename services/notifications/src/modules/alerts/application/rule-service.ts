@@ -4,23 +4,25 @@ import type {
   AlertRuleRepository,
   AlertStateRepository,
   RuleKind,
-  RuleScope,
   UpdateAlertRule,
 } from './ports.js';
 
 export interface CreateRuleInput {
   kind: RuleKind;
-  scope: RuleScope;
   instrumentId?: string | null;
   listingId?: string | null;
   params: Record<string, unknown>;
   label?: string | null;
+  notifyOnce?: boolean;
+  remindAfterMinutes?: number | null;
 }
 
 export interface UpdateRuleInput {
   params?: Record<string, unknown>;
   label?: string | null;
   enabled?: boolean;
+  notifyOnce?: boolean;
+  remindAfterMinutes?: number | null;
 }
 
 /**
@@ -39,17 +41,22 @@ export class RuleService {
   }
 
   create(userId: string, input: CreateRuleInput): Promise<AlertRule> {
-    const scope = requireScope(input.kind, input.scope);
-    const instrumentId = scope === 'instrument' ? requireInstrument(input.instrumentId) : null;
+    // Rules are always instrument-scoped; global ("all holdings") rules were removed.
+    const instrumentId = requireInstrument(input.instrumentId);
     const params = validateParams(input.kind, input.params);
+    // Default to one-shot; the caller opts into recurring / remind-later explicitly.
+    const notifyOnce = input.notifyOnce ?? true;
+    // A one-shot rule never reminds; otherwise validate the cooldown range.
+    const remindAfterMinutes = notifyOnce ? null : validateRemind(input.remindAfterMinutes);
     return this.repo.create({
       userId,
       kind: input.kind,
-      scope,
       instrumentId,
-      listingId: scope === 'instrument' ? (input.listingId ?? null) : null,
+      listingId: input.listingId ?? null,
       params,
       label: input.label ?? null,
+      notifyOnce,
+      remindAfterMinutes,
     });
   }
 
@@ -57,6 +64,8 @@ export class RuleService {
     const next: UpdateAlertRule = {};
     if (patch.label !== undefined) next.label = patch.label;
     if (patch.enabled !== undefined) next.enabled = patch.enabled;
+    if (patch.notifyOnce !== undefined) next.notifyOnce = patch.notifyOnce;
+    if (patch.remindAfterMinutes !== undefined) next.remindAfterMinutes = validateRemind(patch.remindAfterMinutes);
     if (patch.params !== undefined) {
       const existing = (await this.repo.listByUser(userId)).find((r) => r.id === id);
       if (!existing) throw AppError.notFound('alert_rule_not_found', 'Alert rule not found');
@@ -75,17 +84,18 @@ export class RuleService {
   }
 }
 
-function requireScope(kind: RuleKind, scope: RuleScope): RuleScope {
-  // A price threshold is inherently about one instrument's price.
-  if (kind === 'price_threshold' && scope !== 'instrument') {
-    throw AppError.badRequest('invalid_scope', 'Price-threshold rules must target a specific instrument');
-  }
-  return scope;
-}
-
 function requireInstrument(instrumentId: string | null | undefined): string {
   if (!instrumentId) throw AppError.badRequest('missing_instrument', 'An instrument is required for this rule');
   return instrumentId;
+}
+
+/** Validates the "remind me later" cooldown: null or an integer in [5, 1440] minutes. */
+function validateRemind(value: number | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  if (!Number.isInteger(value) || value < 5 || value > 1440) {
+    throw AppError.badRequest('invalid_remind_interval', 'remind_after_minutes must be an integer between 5 and 1440');
+  }
+  return value;
 }
 
 function num(value: unknown): number {

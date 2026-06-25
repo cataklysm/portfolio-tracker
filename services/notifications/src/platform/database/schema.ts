@@ -70,19 +70,15 @@ export interface AlertRulesTable {
   id: Generated<string>;
   user_id: string;
   kind: RuleKind;
-  scope: 'instrument' | 'all_holdings';
-  instrument_id: string | null;
+  instrument_id: string;
   listing_id: string | null;
   params: Json;
   label: string | null;
   enabled: ColumnType<boolean, boolean | undefined, boolean>;
+  notify_once: ColumnType<boolean, boolean | undefined, boolean>;
+  remind_after_minutes: number | null;
   created_at: Generated<Date>;
   updated_at: ColumnType<Date, Date | string | undefined, Date | string>;
-}
-
-export interface SeededUsersTable {
-  user_id: string;
-  seeded_at: Generated<Date>;
 }
 
 export interface NotificationsDatabase {
@@ -90,6 +86,5 @@ export interface NotificationsDatabase {
   'notifications.user_interests': UserInterestsTable;
   'notifications.alert_state': AlertStateTable;
   'notifications.alert_rules': AlertRulesTable;
-  'notifications.seeded_users': SeededUsersTable;
   'notifications.outbox_events': OutboxEventsTable;
 }

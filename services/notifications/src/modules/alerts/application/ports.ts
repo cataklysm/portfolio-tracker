@@ -7,7 +7,6 @@ export type NotificationType =
 export type Severity = 'info' | 'warning' | 'critical';
 
 export type RuleKind = 'price_threshold' | 'daily_move' | 'earnings_lead' | 'cost_basis_move' | 'target_zone';
-export type RuleScope = 'instrument' | 'all_holdings';
 
 export interface NewNotification {
   userId: string;
@@ -47,8 +46,8 @@ export interface NotificationRepository {
 }
 
 export interface AlertStateRepository {
-  /** Last fired dedupe signature for (user, listing, alert_type), or null. */
-  get(userId: string, listingId: string, alertType: string): Promise<string | null>;
+  /** Last fired signature + time for (user, listing, alert_type), or null. */
+  getState(userId: string, listingId: string, alertType: string): Promise<{ signature: string; firedAt: Date } | null>;
   set(userId: string, listingId: string, alertType: string, dedupeKey: string): Promise<void>;
   clear(userId: string, listingId: string, alertType: string): Promise<void>;
   /** Removes all state rows for an alert type (used when a rule is deleted). */
@@ -65,12 +64,15 @@ export interface AlertRule {
   id: string;
   user_id: string;
   kind: RuleKind;
-  scope: RuleScope;
-  instrument_id: string | null;
+  instrument_id: string;
   listing_id: string | null;
   params: Record<string, unknown>;
   label: string | null;
   enabled: boolean;
+  /** When true, the rule disables itself after firing once. */
+  notify_once: boolean;
+  /** "Remind me later" cooldown in minutes (5..1440); null = no cooldown. */
+  remind_after_minutes: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -78,17 +80,20 @@ export interface AlertRule {
 export interface NewAlertRule {
   userId: string;
   kind: RuleKind;
-  scope: RuleScope;
-  instrumentId: string | null;
+  instrumentId: string;
   listingId: string | null;
   params: Record<string, unknown>;
   label: string | null;
+  notifyOnce: boolean;
+  remindAfterMinutes: number | null;
 }
 
 export interface UpdateAlertRule {
   params?: Record<string, unknown>;
   label?: string | null;
   enabled?: boolean;
+  notifyOnce?: boolean;
+  remindAfterMinutes?: number | null;
 }
 
 export interface AlertRuleRepository {
@@ -97,15 +102,4 @@ export interface AlertRuleRepository {
   listEnabled(userId: string): Promise<AlertRule[]>;
   update(userId: string, id: string, patch: UpdateAlertRule): Promise<AlertRule | null>;
   delete(userId: string, id: string): Promise<boolean>;
-}
-
-// ---- Default-rule seeding --------------------------------------------------
-
-export interface SeedRepository {
-  /**
-   * Atomically claims the right to seed default rules for a user. Returns true
-   * the first time it's called for a user (the caller should then create the
-   * defaults) and false on every subsequent call.
-   */
-  claim(userId: string): Promise<boolean>;
 }

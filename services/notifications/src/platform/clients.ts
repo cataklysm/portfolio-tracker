@@ -99,6 +99,24 @@ export class MarketQuotesClient {
   }
 }
 
+export class MarketFxClient {
+  constructor(private readonly baseUrl: string, private readonly logger: Logger) {}
+
+  async fetchRates(currencies: string[]): Promise<Map<string, number>> {
+    const out = new Map<string, number>([['EUR', 1]]);
+    const requested = [...new Set(currencies.map((currency) => currency.toUpperCase()).filter((currency) => /^[A-Z]{3}$/.test(currency) && currency !== 'EUR'))];
+    if (requested.length === 0) return out;
+    const url = new URL('/internal/fx/rates', this.baseUrl);
+    url.searchParams.set('quote_currencies', requested.join(','));
+    const rates = await getJson<Record<string, string>>(url, this.logger);
+    for (const [currency, value] of Object.entries(rates ?? {})) {
+      const rate = toNum(value);
+      if (rate !== null && rate > 0) out.set(currency.toUpperCase(), rate);
+    }
+    return out;
+  }
+}
+
 export class EventsEarningsClient {
   constructor(private readonly baseUrl: string, private readonly logger: Logger) {}
 

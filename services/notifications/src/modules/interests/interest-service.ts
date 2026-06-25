@@ -1,5 +1,5 @@
 import type { EventEnvelope, Logger } from '@portfolio/platform';
-import type { UserInterestRepository, UserSeeder } from './ports.js';
+import type { UserInterestRepository } from './ports.js';
 
 interface InterestPayload {
   listing_id?: string;
@@ -21,7 +21,6 @@ const MAPPING: Record<string, { type: 'position' | 'watchlist'; active: boolean 
 export class InterestService {
   constructor(
     private readonly repo: UserInterestRepository,
-    private readonly seeder: UserSeeder,
     private readonly logger: Logger,
   ) {}
 
@@ -35,9 +34,6 @@ export class InterestService {
       this.logger.debug({ event: envelope.event_type, error_code: 'interest_missing_fields' }, 'Interest event missing user/listing');
       return;
     }
-
-    // First time we see this user, give them the default alert rules.
-    await this.seeder.ensureDefaults(userId);
 
     await this.repo.upsertInterest({
       interestId: envelope.aggregate.id,

@@ -117,6 +117,11 @@ export async function buildApp(config: NotificationsConfig): Promise<BuiltServic
     requireScope: (scope) => verifier.requireScope(scope),
   });
 
+  // Spec-only dump: never touch Redis/DB or start background workers — we only
+  // need the HTTP route table. (connectRedis/outbox already no-op under the flag,
+  // but the live stream connects a duplicated client directly, so gate it here.)
+  const dumpMode = process.env['OPENAPI_DUMP'] === '1';
+
   await connectRedis(redis);
 
   const publisher = new OutboxPublisher({
@@ -126,7 +131,6 @@ export async function buildApp(config: NotificationsConfig): Promise<BuiltServic
     outbox: { schema: 'notifications', table: 'outbox_events' },
     logger,
   });
-  publisher.start();
 
   const scheduler = new EvaluationScheduler(evaluator, config.evaluation.intervalMs, logger);
   const retentionScheduler = new NotificationRetentionScheduler(
@@ -142,21 +146,25 @@ export async function buildApp(config: NotificationsConfig): Promise<BuiltServic
     pushSender,
     logger,
   });
-  await liveStream.start();
-  retentionScheduler.start();
   let consumer: StreamConsumer | undefined;
-  if (config.consumeInterestStream) {
-    consumer = new StreamConsumer({
-      redis,
-      stream: 'portfolio',
-      group: 'notifications',
-      consumer: `notifications-${process.pid}`,
-      handler: (envelope) => interestService.applyInterestEvent(envelope),
-      logger,
-    });
-    await consumer.start();
+
+  if (!dumpMode) {
+    publisher.start();
+    await liveStream.start();
+    retentionScheduler.start();
+    if (config.consumeInterestStream) {
+      consumer = new StreamConsumer({
+        redis,
+        stream: 'portfolio',
+        group: 'notifications',
+        consumer: `notifications-${process.pid}`,
+        handler: (envelope) => interestService.applyInterestEvent(envelope),
+        logger,
+      });
+      await consumer.start();
+    }
+    if (config.evaluation.enabled) scheduler.start();
   }
-  if (config.evaluation.enabled) scheduler.start();
 
   return {
     app,

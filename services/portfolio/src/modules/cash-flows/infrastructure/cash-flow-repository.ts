@@ -32,6 +32,16 @@ interface CashFlowRow {
   amount_per_share: string | null;
   quantity_at_ex_date: string | null;
   expected_gross_amount: string | null;
+  source_currency: string | null;
+  source_gross_amount: string | null;
+  source_withholding_tax: string | null;
+  source_fee: string | null;
+  source_net_amount: string | null;
+  source_amount_per_share: string | null;
+  broker_fx_rate: string | null;
+  broker_fx_from_currency: string | null;
+  broker_fx_to_currency: string | null;
+  broker_fx_rate_date: Date | string | null;
   created_at: Date | string;
   updated_at: Date | string;
 }
@@ -56,9 +66,35 @@ const COLUMNS = [
   'amount_per_share',
   'quantity_at_ex_date',
   'expected_gross_amount',
+  'source_currency',
+  'source_gross_amount',
+  'source_withholding_tax',
+  'source_fee',
+  'source_net_amount',
+  'source_amount_per_share',
+  'broker_fx_rate',
+  'broker_fx_from_currency',
+  'broker_fx_to_currency',
+  'broker_fx_rate_date',
   'created_at',
   'updated_at',
 ] as const;
+
+/** The new source-economics + broker-FX insert values, shared by both create paths. */
+function sourceValues(input: NewCashFlow) {
+  return {
+    source_currency: input.sourceCurrency,
+    source_gross_amount: input.sourceGrossAmount,
+    source_withholding_tax: input.sourceWithholdingTax,
+    source_fee: input.sourceFee,
+    source_net_amount: input.sourceNetAmount,
+    source_amount_per_share: input.sourceAmountPerShare,
+    broker_fx_rate: input.brokerFxRate,
+    broker_fx_from_currency: input.brokerFxFromCurrency,
+    broker_fx_to_currency: input.brokerFxToCurrency,
+    broker_fx_rate_date: input.brokerFxRateDate,
+  };
+}
 
 /** Kysely adapter for `portfolio.cash_flows`. */
 export class KyselyCashFlowRepository implements CashFlowRepository {
@@ -110,6 +146,7 @@ export class KyselyCashFlowRepository implements CashFlowRepository {
           amount_per_share: input.amountPerShare,
           quantity_at_ex_date: input.quantityAtExDate,
           expected_gross_amount: input.expectedGrossAmount,
+          ...sourceValues(input),
         })
         .returning(COLUMNS)
         .executeTakeFirstOrThrow();
@@ -149,6 +186,7 @@ export class KyselyCashFlowRepository implements CashFlowRepository {
           amount_per_share: input.amountPerShare,
           quantity_at_ex_date: input.quantityAtExDate,
           expected_gross_amount: input.expectedGrossAmount,
+          ...sourceValues(input),
         })
         .returning(COLUMNS)
         .executeTakeFirstOrThrow();
@@ -156,18 +194,25 @@ export class KyselyCashFlowRepository implements CashFlowRepository {
 
       if (this.recorder && audit) {
         const change = audit(cashFlow);
-        if (change) await this.recorder.recordIn(trx, change);
+        if (change) {
+          // Embed the source+settlement component breakdown in the cash-flow snapshot
+          // so the change history preserves the original-currency tax detail.
+          change.after = { ...cashFlow, tax_components: taxComponents };
+          await this.recorder.recordIn(trx, change);
+        }
       }
 
       for (const component of taxComponents) {
+        // Linked tax events stay the broker-tax ledger in settlement currency; the
+        // original-source breakdown is preserved alongside in cash_flow_tax_components.
         const teRow = await trx
           .insertInto('portfolio.tax_events')
           .values({
             user_id: input.userId,
             component: component.component,
             direction: 'withheld',
-            amount: component.amount,
-            currency: input.currency,
+            amount: component.settlementAmount,
+            currency: component.settlementCurrency,
             booking_date: component.bookingDate,
             source: 'income_booking',
             note: null,
@@ -178,6 +223,18 @@ export class KyselyCashFlowRepository implements CashFlowRepository {
           })
           .returning(['id'])
           .executeTakeFirstOrThrow();
+        await trx
+          .insertInto('portfolio.cash_flow_tax_components')
+          .values({
+            cash_flow_id: cashFlow.id,
+            component: component.component,
+            source_amount: component.sourceAmount,
+            source_currency: component.sourceCurrency,
+            settlement_amount: component.settlementAmount,
+            settlement_currency: component.settlementCurrency,
+            booking_date: component.bookingDate,
+          })
+          .execute();
         if (this.recorder) {
           await this.recorder.recordIn(trx, {
             userId: input.userId,
@@ -188,8 +245,8 @@ export class KyselyCashFlowRepository implements CashFlowRepository {
               id: teRow.id,
               component: component.component,
               direction: 'withheld',
-              amount: component.amount,
-              currency: input.currency,
+              amount: component.settlementAmount,
+              currency: component.settlementCurrency,
               booking_date: component.bookingDate,
               source: 'income_booking',
               cash_flow_id: cashFlow.id,
@@ -366,6 +423,16 @@ function toRecord(row: CashFlowRow): CashFlowRecord {
     amount_per_share: row.amount_per_share,
     quantity_at_ex_date: row.quantity_at_ex_date,
     expected_gross_amount: row.expected_gross_amount,
+    source_currency: row.source_currency,
+    source_gross_amount: row.source_gross_amount,
+    source_withholding_tax: row.source_withholding_tax,
+    source_fee: row.source_fee,
+    source_net_amount: row.source_net_amount,
+    source_amount_per_share: row.source_amount_per_share,
+    broker_fx_rate: row.broker_fx_rate,
+    broker_fx_from_currency: row.broker_fx_from_currency,
+    broker_fx_to_currency: row.broker_fx_to_currency,
+    broker_fx_rate_date: row.broker_fx_rate_date === null ? null : dateStr(row.broker_fx_rate_date),
     created_at: iso(row.created_at),
     updated_at: iso(row.updated_at),
   };

@@ -1710,6 +1710,16 @@
                       "amount_per_share",
                       "quantity_at_ex_date",
                       "expected_gross_amount",
+                      "source_currency",
+                      "source_gross_amount",
+                      "source_withholding_tax",
+                      "source_fee",
+                      "source_net_amount",
+                      "source_amount_per_share",
+                      "broker_fx_rate",
+                      "broker_fx_from_currency",
+                      "broker_fx_to_currency",
+                      "broker_fx_rate_date",
                       "created_at",
                       "updated_at"
                     ],
@@ -1865,6 +1875,178 @@
                           }
                         ]
                       },
+                      "source_currency": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "source_gross_amount": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "source_withholding_tax": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "source_fee": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "source_net_amount": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "source_amount_per_share": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "broker_fx_rate": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "broker_fx_from_currency": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "broker_fx_to_currency": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "broker_fx_rate_date": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "reference_fx_rate": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "reference_fx_rate_date": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "reference_fx_net_amount": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "broker_fx_difference_amount": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "broker_fx_difference_pct": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fx_comparison_status": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "same_currency"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "available"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "unavailable"
+                            ]
+                          }
+                        ]
+                      },
                       "created_at": {
                         "type": "string"
                       },
@@ -1986,66 +2168,185 @@
                     "pattern": "^-?\\d+(\\.\\d+)?$",
                     "type": "string"
                   },
+                  "source_currency": {
+                    "minLength": 3,
+                    "maxLength": 3,
+                    "type": "string"
+                  },
+                  "source_gross_amount": {
+                    "pattern": "^-?\\d+(\\.\\d+)?$",
+                    "type": "string"
+                  },
+                  "source_withholding_tax": {
+                    "pattern": "^-?\\d+(\\.\\d+)?$",
+                    "type": "string"
+                  },
+                  "source_fee": {
+                    "pattern": "^-?\\d+(\\.\\d+)?$",
+                    "type": "string"
+                  },
+                  "source_net_amount": {
+                    "pattern": "^-?\\d+(\\.\\d+)?$",
+                    "type": "string"
+                  },
+                  "source_amount_per_share": {
+                    "pattern": "^-?\\d+(\\.\\d+)?$",
+                    "type": "string"
+                  },
+                  "broker_fx_rate": {
+                    "pattern": "^-?\\d+(\\.\\d+)?$",
+                    "type": "string"
+                  },
+                  "broker_fx_from_currency": {
+                    "minLength": 3,
+                    "maxLength": 3,
+                    "type": "string"
+                  },
+                  "broker_fx_to_currency": {
+                    "minLength": 3,
+                    "maxLength": 3,
+                    "type": "string"
+                  },
+                  "broker_fx_rate_date": {
+                    "format": "date",
+                    "type": "string"
+                  },
                   "tax_components": {
                     "minItems": 1,
                     "type": "array",
                     "items": {
-                      "type": "object",
-                      "required": [
-                        "component",
-                        "amount",
-                        "currency",
-                        "booking_date"
-                      ],
-                      "properties": {
-                        "component": {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "enum": [
-                                "capital_income"
+                      "description": "A withheld-tax component — either same-currency or split into source/settlement.",
+                      "anyOf": [
+                        {
+                          "description": "Same-currency tax component: `amount` is in the cash-flow settlement currency.",
+                          "type": "object",
+                          "required": [
+                            "component",
+                            "amount",
+                            "currency",
+                            "booking_date"
+                          ],
+                          "properties": {
+                            "component": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "capital_income"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "solidarity"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "church"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "foreign_withholding"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "generic"
+                                  ]
+                                }
                               ]
                             },
-                            {
-                              "type": "string",
-                              "enum": [
-                                "solidarity"
-                              ]
+                            "amount": {
+                              "pattern": "^-?\\d+(\\.\\d+)?$",
+                              "type": "string"
                             },
-                            {
-                              "type": "string",
-                              "enum": [
-                                "church"
-                              ]
+                            "currency": {
+                              "minLength": 3,
+                              "maxLength": 3,
+                              "type": "string"
                             },
-                            {
-                              "type": "string",
-                              "enum": [
-                                "foreign_withholding"
-                              ]
-                            },
-                            {
-                              "type": "string",
-                              "enum": [
-                                "generic"
-                              ]
+                            "booking_date": {
+                              "format": "date",
+                              "type": "string"
                             }
-                          ]
+                          }
                         },
-                        "amount": {
-                          "pattern": "^-?\\d+(\\.\\d+)?$",
-                          "type": "string"
-                        },
-                        "currency": {
-                          "minLength": 3,
-                          "maxLength": 3,
-                          "type": "string"
-                        },
-                        "booking_date": {
-                          "format": "date",
-                          "type": "string"
+                        {
+                          "description": "Foreign-currency tax component: original `source_amount` plus broker-settled `settlement_amount`.",
+                          "type": "object",
+                          "required": [
+                            "component",
+                            "source_amount",
+                            "source_currency",
+                            "settlement_amount",
+                            "settlement_currency",
+                            "booking_date"
+                          ],
+                          "properties": {
+                            "component": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "capital_income"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "solidarity"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "church"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "foreign_withholding"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "generic"
+                                  ]
+                                }
+                              ]
+                            },
+                            "source_amount": {
+                              "pattern": "^-?\\d+(\\.\\d+)?$",
+                              "type": "string"
+                            },
+                            "source_currency": {
+                              "minLength": 3,
+                              "maxLength": 3,
+                              "type": "string"
+                            },
+                            "settlement_amount": {
+                              "pattern": "^-?\\d+(\\.\\d+)?$",
+                              "type": "string"
+                            },
+                            "settlement_currency": {
+                              "minLength": 3,
+                              "maxLength": 3,
+                              "type": "string"
+                            },
+                            "booking_date": {
+                              "format": "date",
+                              "type": "string"
+                            }
+                          }
                         }
-                      }
+                      ]
                     }
                   }
                 }
@@ -2090,6 +2391,16 @@
                     "amount_per_share",
                     "quantity_at_ex_date",
                     "expected_gross_amount",
+                    "source_currency",
+                    "source_gross_amount",
+                    "source_withholding_tax",
+                    "source_fee",
+                    "source_net_amount",
+                    "source_amount_per_share",
+                    "broker_fx_rate",
+                    "broker_fx_from_currency",
+                    "broker_fx_to_currency",
+                    "broker_fx_rate_date",
                     "created_at",
                     "updated_at"
                   ],
@@ -2242,6 +2553,178 @@
                         },
                         {
                           "type": "null"
+                        }
+                      ]
+                    },
+                    "source_currency": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_gross_amount": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_withholding_tax": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_fee": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_net_amount": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_amount_per_share": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "broker_fx_rate": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "broker_fx_from_currency": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "broker_fx_to_currency": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "broker_fx_rate_date": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "reference_fx_rate": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "reference_fx_rate_date": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "reference_fx_net_amount": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "broker_fx_difference_amount": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "broker_fx_difference_pct": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "fx_comparison_status": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "same_currency"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "available"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "unavailable"
+                          ]
                         }
                       ]
                     },
@@ -2359,6 +2842,16 @@
                     "amount_per_share",
                     "quantity_at_ex_date",
                     "expected_gross_amount",
+                    "source_currency",
+                    "source_gross_amount",
+                    "source_withholding_tax",
+                    "source_fee",
+                    "source_net_amount",
+                    "source_amount_per_share",
+                    "broker_fx_rate",
+                    "broker_fx_from_currency",
+                    "broker_fx_to_currency",
+                    "broker_fx_rate_date",
                     "created_at",
                     "updated_at"
                   ],
@@ -2511,6 +3004,178 @@
                         },
                         {
                           "type": "null"
+                        }
+                      ]
+                    },
+                    "source_currency": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_gross_amount": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_withholding_tax": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_fee": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_net_amount": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_amount_per_share": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "broker_fx_rate": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "broker_fx_from_currency": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "broker_fx_to_currency": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "broker_fx_rate_date": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "reference_fx_rate": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "reference_fx_rate_date": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "reference_fx_net_amount": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "broker_fx_difference_amount": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "broker_fx_difference_pct": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "fx_comparison_status": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "same_currency"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "available"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "unavailable"
+                          ]
                         }
                       ]
                     },

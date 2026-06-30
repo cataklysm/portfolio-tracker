@@ -364,6 +364,25 @@ export interface CashFlow {
   amount_per_share: string | null
   quantity_at_ex_date: string | null
   expected_gross_amount: string | null
+  // Foreign-currency income: original source-currency economics (null when same-currency).
+  source_currency: string | null
+  source_gross_amount: string | null
+  source_withholding_tax: string | null
+  source_fee: string | null
+  source_net_amount: string | null
+  source_amount_per_share: string | null
+  // Broker's fixed conversion, as a direct source->settlement rate.
+  broker_fx_rate: string | null
+  broker_fx_from_currency: string | null
+  broker_fx_to_currency: string | null
+  broker_fx_rate_date: string | null
+  // Read-only broker-vs-reference FX comparison (settlement currency); present on list reads.
+  reference_fx_rate?: string | null
+  reference_fx_rate_date?: string | null
+  reference_fx_net_amount?: string | null
+  broker_fx_difference_amount?: string | null
+  broker_fx_difference_pct?: string | null
+  fx_comparison_status?: "same_currency" | "available" | "unavailable"
   note: string | null
   created_at: string
   updated_at: string

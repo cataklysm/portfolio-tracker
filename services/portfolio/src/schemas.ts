@@ -282,6 +282,29 @@ export const CashFlowRecordSchema = Type.Object({
   amount_per_share: Ns,
   quantity_at_ex_date: Ns,
   expected_gross_amount: Ns,
+  // Foreign-currency income: original source-currency economics. Null for
+  // same-currency bookings. The fields above remain the broker-settled amounts.
+  source_currency: Ns,
+  source_gross_amount: Ns,
+  source_withholding_tax: Ns,
+  source_fee: Ns,
+  source_net_amount: Ns,
+  source_amount_per_share: Ns,
+  // Broker's fixed conversion, as a direct source->settlement rate.
+  broker_fx_rate: Ns,
+  broker_fx_from_currency: Ns,
+  broker_fx_to_currency: Ns,
+  broker_fx_rate_date: Ns,
+  // Read-only broker-vs-reference FX comparison (settlement currency), present on
+  // list reads. Omitted on create/update responses.
+  reference_fx_rate: Type.Optional(Ns),
+  reference_fx_rate_date: Type.Optional(Ns),
+  reference_fx_net_amount: Type.Optional(Ns),
+  broker_fx_difference_amount: Type.Optional(Ns),
+  broker_fx_difference_pct: Type.Optional(Ns),
+  fx_comparison_status: Type.Optional(
+    Type.Union([Type.Literal('same_currency'), Type.Literal('available'), Type.Literal('unavailable')]),
+  ),
   created_at: Type.String(),
   updated_at: Type.String(),
 });

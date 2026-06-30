@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { CashFlowService } from './cash-flow-service.js';
-import type { CashFlowRecord, CashFlowRepository, NewCashFlow, NewIncomeTaxComponent, PositionQuantityReader, UpdateCashFlow } from './ports.js';
+import type { CashFlowRecord, CashFlowRepository, DatedRateRequest, FxRateReader, NewCashFlow, NewIncomeTaxComponent, PositionQuantityReader, UpdateCashFlow } from './ports.js';
 
 const USER = 'user-1';
 const PORTFOLIO = 'pf-1';
@@ -34,6 +34,16 @@ class FakeRepo implements CashFlowRepository {
       amount_per_share: input.amountPerShare,
       quantity_at_ex_date: input.quantityAtExDate,
       expected_gross_amount: input.expectedGrossAmount,
+      source_currency: input.sourceCurrency,
+      source_gross_amount: input.sourceGrossAmount,
+      source_withholding_tax: input.sourceWithholdingTax,
+      source_fee: input.sourceFee,
+      source_net_amount: input.sourceNetAmount,
+      source_amount_per_share: input.sourceAmountPerShare,
+      broker_fx_rate: input.brokerFxRate,
+      broker_fx_from_currency: input.brokerFxFromCurrency,
+      broker_fx_to_currency: input.brokerFxToCurrency,
+      broker_fx_rate_date: input.brokerFxRateDate,
       created_at: 'now',
       updated_at: 'now',
     };
@@ -79,6 +89,19 @@ class FakeQuantityReader implements PositionQuantityReader {
   constructor(private readonly qty: string) {}
   async getOpenQuantityAsOf(): Promise<string> {
     return this.qty;
+  }
+}
+
+/** EUR-based rate reader stub keyed by currency (date-agnostic) for the FX comparison. */
+class FakeFx implements FxRateReader {
+  constructor(private readonly rates: Record<string, string>) {}
+  async getEurRatesAt(requests: DatedRateRequest[]): Promise<Map<string, string>> {
+    const m = new Map<string, string>();
+    for (const { currency, date } of requests) {
+      const r = this.rates[currency];
+      if (r) m.set(`${currency}@${date}`, r);
+    }
+    return m;
   }
 }
 
@@ -190,7 +213,7 @@ describe('CashFlowService', () => {
     assert.equal(repo.taxEvents.length, 2);
   });
 
-  test('rejects tax components in a foreign currency (MVP)', async () => {
+  test('rejects a legacy tax component whose currency ≠ the settlement currency', async () => {
     const svc = new CashFlowService(new FakeRepo());
     await rejectsWith('tax_component_currency_mismatch', () =>
       svc.create(USER, PORTFOLIO, { type: 'dividend', grossAmount: '22', currency: 'EUR', paymentDate: '2026-06-30', positionId: POSITION,
@@ -221,5 +244,150 @@ describe('CashFlowService', () => {
     await rejectsWith('withholding_managed', () => svc.update(USER, cf.id, { withholdingTax: '7' }));
     // Patches that don't touch withholding_tax are still allowed.
     await assert.doesNotReject(() => svc.update(USER, cf.id, { note: 'ok' }));
+  });
+});
+
+describe('CashFlowService — foreign-currency income', () => {
+  // A USD dividend on an EUR-settled position: settlement fields are the EUR amounts
+  // the broker credited; source fields are the original USD economics.
+  const foreignDividend = {
+    type: 'dividend' as const,
+    grossAmount: '92.13',
+    withholdingTax: '13.82',
+    currency: 'EUR',
+    paymentDate: '2026-06-30',
+    positionId: POSITION,
+    sourceCurrency: 'USD',
+    sourceGrossAmount: '100.00',
+    sourceWithholdingTax: '15.00',
+    brokerFxRate: '0.921333333333333333',
+    brokerFxRateDate: '2026-06-30',
+  };
+
+  test('stores source economics + broker FX and recomputes source net; derives FX direction', async () => {
+    const svc = new CashFlowService(new FakeRepo());
+    const cf = await svc.create(USER, PORTFOLIO, { ...foreignDividend });
+    assert.equal(cf.net_amount, '78.31'); // settlement: 92.13 − 13.82
+    assert.equal(cf.currency, 'EUR');
+    assert.equal(cf.source_currency, 'USD');
+    assert.equal(cf.source_gross_amount, '100');
+    assert.equal(cf.source_withholding_tax, '15');
+    assert.equal(cf.source_net_amount, '85'); // 100 − 15 − 0
+    assert.equal(cf.broker_fx_rate, '0.921333333333333333');
+    assert.equal(cf.broker_fx_from_currency, 'USD'); // = source currency
+    assert.equal(cf.broker_fx_to_currency, 'EUR'); // = settlement currency
+    assert.equal(cf.broker_fx_rate_date, '2026-06-30');
+  });
+
+  test('a same-currency source layer is collapsed (prefer-omit)', async () => {
+    const svc = new CashFlowService(new FakeRepo());
+    const cf = await svc.create(USER, PORTFOLIO, {
+      type: 'dividend', grossAmount: '10', currency: 'EUR', paymentDate: '2026-06-30', positionId: POSITION,
+      sourceCurrency: 'EUR',
+    });
+    assert.equal(cf.source_currency, null);
+    assert.equal(cf.broker_fx_rate, null);
+  });
+
+  test('rejects source amounts without a source_currency', async () => {
+    const svc = new CashFlowService(new FakeRepo());
+    await rejectsWith('source_currency_required', () =>
+      svc.create(USER, PORTFOLIO, { type: 'dividend', grossAmount: '10', currency: 'EUR', paymentDate: '2026-06-30', positionId: POSITION, sourceGrossAmount: '100' }));
+  });
+
+  test('rejects a foreign booking without broker FX', async () => {
+    const svc = new CashFlowService(new FakeRepo());
+    const { brokerFxRate: _omit, ...noFx } = foreignDividend;
+    await rejectsWith('broker_fx_required', () => svc.create(USER, PORTFOLIO, noFx));
+  });
+
+  test('rejects a foreign booking without source withholding', async () => {
+    const svc = new CashFlowService(new FakeRepo());
+    const { sourceWithholdingTax: _omit, ...noWht } = foreignDividend;
+    await rejectsWith('source_withholding_required', () => svc.create(USER, PORTFOLIO, noWht));
+  });
+
+  test('rejects broker_fx_rate <= 0', async () => {
+    const svc = new CashFlowService(new FakeRepo());
+    await rejectsWith('invalid_amount', () => svc.create(USER, PORTFOLIO, { ...foreignDividend, brokerFxRate: '0' }));
+  });
+
+  test('rejects an inconsistent broker FX direction', async () => {
+    const svc = new CashFlowService(new FakeRepo());
+    await rejectsWith('broker_fx_direction_mismatch', () =>
+      svc.create(USER, PORTFOLIO, { ...foreignDividend, brokerFxFromCurrency: 'EUR' }));
+  });
+
+  test('rejects a supplied source_net_amount that breaks the identity', async () => {
+    const svc = new CashFlowService(new FakeRepo());
+    await rejectsWith('source_net_mismatch', () =>
+      svc.create(USER, PORTFOLIO, { ...foreignDividend, sourceNetAmount: '80' })); // computed = 85
+  });
+
+  test('rejects broker FX when source currency equals settlement currency', async () => {
+    const svc = new CashFlowService(new FakeRepo());
+    await rejectsWith('broker_fx_not_applicable', () =>
+      svc.create(USER, PORTFOLIO, { type: 'dividend', grossAmount: '10', currency: 'EUR', paymentDate: '2026-06-30', positionId: POSITION, sourceCurrency: 'EUR', brokerFxRate: '1' }));
+  });
+
+  test('cross-currency tax components sum settlement → withholding_tax and source → source_withholding_tax', async () => {
+    const repo = new FakeRepo();
+    const svc = new CashFlowService(repo);
+    const cf = await svc.create(USER, PORTFOLIO, {
+      type: 'dividend', grossAmount: '92.13', currency: 'EUR', paymentDate: '2026-06-30', positionId: POSITION,
+      sourceCurrency: 'USD', sourceGrossAmount: '100.00', brokerFxRate: '0.921333333333333333', brokerFxRateDate: '2026-06-30',
+      taxComponents: [
+        { component: 'foreign_withholding', sourceAmount: '15.00', sourceCurrency: 'USD', settlementAmount: '13.82', settlementCurrency: 'EUR', bookingDate: '2026-06-30' },
+      ],
+    });
+    assert.equal(cf.withholding_tax, '13.82'); // settlement sum
+    assert.equal(cf.source_withholding_tax, '15'); // source sum
+    assert.equal(cf.source_net_amount, '85'); // 100 − 15 − 0
+    assert.equal(repo.taxEvents.length, 1);
+    const [te] = repo.taxEvents;
+    assert.ok(te);
+    assert.equal(te.settlementAmount, '13.82');
+    assert.equal(te.sourceAmount, '15');
+  });
+
+  test('rejects a cross-currency component whose settlement currency ≠ the cash-flow currency', async () => {
+    const svc = new CashFlowService(new FakeRepo());
+    await rejectsWith('tax_component_currency_mismatch', () =>
+      svc.create(USER, PORTFOLIO, {
+        type: 'dividend', grossAmount: '92.13', currency: 'EUR', paymentDate: '2026-06-30', positionId: POSITION,
+        sourceCurrency: 'USD', sourceGrossAmount: '100.00', brokerFxRate: '0.92', brokerFxRateDate: '2026-06-30',
+        taxComponents: [{ component: 'foreign_withholding', sourceAmount: '15', sourceCurrency: 'USD', settlementAmount: '13.82', settlementCurrency: 'USD', bookingDate: '2026-06-30' }],
+      }));
+  });
+
+  test('rejects a legacy component on a foreign booking (source/settlement required)', async () => {
+    const svc = new CashFlowService(new FakeRepo());
+    await rejectsWith('tax_component_source_required', () =>
+      svc.create(USER, PORTFOLIO, {
+        type: 'dividend', grossAmount: '92.13', currency: 'EUR', paymentDate: '2026-06-30', positionId: POSITION,
+        sourceCurrency: 'USD', sourceGrossAmount: '100.00', brokerFxRate: '0.92', brokerFxRateDate: '2026-06-30',
+        taxComponents: [{ component: 'capital_income', amount: '13.82', currency: 'EUR', bookingDate: '2026-06-30' }],
+      }));
+  });
+
+  test('list enriches a foreign booking with the broker-vs-reference FX comparison', async () => {
+    const repo = new FakeRepo();
+    const svc = new CashFlowService(repo, undefined, new FakeFx({ USD: '1.25' })); // EUR is the implicit pivot
+    await svc.create(USER, PORTFOLIO, { ...foreignDividend });
+    const [view] = await svc.list(USER, PORTFOLIO, {}, 'token');
+    assert.ok(view);
+    assert.equal(view.fx_comparison_status, 'available');
+    assert.equal(view.reference_fx_rate, '0.8'); // 1 / 1.25
+    assert.equal(view.reference_fx_net_amount, '68'); // source net 85 × 0.8
+  });
+
+  test('list reports a same-currency booking as same_currency', async () => {
+    const repo = new FakeRepo();
+    const svc = new CashFlowService(repo, undefined, new FakeFx({ USD: '1.25' }));
+    await svc.create(USER, PORTFOLIO, { type: 'dividend', grossAmount: '10', currency: 'EUR', paymentDate: '2026-06-30', positionId: POSITION });
+    const [view] = await svc.list(USER, PORTFOLIO, {}, 'token');
+    assert.ok(view);
+    assert.equal(view.fx_comparison_status, 'same_currency');
+    assert.equal(view.reference_fx_rate, null);
   });
 });

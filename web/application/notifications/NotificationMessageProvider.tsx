@@ -13,7 +13,9 @@ export interface NotificationMessage {
   source?: string
   href?: string
   actionLabel?: string
+  allowSnooze?: boolean
   onClose?: (message: ActiveNotificationMessage) => void | Promise<void>
+  onSnooze?: (message: ActiveNotificationMessage, minutes: number) => void | Promise<void>
 }
 
 interface NotificationMessageContextValue {
@@ -36,18 +38,30 @@ const severityDotClass: Record<NotificationMessageSeverity, string> = {
   warning: "bg-[var(--app-warning)]",
 }
 
+const snoozeOptions = [
+  { label: "15m", minutes: 15 },
+  { label: "1h", minutes: 60 },
+  { label: "4h", minutes: 240 },
+]
+
 export function NotificationMessageProvider({ children }: { children: React.ReactNode }) {
   const [messages, setMessages] = useState<ActiveNotificationMessage[]>([])
 
-  const dismissMessage = useCallback((id: string) => {
+  const dismissMessage = useCallback((id: string, options?: { callOnClose?: boolean }) => {
+    const callOnClose = options?.callOnClose ?? true
     setMessages((items) => {
       const dismissedMessage = items.find((item) => item.id === id)
-      if (dismissedMessage?.onClose) {
+      if (callOnClose && dismissedMessage?.onClose) {
         void Promise.resolve(dismissedMessage.onClose(dismissedMessage)).catch(() => undefined)
       }
       return items.filter((item) => item.id !== id)
     })
   }, [])
+
+  const snoozeMessage = useCallback((message: ActiveNotificationMessage, minutes: number) => {
+    dismissMessage(message.id, { callOnClose: false })
+    if (message.onSnooze) void Promise.resolve(message.onSnooze(message, minutes)).catch(() => undefined)
+  }, [dismissMessage])
 
   const notify = useCallback((message: NotificationMessage) => {
     const nextMessage = normalizeMessage(message)
@@ -92,13 +106,30 @@ export function NotificationMessageProvider({ children }: { children: React.Reac
                 </div>
                 {message.message ? <p className="mt-1 text-[12px] font-medium leading-5 text-[var(--app-text-muted)]">{message.message}</p> : null}
                 {message.href ? (
-                  <Link
-                    className="mt-2 inline-flex h-8 items-center rounded-md border border-[color-mix(in_srgb,var(--app-accent)_34%,var(--app-border))] bg-[var(--app-accent-soft)] px-3 text-[11px] font-extrabold text-[var(--app-accent)] transition hover:bg-[color-mix(in_srgb,var(--app-accent)_14%,transparent)]"
-                    href={message.href}
-                    onClick={() => dismissMessage(message.id)}
-                  >
-                    {message.actionLabel ?? "Open"}
-                  </Link>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <Link
+                      className="inline-flex h-8 items-center rounded-md border border-[color-mix(in_srgb,var(--app-accent)_34%,var(--app-border))] bg-[var(--app-accent-soft)] px-3 text-[11px] font-extrabold text-[var(--app-accent)] transition hover:bg-[color-mix(in_srgb,var(--app-accent)_14%,transparent)]"
+                      href={message.href}
+                      onClick={() => dismissMessage(message.id)}
+                    >
+                      {message.actionLabel ?? "Open"}
+                    </Link>
+                    {message.allowSnooze ? (
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] font-bold text-[var(--app-text-faint)]">Remind</span>
+                        {snoozeOptions.map((option) => (
+                          <button
+                            className="inline-flex h-7 items-center rounded-md border border-[var(--app-border)] px-2 text-[10px] font-bold text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text)]"
+                            key={option.minutes}
+                            onClick={() => snoozeMessage(message, option.minutes)}
+                            type="button"
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                 ) : null}
               </div>
               <button

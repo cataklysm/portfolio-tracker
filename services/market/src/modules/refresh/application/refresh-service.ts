@@ -90,7 +90,7 @@ export class RefreshService {
 
   private async runQuotes(cadence: Map<string, Cadence>, now: number): Promise<void> {
     const plan = await this.deps.planResolver.resolve('quotes');
-    const batchSizes = await this.loadBatchSizes();
+    const pacing = await this.loadProviderPacing();
 
     // Two passes, grouped by provider:
     //  - `open`: regular sweep over open/unknown/absent listings (the per-listing
@@ -120,15 +120,19 @@ export class RefreshService {
       this.deps.logger.debug({ skipped_closed: skippedClosed }, 'Skipped listings on closed exchanges');
     }
 
-    // Regular open sweep — freshness-gated by each provider's configured interval.
+    // Regular open sweep — freshness-gated by each provider's configured interval,
+    // oldest-first, and capped at the provider's per-cycle budget (fair rotation
+    // for rate-constrained providers like lstc).
     for (const [provider, entries] of open) {
       const c = this.cadenceFor(cadence, provider, 'quotes');
       if (!c.enabled) continue;
-      const batchSize = batchSizes.get(provider) ?? this.defaultBatchSize;
+      const p = pacing.get(provider);
+      const batchSize = p?.batchSize ?? this.defaultBatchSize;
       try {
         const stored = await this.deps.quotes.refreshLatestBatched(provider, entries, batchSize, {
           refreshIntervalMs: c.refreshIntervalMs,
           saveResolutionMs: c.saveResolutionMs,
+          maxPerCycle: p?.maxPerCycle ?? null,
         });
         if (stored > 0) {
           await this.deps.refreshState.recordRefresh(
@@ -150,7 +154,7 @@ export class RefreshService {
     for (const [provider, entries] of closing) {
       const c = this.cadenceFor(cadence, provider, 'quotes');
       if (!c.enabled) continue;
-      const batchSize = batchSizes.get(provider) ?? this.defaultBatchSize;
+      const batchSize = pacing.get(provider)?.batchSize ?? this.defaultBatchSize;
       try {
         await this.deps.quotes.refreshLatestBatched(provider, entries, batchSize, {
           refreshIntervalMs: 0,
@@ -252,12 +256,16 @@ export class RefreshService {
     return map;
   }
 
-  /** Per-provider effective batch size: configured `max_batch_size`, else 1 (single-symbol). */
-  private async loadBatchSizes(): Promise<Map<string, number>> {
-    const map = new Map<string, number>();
+  /**
+   * Per-provider pacing for the sweep: effective batch size (configured
+   * `max_batch_size`, else 1 single-symbol) and the per-cycle budget
+   * (`max_per_cycle`, null = uncapped).
+   */
+  private async loadProviderPacing(): Promise<Map<string, { batchSize: number; maxPerCycle: number | null }>> {
+    const map = new Map<string, { batchSize: number; maxPerCycle: number | null }>();
     try {
       for (const s of await this.deps.providers.fetchProviderSettings()) {
-        map.set(s.provider, s.maxBatchSize ?? 1);
+        map.set(s.provider, { batchSize: s.maxBatchSize ?? 1, maxPerCycle: s.maxPerCycle ?? null });
       }
     } catch (err) {
       this.deps.logger.warn({ err, error_code: 'provider_settings_failed' }, 'Provider settings fetch failed');

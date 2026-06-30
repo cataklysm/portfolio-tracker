@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useMemo, useState, useTransition, type ReactNode } from "react"
+import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import {
   Box,
@@ -15,9 +15,9 @@ import {
 } from "@mui/material"
 import { AppBadge, appIconButtonSx } from "@/design/components/AppBadge"
 import { appTypography } from "@/design/tokens/appTypography"
-import { PageMetricGrid, PageShell } from "@/application/shell/PageShell"
+import { PageShell } from "@/application/shell/PageShell"
 import { ControlBar } from "@/design/components/ControlBar"
-import { MetricBar, MetricBarItem, type MetricBarTone } from "@/design/components/MetricBar"
+import { MetricBar, MetricBarItem } from "@/design/components/MetricBar"
 import { AppIcon } from "@/design/icons/AppIcon"
 import { AddToWatchlistDialog } from "@/features/watchlist/components/AddToWatchlistDialog"
 import { removeFromWatchlistAction } from "@/features/watchlist/actions"
@@ -72,11 +72,11 @@ export function WatchlistWorkspace({ locale, watchlistItems }: WatchlistWorkspac
         <Typography sx={appTypography.breadcrumbCurrent}>Watchlist</Typography>
       </Breadcrumbs>
 
-      <PageMetricGrid columns={{ xs: "1fr", md: "repeat(3, minmax(0, 1fr))" }}>
-        <WatchlistMetric icon={<AppIcon name="bookmark" />} label="Tracked assets" value={metrics.total} sub="Not included in portfolio totals" tone="accent" />
-        <WatchlistMetric icon={<AppIcon name="trendUp" />} label="Positive today" value={metrics.positiveToday} sub={`${metrics.negativeToday} down / ${metrics.unchangedToday} flat`} tone="positive" />
-        <WatchlistMetric icon={<AppIcon name="value" />} label="Priced assets" value={`${metrics.pricedAssets}/${metrics.total}`} sub={metrics.unavailableAssets > 0 ? `${metrics.unavailableAssets} without quote` : "Current quote coverage"} tone={metrics.unavailableAssets > 0 ? "warning" : "positive"} />
-      </PageMetricGrid>
+      <MetricBar columns={{ xs: "1fr", md: "repeat(3, minmax(0, 1fr))" }}>
+        <MetricBarItem icon={<AppIcon name="bookmark" />} label="Tracked assets" primary sub="Not included in portfolio totals" tone="accent" value={metrics.total} />
+        <MetricBarItem icon={<AppIcon name="trendUp" />} label="Positive today" primary sub={`${metrics.negativeToday} down / ${metrics.unchangedToday} flat`} tone="positive" value={metrics.positiveToday} />
+        <MetricBarItem icon={<AppIcon name="value" />} label="Priced assets" primary sub={metrics.unavailableAssets > 0 ? `${metrics.unavailableAssets} without quote` : "Current quote coverage"} tone={metrics.unavailableAssets > 0 ? "warning" : "positive"} value={`${metrics.pricedAssets}/${metrics.total}`} />
+      </MetricBar>
 
       <ControlBar
         defaultTabValue="all"
@@ -108,26 +108,6 @@ export function WatchlistWorkspace({ locale, watchlistItems }: WatchlistWorkspac
 
       <AddToWatchlistDialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} />
     </PageShell>
-  )
-}
-
-function WatchlistMetric({
-  icon,
-  label,
-  sub,
-  tone,
-  value,
-}: {
-  icon: ReactNode
-  label: string
-  sub: string
-  tone: MetricBarTone
-  value: ReactNode
-}) {
-  return (
-    <MetricBar>
-      <MetricBarItem icon={icon} label={label} primary sub={sub} tone={tone} value={value} />
-    </MetricBar>
   )
 }
 

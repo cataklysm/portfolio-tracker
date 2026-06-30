@@ -10,6 +10,8 @@ export interface FairValueRecord {
   assumptions: unknown;
   effective_date: string;
   source: string | null;
+  /** NULL = current; set when superseded by a newer analyst value (history). */
+  superseded_at: string | null;
   created_at: string;
 }
 
@@ -35,6 +37,8 @@ export interface PriceTargetRecord {
   currency: string;
   effective_date: string;
   note: string | null;
+  /** NULL = current; set when superseded by a newer analyst zone (history). */
+  superseded_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -78,9 +82,10 @@ export interface GlobalAnalystFairValue {
 
 /**
  * Persistence for instrument-level assessments. Reads return the caller's own
- * records plus global (user_id NULL) provider records; user writes are scoped to
- * the owning user. The `replaceGlobalAnalyst*` methods maintain the single
- * provider-fed record per instrument (idempotent: delete + insert).
+ * records plus the CURRENT global (user_id NULL) provider records (superseded_at
+ * IS NULL); user writes are scoped to the owning user. The `ingestGlobalAnalyst*`
+ * methods keep an append-only history: a changed value supersedes the current
+ * row (kept) and inserts a new current row; an unchanged value is a no-op.
  */
 export interface AssessmentRepository {
   listFairValues(instrumentId: string, userId: string): Promise<FairValueRecord[]>;
@@ -92,8 +97,13 @@ export interface AssessmentRepository {
   listOwnTargetsForInstruments(userId: string, instrumentIds: string[]): Promise<PriceTargetRecord[]>;
   insertPriceTarget(input: NewPriceTarget): Promise<PriceTargetRecord>;
   updatePriceTarget(id: string, userId: string, patch: UpdatePriceTarget): Promise<PriceTargetRecord | null>;
-  deletePriceTarget(id: string, userId: string): Promise<boolean>;
+  deletePriceTarget(id: string, userId: string, canDeleteGlobalAnalyst?: boolean): Promise<boolean>;
 
-  replaceGlobalAnalystTarget(input: GlobalAnalystTarget): Promise<void>;
-  replaceGlobalAnalystFairValue(input: GlobalAnalystFairValue): Promise<void>;
+  /** Full analyst fair-value history for an instrument, oldest first (trend line). */
+  listAnalystFairValueHistory(instrumentId: string): Promise<FairValueRecord[]>;
+  /** Full analyst target-zone history for an instrument, oldest first (trend line). */
+  listAnalystTargetHistory(instrumentId: string): Promise<PriceTargetRecord[]>;
+
+  ingestGlobalAnalystTarget(input: GlobalAnalystTarget): Promise<void>;
+  ingestGlobalAnalystFairValue(input: GlobalAnalystFairValue): Promise<void>;
 }

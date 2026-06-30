@@ -231,12 +231,14 @@ export class KyselyCatalogRepository implements CatalogRepository {
     if (ids.length === 0) return [];
     const rows = await this.db
       .selectFrom('instruments.listings as l')
+      .innerJoin('instruments.instruments as i', 'i.id', 'l.instrument_id')
       .leftJoin('instruments.listing_provider_identifiers as p', (join) =>
         join.onRef('p.listing_id', '=', 'l.id').on('p.provider', '=', provider),
       )
       .select([
         'l.id as listing_id',
         'l.instrument_id as instrument_id',
+        'i.name as name',
         'l.symbol as symbol',
         'l.currency as currency',
         'p.provider_identifier as provider_identifier',
@@ -246,6 +248,7 @@ export class KyselyCatalogRepository implements CatalogRepository {
     return rows.map((row) => ({
       listing_id: row.listing_id,
       instrument_id: row.instrument_id,
+      name: row.name,
       symbol: row.symbol,
       currency: row.currency,
       provider_identifier: row.provider_identifier ?? null,

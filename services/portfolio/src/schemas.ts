@@ -31,6 +31,7 @@ export const CashFlowKindSchema = Type.Union([
   Type.Literal('deposit'),
   Type.Literal('withdrawal'),
   Type.Literal('cash_in_lieu'),
+  Type.Literal('interest'),
 ]);
 
 export const TaxComponentSchema = Type.Union([
@@ -44,6 +45,15 @@ export const TaxComponentSchema = Type.Union([
 export const TaxDirectionSchema = Type.Union([
   Type.Literal('withheld'),
   Type.Literal('refunded'),
+]);
+
+export const TaxSourceSchema = Type.Union([
+  Type.Literal('manual'),
+  Type.Literal('import'),
+  Type.Literal('broker_api'),
+  Type.Literal('provider'),
+  Type.Literal('corporate_action'),
+  Type.Literal('income_booking'),
 ]);
 
 export const PerformancePeriodSchema = Type.Union([
@@ -265,6 +275,13 @@ export const CashFlowRecordSchema = Type.Object({
   payment_date: Type.String(),
   tax_relevant_value_date: Type.String(),
   note: Ns,
+  source_event_id: Ns,
+  source_event_version: Ni,
+  source_event_type: Ns,
+  ex_date: Ns,
+  amount_per_share: Ns,
+  quantity_at_ex_date: Ns,
+  expected_gross_amount: Ns,
   created_at: Type.String(),
   updated_at: Type.String(),
 });
@@ -278,7 +295,7 @@ export const TaxEventRecordSchema = Type.Object({
   amount: Type.String(),
   currency: Type.String(),
   booking_date: Type.String(),
-  source: Type.String(),
+  source: TaxSourceSchema,
   note: Ns,
   created_at: Type.String(),
   updated_at: Type.String(),
@@ -302,6 +319,12 @@ export const PortfolioSummarySchema = Type.Object({
   realized_pnl: Type.String(),
   unrealized_pnl: Type.String(),
   dividends: Type.String(),
+  dividends_net: Type.String(),
+  cash_in_lieu_net: Type.String(),
+  interest_net: Type.String(),
+  income_net: Type.String(),
+  income_gross: Type.String(),
+  income_tax: Type.String(),
   fees: Type.String(),
   total_pnl: Type.String(),
   simple_return_pct: Ns,
@@ -428,6 +451,7 @@ export const PerformancePointSchema = Type.Object({
   realized_pnl: Type.String(),
   unrealized_pnl: Type.String(),
   dividends: Type.String(),
+  interest: Type.String(),
   total_pnl: Type.String(),
   complete: Type.Boolean(),
 });

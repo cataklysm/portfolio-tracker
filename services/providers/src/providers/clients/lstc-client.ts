@@ -113,7 +113,8 @@ export class LstcClient {
   /**
    * Intraday per-minute series for the current session (`[epochMs, price]`), plus
    * the previous-day close. Empty/null outside trading hours. Returns null on
-   * failure.
+   * failure. Timestamps are returned exactly as received — their UTC fields are
+   * actually Europe/Berlin wall-clock; the provider normalizes them to real UTC.
    */
   getIntraday(instrumentId: number): Promise<LstcSeries | null> {
     return this.getChart(instrumentId, 'intraday');

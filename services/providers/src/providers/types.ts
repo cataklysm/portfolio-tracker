@@ -48,6 +48,8 @@ export interface ProviderSettings {
   maxBatchSize: number | null;
   rateLimitPerMin: number | null;
   maxConcurrency: number;
+  /** Max listings refreshed per sweep for this provider; null = no cap. */
+  maxPerCycle: number | null;
 }
 
 /**
@@ -62,6 +64,7 @@ export interface ProviderSettingsUpdate {
   maxBatchSize?: number | null;
   rateLimitPerMin?: number | null;
   maxConcurrency?: number;
+  maxPerCycle?: number | null;
 }
 
 /**

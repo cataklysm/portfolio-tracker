@@ -51,6 +51,7 @@ function buildService(
         maxBatchSize: s.maxBatchSize,
         rateLimitPerMin: null,
         maxConcurrency: 4,
+        maxPerCycle: null,
       }))),
       fetchCapabilityRefresh: () => Promise.resolve(cadence.map((c) => ({
         provider: c.provider,

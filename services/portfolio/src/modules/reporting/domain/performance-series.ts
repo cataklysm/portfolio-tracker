@@ -49,9 +49,9 @@ export interface SeriesPosition {
   ownershipWindows?: OwnershipWindow[];
 }
 
-/** An external/​income cash flow contributing to contributed capital and dividends. */
+/** An external/​income cash flow contributing to contributed capital and income. */
 export interface SeriesCashFlow {
-  type: 'deposit' | 'withdrawal' | 'dividend' | 'cash_in_lieu';
+  type: 'deposit' | 'withdrawal' | 'dividend' | 'cash_in_lieu' | 'interest';
   /** Net amount in `currency` (always positive; sign is implied by `type`). */
   amount: Decimal;
   currency: string;
@@ -85,7 +85,9 @@ export interface PerformancePoint {
   unrealized_pnl: string;
   /** Cumulative dividends/cash-in-lieu to date (value-date FX), reporting currency. */
   dividends: string;
-  /** realized + unrealized + dividends, reporting currency. */
+  /** Cumulative interest income to date (value-date FX), reporting currency. */
+  interest: string;
+  /** realized + unrealized + dividends + interest, reporting currency. */
   total_pnl: string;
   /** False when an open holding was unpriced or a needed FX rate was missing that day. */
   complete: boolean;
@@ -186,6 +188,7 @@ export function computePerformanceSeries(input: PerformanceSeriesInput): Perform
 
     let netContributed = new D(0);
     let dividends = new D(0);
+    let interest = new D(0);
     for (const flow of cashFlows) {
       if (flow.valueDate > date) continue;
       const converted = convertDated(flow.amount, flow.currency, flow.valueDate, date);
@@ -194,12 +197,13 @@ export function computePerformanceSeries(input: PerformanceSeriesInput): Perform
         continue;
       }
       if (INCOME_TYPES.has(flow.type)) dividends = dividends.plus(converted);
+      else if (flow.type === 'interest') interest = interest.plus(converted);
       else if (flow.type === 'deposit') netContributed = netContributed.plus(converted);
       else if (flow.type === 'withdrawal') netContributed = netContributed.minus(converted);
     }
 
     const unrealized = value.minus(invested);
-    const totalPnl = realized.plus(unrealized).plus(dividends);
+    const totalPnl = realized.plus(unrealized).plus(dividends).plus(interest);
 
     return {
       date,
@@ -209,6 +213,7 @@ export function computePerformanceSeries(input: PerformanceSeriesInput): Perform
       realized_pnl: realized.toFixed(2),
       unrealized_pnl: unrealized.toFixed(2),
       dividends: dividends.toFixed(2),
+      interest: interest.toFixed(2),
       total_pnl: totalPnl.toFixed(2),
       complete,
     };

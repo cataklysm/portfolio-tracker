@@ -1,7 +1,7 @@
 import type { Kysely } from 'kysely';
 import { sql } from 'kysely';
 import type { NotificationsDatabase } from '../../../platform/database/schema.js';
-import type { NewNotification, NotificationRepository, StoredNotification } from '../application/ports.js';
+import type { DueSnoozedNotification, NewNotification, NotificationRepository, StoredNotification } from '../application/ports.js';
 
 /** Kysely adapter for `notifications.notifications`. */
 export class KyselyNotificationRepository implements NotificationRepository {
@@ -29,7 +29,7 @@ export class KyselyNotificationRepository implements NotificationRepository {
   async getForUser(userId: string, id: string): Promise<StoredNotification | null> {
     const row = await this.db
       .selectFrom('notifications.notifications')
-      .select(['id', 'type', 'severity', 'title', 'body', 'instrument_id', 'listing_id', 'rule_id', 'data', 'read_at', 'created_at'])
+      .select(['id', 'type', 'severity', 'title', 'body', 'instrument_id', 'listing_id', 'rule_id', 'data', 'read_at', 'snoozed_until', 'created_at'])
       .where('user_id', '=', userId)
       .where('id', '=', id)
       .executeTakeFirst();
@@ -45,6 +45,7 @@ export class KyselyNotificationRepository implements NotificationRepository {
           rule_id: row.rule_id,
           data: row.data,
           read_at: toIso(row.read_at),
+          snoozed_until: toIso(row.snoozed_until),
           created_at: toIso(row.created_at) ?? new Date(0).toISOString(),
         }
       : null;
@@ -53,7 +54,7 @@ export class KyselyNotificationRepository implements NotificationRepository {
   async listForUser(userId: string, limit: number): Promise<StoredNotification[]> {
     const rows = await this.db
       .selectFrom('notifications.notifications')
-      .select(['id', 'type', 'severity', 'title', 'body', 'instrument_id', 'listing_id', 'rule_id', 'data', 'read_at', 'created_at'])
+      .select(['id', 'type', 'severity', 'title', 'body', 'instrument_id', 'listing_id', 'rule_id', 'data', 'read_at', 'snoozed_until', 'created_at'])
       .where('user_id', '=', userId)
       .orderBy('created_at', 'desc')
       .limit(limit)
@@ -69,6 +70,7 @@ export class KyselyNotificationRepository implements NotificationRepository {
       rule_id: row.rule_id,
       data: row.data,
       read_at: toIso(row.read_at),
+      snoozed_until: toIso(row.snoozed_until),
       created_at: toIso(row.created_at) ?? new Date(0).toISOString(),
     }));
   }
@@ -86,7 +88,7 @@ export class KyselyNotificationRepository implements NotificationRepository {
   async markRead(userId: string, id: string): Promise<boolean> {
     const result = await this.db
       .updateTable('notifications.notifications')
-      .set({ read_at: sql`coalesce(read_at, now())` })
+      .set({ read_at: sql`coalesce(read_at, now())`, snoozed_until: null })
       .where('id', '=', id)
       .where('user_id', '=', userId)
       .executeTakeFirst();
@@ -96,11 +98,44 @@ export class KyselyNotificationRepository implements NotificationRepository {
   async markAllRead(userId: string): Promise<number> {
     const result = await this.db
       .updateTable('notifications.notifications')
-      .set({ read_at: sql`now()` })
+      .set({ read_at: sql`now()`, snoozed_until: null })
       .where('user_id', '=', userId)
       .where('read_at', 'is', null)
       .executeTakeFirst();
     return Number(result.numUpdatedRows ?? 0n);
+  }
+
+  async snooze(userId: string, id: string, until: Date): Promise<boolean> {
+    const result = await this.db
+      .updateTable('notifications.notifications')
+      .set({ snoozed_until: until })
+      .where('id', '=', id)
+      .where('user_id', '=', userId)
+      .where('read_at', 'is', null)
+      .executeTakeFirst();
+    return (result.numUpdatedRows ?? 0n) > 0n;
+  }
+
+  async releaseDueSnoozed(now: Date, limit: number): Promise<DueSnoozedNotification[]> {
+    // Postgres has no UPDATE ... LIMIT, so bound the batch via a subquery of ids
+    // (oldest-due first) and update those rows.
+    const rows = await this.db
+      .updateTable('notifications.notifications')
+      .set({ snoozed_until: null })
+      .where('id', 'in', (qb) =>
+        qb
+          .selectFrom('notifications.notifications')
+          .select('id')
+          .where('read_at', 'is', null)
+          .where('snoozed_until', 'is not', null)
+          .where('snoozed_until', '<=', now)
+          .orderBy('snoozed_until')
+          .limit(limit),
+      )
+      .returning(['id', 'user_id', 'type'])
+      .execute();
+
+    return rows.map((row) => ({ id: row.id, userId: row.user_id, type: row.type }));
   }
 
   async deleteReadBefore(cutoff: Date): Promise<number> {

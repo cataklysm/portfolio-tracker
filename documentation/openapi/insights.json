@@ -48,6 +48,7 @@
                       "assumptions",
                       "effective_date",
                       "source",
+                      "superseded_at",
                       "created_at"
                     ],
                     "properties": {
@@ -94,6 +95,16 @@
                         "type": "string"
                       },
                       "source": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "superseded_at": {
                         "anyOf": [
                           {
                             "type": "string"
@@ -206,6 +217,7 @@
                         "assumptions",
                         "effective_date",
                         "source",
+                        "superseded_at",
                         "created_at"
                       ],
                       "properties": {
@@ -261,6 +273,16 @@
                             }
                           ]
                         },
+                        "superseded_at": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "created_at": {
                           "type": "string"
                         }
@@ -302,6 +324,116 @@
                       }
                     }
                   ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/fair-values/history": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "in": "query",
+            "name": "instrument_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "instrument_id",
+                      "user_id",
+                      "method",
+                      "value",
+                      "currency",
+                      "assumptions",
+                      "effective_date",
+                      "source",
+                      "superseded_at",
+                      "created_at"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "instrument_id": {
+                        "type": "string"
+                      },
+                      "user_id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "method": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "dcf"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "analyst"
+                            ]
+                          }
+                        ]
+                      },
+                      "value": {
+                        "type": "string"
+                      },
+                      "currency": {
+                        "type": "string"
+                      },
+                      "assumptions": {},
+                      "effective_date": {
+                        "type": "string"
+                      },
+                      "source": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "superseded_at": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "created_at": {
+                        "type": "string"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -389,6 +521,7 @@
                       "currency",
                       "effective_date",
                       "note",
+                      "superseded_at",
                       "created_at",
                       "updated_at"
                     ],
@@ -490,6 +623,16 @@
                         "type": "string"
                       },
                       "note": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "superseded_at": {
                         "anyOf": [
                           {
                             "type": "string"
@@ -601,6 +744,7 @@
                     "currency",
                     "effective_date",
                     "note",
+                    "superseded_at",
                     "created_at",
                     "updated_at"
                   ],
@@ -711,11 +855,191 @@
                         }
                       ]
                     },
+                    "superseded_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "created_at": {
                       "type": "string"
                     },
                     "updated_at": {
                       "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/price-targets/history": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "in": "query",
+            "name": "instrument_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "instrument_id",
+                      "listing_id",
+                      "user_id",
+                      "horizon",
+                      "source",
+                      "zone_low",
+                      "zone_high",
+                      "currency",
+                      "effective_date",
+                      "note",
+                      "superseded_at",
+                      "created_at",
+                      "updated_at"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "instrument_id": {
+                        "type": "string"
+                      },
+                      "listing_id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "user_id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "horizon": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "short"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "medium"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "long"
+                            ]
+                          }
+                        ]
+                      },
+                      "source": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "own"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "analyst"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "technical"
+                            ]
+                          }
+                        ]
+                      },
+                      "zone_low": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "zone_high": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "currency": {
+                        "type": "string"
+                      },
+                      "effective_date": {
+                        "type": "string"
+                      },
+                      "note": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "superseded_at": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "created_at": {
+                        "type": "string"
+                      },
+                      "updated_at": {
+                        "type": "string"
+                      }
                     }
                   }
                 }
@@ -814,6 +1138,7 @@
                     "currency",
                     "effective_date",
                     "note",
+                    "superseded_at",
                     "created_at",
                     "updated_at"
                   ],
@@ -915,6 +1240,16 @@
                       "type": "string"
                     },
                     "note": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "superseded_at": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -1017,6 +1352,7 @@
                       "currency",
                       "effective_date",
                       "note",
+                      "superseded_at",
                       "created_at",
                       "updated_at"
                     ],
@@ -1118,6 +1454,16 @@
                         "type": "string"
                       },
                       "note": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "superseded_at": {
                         "anyOf": [
                           {
                             "type": "string"

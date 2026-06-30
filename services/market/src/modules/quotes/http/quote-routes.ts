@@ -3,6 +3,7 @@ import { Type } from '@sinclair/typebox';
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import { AppError } from '@portfolio/platform';
 import type { QuoteService } from '../application/quote-service.js';
+import type { PriceRange } from '../application/ports.js';
 import type { AnalystService } from '../../analyst/index.js';
 
 const QuotesQuery = Type.Object({ listing_ids: Type.String({ minLength: 1 }) });
@@ -23,6 +24,9 @@ const RebuildBody = Type.Object({
   // Rebuild range start (the instrument's first-acquisition date). Omitted → a
   // short default window.
   from: Type.Optional(Type.String({ format: 'date' })),
+  // Also pull the current intraday session at full resolution after the daily
+  // rebuild (providers with an intraday feed only, e.g. lstc).
+  include_intraday: Type.Optional(Type.Boolean()),
   // Explicit confirmation — this purges the listings' entire stored price history.
   confirm: Type.Boolean(),
 });
@@ -30,6 +34,12 @@ const RebuildBody = Type.Object({
 const PurgeBody = Type.Object({
   listing_ids: Type.Array(Type.String({ format: 'uuid' }), { minItems: 1 }),
   // Explicit confirmation — this deletes the listings' entire stored price history.
+  confirm: Type.Boolean(),
+});
+
+const RebuildIntradayBody = Type.Object({
+  listing_ids: Type.Array(Type.String({ format: 'uuid' }), { minItems: 1 }),
+  // Explicit confirmation — this deletes the current day's stored quotes for these listings.
   confirm: Type.Boolean(),
 });
 
@@ -49,8 +59,26 @@ const QuoteViewSchema = Type.Object({
 
 const SeriesPointSchema = Type.Object({ time: Type.String(), price: Type.String(), volume: Ns });
 const DailyCloseSchema = Type.Object({ date: Type.String(), price: Type.String(), volume: Ns });
-const RebuildResponse = Type.Object({ purged: Type.Integer(), rebuilt: Type.Integer() });
+const PriceRangeSchema = Type.Object({ high: Ns, low: Ns, high_at: Ns, low_at: Ns });
+const PriceRangesSchema = Type.Object({
+  listing_id: Type.String(),
+  currency: Ns,
+  as_of: Type.String(),
+  ranges: Type.Object({
+    daily: PriceRangeSchema,
+    weekly: PriceRangeSchema,
+    monthly: PriceRangeSchema,
+    yearly: PriceRangeSchema,
+  }),
+});
+const RebuildResponse = Type.Object({
+  purged: Type.Integer(),
+  rebuilt: Type.Integer(),
+  // Listings whose current intraday session was restored (0 unless include_intraday).
+  intraday: Type.Integer(),
+});
 const PurgeResponse = Type.Object({ purged: Type.Integer() });
+const RebuildIntradayResponse = Type.Object({ purged: Type.Integer(), intraday: Type.Integer() });
 const RefreshedResponse = Type.Object({ refreshed: Type.Integer() });
 
 export interface QuoteRouteDeps {
@@ -88,6 +116,32 @@ export function registerQuoteRoutes(app: FastifyInstance, deps: QuoteRouteDeps):
     return deps.service.getDailyHistory(listingId, request.query.from, request.query.to);
   });
 
+  // Daily/weekly/monthly/yearly price extremes (high/low) for a listing, from
+  // stored quotes. `daily` is today's range (UTC calendar day); `weekly`/`monthly`/
+  // `yearly` are trailing windows ending now (yearly = the 52-week range). Serves
+  // stored data only; resolution follows what is stored (intraday or daily closes).
+  r.get('/quotes/:listingId/ranges', { preHandler: read, schema: { response: { 200: PriceRangesSchema } } }, async (request) => {
+    const { listingId } = request.params as { listingId: string };
+    const ranges = await deps.service.getPriceRanges(listingId);
+    const toRange = (r: PriceRange) => ({
+      high: r.high,
+      low: r.low,
+      high_at: r.highAt ? r.highAt.toISOString() : null,
+      low_at: r.lowAt ? r.lowAt.toISOString() : null,
+    });
+    return {
+      listing_id: listingId,
+      currency: ranges.currency,
+      as_of: ranges.asOf.toISOString(),
+      ranges: {
+        daily: toRange(ranges.daily),
+        weekly: toRange(ranges.weekly),
+        monthly: toRange(ranges.monthly),
+        yearly: toRange(ranges.yearly),
+      },
+    };
+  });
+
   // Admin: purge + rebuild a listing's stored price history from its currently
   // selected provider (after switching the quotes/chart provider). Destructive —
   // requires `confirm`. Gateway-exposed under `/quotes`, system:admin.
@@ -99,7 +153,9 @@ export function registerQuoteRoutes(app: FastifyInstance, deps: QuoteRouteDeps):
       );
     }
     const from = request.body.from ? new Date(request.body.from) : undefined;
-    return deps.service.purgeAndRebuild(request.body.listing_ids, from);
+    return deps.service.purgeAndRebuild(request.body.listing_ids, from, {
+      includeIntraday: request.body.include_intraday ?? false,
+    });
   });
 
   // Admin: purge a listing's stored price history without refetching it. Useful
@@ -114,6 +170,21 @@ export function registerQuoteRoutes(app: FastifyInstance, deps: QuoteRouteDeps):
     }
     const purged = await deps.service.purgeListings(request.body.listing_ids);
     return { purged };
+  });
+
+  // Admin: rebuild only the current intraday session — delete today's stored
+  // quotes for these listings (from the live session's first tick onward) and
+  // refetch the intraday feed. Leaves prior days' daily history intact. Destructive
+  // for the current day, so requires `confirm`. Providers without an intraday feed
+  // contribute nothing. Gateway-exposed under `/quotes`, system:admin.
+  r.post('/quotes/rebuild-intraday', { preHandler: admin, schema: { body: RebuildIntradayBody, response: { 200: RebuildIntradayResponse } } }, async (request) => {
+    if (!request.body.confirm) {
+      throw AppError.badRequest(
+        'confirmation_required',
+        "Rebuild-intraday deletes the current day's stored quotes; set confirm=true to proceed",
+      );
+    }
+    return deps.service.purgeAndRebuildIntraday(request.body.listing_ids);
   });
 
   // User-facing on-demand refresh: pull fresh quotes for specific listings now
@@ -152,7 +223,22 @@ export function registerQuoteRoutes(app: FastifyInstance, deps: QuoteRouteDeps):
       );
     }
     const from = request.body.from ? new Date(request.body.from) : undefined;
-    return deps.service.purgeAndRebuild(request.body.listing_ids, from);
+    return deps.service.purgeAndRebuild(request.body.listing_ids, from, {
+      includeIntraday: request.body.include_intraday ?? false,
+    });
+  });
+
+  // Internal: rebuild only the current intraday session (delete today's stored
+  // quotes from the live session's first tick onward, then refetch the intraday
+  // feed). Network/gateway restricted. Destructive for the current day — requires confirm.
+  r.post('/internal/quotes/rebuild-intraday', { schema: { body: RebuildIntradayBody, response: { 200: RebuildIntradayResponse } } }, async (request) => {
+    if (!request.body.confirm) {
+      throw AppError.badRequest(
+        'confirmation_required',
+        "Rebuild-intraday deletes the current day's stored quotes; set confirm=true to proceed",
+      );
+    }
+    return deps.service.purgeAndRebuildIntraday(request.body.listing_ids);
   });
 
   // Internal: purge stored price history without refetching. Network/gateway

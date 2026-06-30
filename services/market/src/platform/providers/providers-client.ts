@@ -84,6 +84,7 @@ export interface ProvidersProviderSettingsDto {
   maxBatchSize: number | null;
   rateLimitPerMin: number | null;
   maxConcurrency: number;
+  maxPerCycle: number | null;
 }
 
 export class ProvidersClient {

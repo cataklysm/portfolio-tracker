@@ -3,8 +3,8 @@ import { useActionState, useState, useTransition } from "react"
 import { createDcfFairValueAction, deleteFairValueAction } from "@/features/insights/actions"
 import { useLocale } from "@/lib/locale-context"
 import { useTranslations } from "@/lib/i18n"
-import { fmtCurrency, num } from "@/lib/format"
-import type { FairValueEstimate } from "@/lib/types"
+import { fmtPriceAmount, num } from "@/lib/format"
+import type { ConvertedFairValueEstimate } from "@/lib/types"
 
 const inputClass =
   "w-full rounded-md border border-[var(--app-border)] bg-[var(--app-surface-raised)] px-2.5 py-1.5 text-[12px] font-semibold text-[var(--app-text)] placeholder:text-[var(--app-text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--app-accent)]"
@@ -17,14 +17,15 @@ const ghostButtonClass =
   "rounded-md border border-[var(--app-border)] px-2 py-1 text-[11px] font-semibold text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text)] disabled:opacity-50"
 
 interface Props {
+  assetType: string
   detailContext: string
   instrumentId: string
   currency: string
   currentPrice: number | null
-  items: FairValueEstimate[]
+  items: ConvertedFairValueEstimate[]
 }
 
-export function FairValueSection({ detailContext, instrumentId, currency, currentPrice, items }: Props) {
+export function FairValueSection({ assetType, detailContext, instrumentId, currency, currentPrice, items }: Props) {
   const locale = useLocale()
   const t = useTranslations()
   const [open, setOpen] = useState(false)
@@ -40,7 +41,7 @@ export function FairValueSection({ detailContext, instrumentId, currency, curren
       ) : (
         <ul className="space-y-2">
           {items.map((fv) => (
-            <FairValueRow key={fv.id} fv={fv} detailContext={detailContext} currency={currency} currentPrice={currentPrice} locale={locale} />
+            <FairValueRow assetType={assetType} key={fv.id} fv={fv} detailContext={detailContext} currency={currency} currentPrice={currentPrice} locale={locale} />
           ))}
         </ul>
       )}
@@ -117,12 +118,14 @@ function Field({
 
 function FairValueRow({
   fv,
+  assetType,
   detailContext,
   currency,
   currentPrice,
   locale,
 }: {
-  fv: FairValueEstimate
+  fv: ConvertedFairValueEstimate
+  assetType: string
   detailContext: string
   currency: string
   currentPrice: number | null
@@ -131,10 +134,13 @@ function FairValueRow({
   const t = useTranslations()
   const [isDeleting, startDelete] = useTransition()
   const value = num(fv.value)
+  const displayValue = num(fv.display_value)
   const sameCcy = fv.currency === currency
-  const upside = value !== null && currentPrice && currentPrice > 0 && sameCcy ? ((value - currentPrice) / currentPrice) * 100 : null
+  const upside = displayValue !== null && currentPrice && currentPrice > 0 && fv.fx_status !== "unavailable" ? ((displayValue - currentPrice) / currentPrice) * 100 : null
   const isOwn = fv.user_id !== null
   const a = fv.assumptions
+  const valueLabel = displayValue !== null ? fmtPriceAmount(locale, displayValue, fv.display_currency, assetType) : value !== null ? fmtPriceAmount(locale, value, fv.currency, assetType) : "-"
+  const conversionNote = fv.fx_status === "converted" && value !== null ? `from ${fmtPriceAmount(locale, value, fv.currency, assetType)}` : null
 
   return (
     <li className="app-muted-panel flex items-center gap-3 rounded-lg px-3 py-2">
@@ -143,7 +149,7 @@ function FairValueRow({
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold tabular-nums text-[var(--app-text)]">
-          {value !== null ? fmtCurrency(locale, value, fv.currency) : "-"}
+          {valueLabel}
           {upside !== null && (
             <span className={`ml-2 text-xs font-medium ${upside >= 0 ? "text-[var(--app-positive)]" : "text-[var(--app-negative)]"}`}>
               {t("fairValue.upsideSuffix", { value: `${upside >= 0 ? "+" : ""}${upside.toFixed(1)}%` })}
@@ -152,6 +158,7 @@ function FairValueRow({
         </p>
         <p className="truncate text-[11px] text-[var(--app-text-faint)]">
           {fv.effective_date}
+          {conversionNote && <> - {conversionNote}</>}
           {a && fv.method === "dcf" && (
             <> - g {pct(a.growth_rate)} - disc {pct(a.discount_rate)} - {a.projection_years}y</>
           )}

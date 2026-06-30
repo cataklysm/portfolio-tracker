@@ -21,8 +21,22 @@ export class KyselyAssessmentRepository implements AssessmentRepository {
       .selectAll()
       .where('instrument_id', '=', instrumentId)
       .where((eb) => eb.or([eb('user_id', '=', userId), eb('user_id', 'is', null)]))
+      .where('superseded_at', 'is', null)
       .orderBy('effective_date', 'desc')
       .orderBy('created_at', 'desc')
+      .execute();
+    return rows.map(toFairValue);
+  }
+
+  async listAnalystFairValueHistory(instrumentId: string): Promise<FairValueRecord[]> {
+    const rows = await this.db
+      .selectFrom('insights.fair_value_estimates')
+      .selectAll()
+      .where('instrument_id', '=', instrumentId)
+      .where('method', '=', 'analyst')
+      .where('user_id', 'is', null)
+      .orderBy('effective_date', 'asc')
+      .orderBy('created_at', 'asc')
       .execute();
     return rows.map(toFairValue);
   }
@@ -59,13 +73,27 @@ export class KyselyAssessmentRepository implements AssessmentRepository {
       .selectFrom('insights.price_targets')
       .selectAll()
       .where('instrument_id', '=', instrumentId)
-      .where((eb) => eb.or([eb('user_id', '=', userId), eb('user_id', 'is', null)]));
+      .where((eb) => eb.or([eb('user_id', '=', userId), eb('user_id', 'is', null)]))
+      .where('superseded_at', 'is', null);
     // With a listing: instrument-wide targets (listing_id null) + that listing's;
     // other listings' targets are excluded.
     if (listingId) {
       query = query.where((eb) => eb.or([eb('listing_id', 'is', null), eb('listing_id', '=', listingId)]));
     }
     const rows = await query.orderBy('horizon').orderBy('updated_at', 'desc').execute();
+    return rows.map(toPriceTarget);
+  }
+
+  async listAnalystTargetHistory(instrumentId: string): Promise<PriceTargetRecord[]> {
+    const rows = await this.db
+      .selectFrom('insights.price_targets')
+      .selectAll()
+      .where('instrument_id', '=', instrumentId)
+      .where('source', '=', 'analyst')
+      .where('user_id', 'is', null)
+      .orderBy('effective_date', 'asc')
+      .orderBy('created_at', 'asc')
+      .execute();
     return rows.map(toPriceTarget);
   }
 
@@ -123,23 +151,91 @@ export class KyselyAssessmentRepository implements AssessmentRepository {
     return row ? toPriceTarget(row) : null;
   }
 
-  async deletePriceTarget(id: string, userId: string): Promise<boolean> {
-    const result = await this.db
-      .deleteFrom('insights.price_targets')
-      .where('id', '=', id)
-      .where('user_id', '=', userId)
-      .executeTakeFirst();
-    return (result.numDeletedRows ?? 0n) > 0n;
+  async deletePriceTarget(id: string, userId: string, canDeleteGlobalAnalyst = false): Promise<boolean> {
+    return this.db.transaction().execute(async (trx) => {
+      const ownResult = await trx
+        .deleteFrom('insights.price_targets')
+        .where('id', '=', id)
+        .where('user_id', '=', userId)
+        .executeTakeFirst();
+      if ((ownResult.numDeletedRows ?? 0n) > 0n) return true;
+
+      if (!canDeleteGlobalAnalyst) return false;
+
+      const target = await trx
+        .selectFrom('insights.price_targets')
+        .select(['instrument_id'])
+        .where('id', '=', id)
+        .where('source', '=', 'analyst')
+        .where('user_id', 'is', null)
+        .executeTakeFirst();
+      if (!target) return false;
+
+      const globalResult = await trx
+        .deleteFrom('insights.price_targets')
+        .where('id', '=', id)
+        .where('source', '=', 'analyst')
+        .where('user_id', 'is', null)
+        .executeTakeFirst();
+      if ((globalResult.numDeletedRows ?? 0n) === 0n) return false;
+
+      await trx
+        .insertInto('insights.suppressed_analyst_price_targets')
+        .values({
+          instrument_id: target.instrument_id,
+          deleted_by: userId,
+        })
+        .onConflict((oc) => oc.column('instrument_id').doUpdateSet({ deleted_by: userId, deleted_at: new Date() }))
+        .execute();
+
+      return true;
+    });
   }
 
-  async replaceGlobalAnalystTarget(input: GlobalAnalystTarget): Promise<void> {
+  async ingestGlobalAnalystTarget(input: GlobalAnalystTarget): Promise<void> {
     await this.db.transaction().execute(async (trx) => {
-      await trx
-        .deleteFrom('insights.price_targets')
+      const suppressed = await trx
+        .selectFrom('insights.suppressed_analyst_price_targets')
+        .select('instrument_id')
+        .where('instrument_id', '=', input.instrumentId)
+        .executeTakeFirst();
+      if (suppressed) return;
+
+      const current = await trx
+        .selectFrom('insights.price_targets')
+        .select(['id', 'zone_low', 'zone_high', 'currency', 'note'])
         .where('instrument_id', '=', input.instrumentId)
         .where('source', '=', 'analyst')
         .where('user_id', 'is', null)
-        .execute();
+        .where('superseded_at', 'is', null)
+        .executeTakeFirst();
+
+      // Unchanged zone → keep the current row (and its effective_date); only
+      // refresh the note in place so "N analysts / recommendation" stays current.
+      if (
+        current &&
+        numEq(current.zone_low, input.zoneLow) &&
+        numEq(current.zone_high, input.zoneHigh) &&
+        current.currency === input.currency
+      ) {
+        if ((current.note ?? null) !== (input.note ?? null)) {
+          await trx
+            .updateTable('insights.price_targets')
+            .set({ note: input.note, updated_at: new Date() })
+            .where('id', '=', current.id)
+            .execute();
+        }
+        return;
+      }
+
+      // Changed (or new): supersede the current row and insert a new current one.
+      if (current) {
+        await trx
+          .updateTable('insights.price_targets')
+          .set({ superseded_at: new Date() })
+          .where('id', '=', current.id)
+          .execute();
+      }
       await trx
         .insertInto('insights.price_targets')
         .values({
@@ -157,14 +253,27 @@ export class KyselyAssessmentRepository implements AssessmentRepository {
     });
   }
 
-  async replaceGlobalAnalystFairValue(input: GlobalAnalystFairValue): Promise<void> {
+  async ingestGlobalAnalystFairValue(input: GlobalAnalystFairValue): Promise<void> {
     await this.db.transaction().execute(async (trx) => {
-      await trx
-        .deleteFrom('insights.fair_value_estimates')
+      const current = await trx
+        .selectFrom('insights.fair_value_estimates')
+        .select(['id', 'value', 'currency'])
         .where('instrument_id', '=', input.instrumentId)
         .where('method', '=', 'analyst')
         .where('user_id', 'is', null)
-        .execute();
+        .where('superseded_at', 'is', null)
+        .executeTakeFirst();
+
+      // Unchanged value → no-op, preserving the original effective_date.
+      if (current && numEq(current.value, input.value) && current.currency === input.currency) return;
+
+      if (current) {
+        await trx
+          .updateTable('insights.fair_value_estimates')
+          .set({ superseded_at: new Date() })
+          .where('id', '=', current.id)
+          .execute();
+      }
       await trx
         .insertInto('insights.fair_value_estimates')
         .values({
@@ -179,6 +288,12 @@ export class KyselyAssessmentRepository implements AssessmentRepository {
         .execute();
     });
   }
+}
+
+/** Numeric equality for decimal-string columns ("150" == "150.000000000000"). */
+function numEq(a: string | null, b: string | null): boolean {
+  if (a === null || b === null) return a === b;
+  return Number(a) === Number(b);
 }
 
 /** A timestamptz column (Date) → ISO string. */
@@ -201,6 +316,7 @@ function toFairValue(row: {
   assumptions: unknown;
   effective_date: Date;
   source: string | null;
+  superseded_at: Date | null;
   created_at: Date;
 }): FairValueRecord {
   return {
@@ -213,6 +329,7 @@ function toFairValue(row: {
     assumptions: row.assumptions,
     effective_date: dateOnly(row.effective_date),
     source: row.source,
+    superseded_at: row.superseded_at ? iso(row.superseded_at) : null,
     created_at: iso(row.created_at),
   };
 }
@@ -229,6 +346,7 @@ function toPriceTarget(row: {
   currency: string;
   effective_date: Date;
   note: string | null;
+  superseded_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }): PriceTargetRecord {
@@ -244,6 +362,7 @@ function toPriceTarget(row: {
     currency: row.currency,
     effective_date: dateOnly(row.effective_date),
     note: row.note,
+    superseded_at: row.superseded_at ? iso(row.superseded_at) : null,
     created_at: iso(row.created_at),
     updated_at: iso(row.updated_at),
   };

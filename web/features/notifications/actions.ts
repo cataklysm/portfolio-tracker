@@ -43,7 +43,8 @@ export async function createAssetAlertAction(
       params = { direction: formData.get("direction"), threshold_pct: numberValue("threshold_pct") }
       break
     case "target_zone":
-      params = {}
+      if (!formData.get("target_id")) return "Pick a target zone."
+      params = { target_id: formData.get("target_id") }
       break
     default:
       return "Unknown alert type."
@@ -56,7 +57,6 @@ export async function createAssetAlertAction(
     listing_id: listingId,
     params,
     notify_once: repeat.notifyOnce,
-    remind_after_minutes: repeat.remindAfterMinutes,
   }
   const label = (formData.get("label") as string)?.trim()
   if (label) body.label = label

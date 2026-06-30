@@ -32,8 +32,6 @@ const CreateRuleBody = Type.Object({
   label: Type.Optional(Type.String({ maxLength: 100 })),
   // Defaults to true (fire once then disable); set false for a recurring alert.
   notify_once: Type.Optional(Type.Boolean()),
-  // "Remind me later" cooldown in minutes (5..1440) for recurring rules; null = none.
-  remind_after_minutes: Type.Optional(Type.Union([Type.Integer({ minimum: 5, maximum: 1440 }), Type.Null()])),
 });
 
 const UpdateRuleBody = Type.Object({
@@ -41,7 +39,6 @@ const UpdateRuleBody = Type.Object({
   label: Type.Optional(Type.Union([Type.String({ maxLength: 100 }), Type.Null()])),
   enabled: Type.Optional(Type.Boolean()),
   notify_once: Type.Optional(Type.Boolean()),
-  remind_after_minutes: Type.Optional(Type.Union([Type.Integer({ minimum: 5, maximum: 1440 }), Type.Null()])),
 });
 
 const StoredNotificationSchema = Type.Object({
@@ -61,6 +58,7 @@ const StoredNotificationSchema = Type.Object({
   rule_id: Type.Union([Type.String(), Type.Null()]),
   data: Type.Unknown(),
   read_at: Type.Union([Type.String(), Type.Null()]),
+  snoozed_until: Type.Union([Type.String(), Type.Null()]),
   created_at: Type.String(),
 });
 
@@ -79,13 +77,13 @@ const AlertRuleSchema = Type.Object({
   label: Type.Union([Type.String(), Type.Null()]),
   enabled: Type.Boolean(),
   notify_once: Type.Boolean(),
-  remind_after_minutes: Type.Union([Type.Integer(), Type.Null()]),
   created_at: Type.String(),
   updated_at: Type.String(),
 });
 
 const OkResponse = Type.Object({ ok: Type.Literal(true) });
 const MarkedResponse = Type.Object({ marked: Type.Integer() });
+const SnoozeBody = Type.Object({ minutes: Type.Integer({ minimum: 5, maximum: 1440 }) });
 
 const PublicKeyResponse = Type.Object({ public_key: Type.Union([Type.String(), Type.Null()]) });
 const PushSubscriptionBody = Type.Object({
@@ -163,6 +161,10 @@ export function registerNotificationRoutes(app: FastifyInstance, deps: Notificat
     await deps.service.markRead(uid(request), (request.params as { id: string }).id);
     return { ok: true as const };
   });
+  r.post('/notifications/:id/snooze', { preHandler: read, schema: { body: SnoozeBody, response: { 200: OkResponse } } }, async (request) => {
+    await deps.service.snooze(uid(request), (request.params as { id: string }).id, request.body.minutes);
+    return { ok: true as const };
+  });
   r.post('/notifications/read-all', { preHandler: read, schema: { response: { 200: MarkedResponse } } }, async (request) => {
     const marked = await deps.service.markAllRead(uid(request));
     return { marked };
@@ -181,7 +183,6 @@ export function registerNotificationRoutes(app: FastifyInstance, deps: Notificat
       params: request.body.params,
       label: request.body.label ?? null,
       notifyOnce: request.body.notify_once,
-      remindAfterMinutes: request.body.remind_after_minutes ?? null,
     });
     reply.code(201);
     return rule;
@@ -193,7 +194,6 @@ export function registerNotificationRoutes(app: FastifyInstance, deps: Notificat
       label: request.body.label,
       enabled: request.body.enabled,
       notifyOnce: request.body.notify_once,
-      remindAfterMinutes: request.body.remind_after_minutes,
     }),
   );
 
@@ -223,7 +223,7 @@ export function registerNotificationRoutes(app: FastifyInstance, deps: Notificat
     return { ok: true as const };
   });
 
-  // Remove this client's push subscription. `:id` is sha256(endpoint) hex — the
+  // Remove this client's push subscription. `:id` is sha256(endpoint) hex, the
   // deterministic handle the client computes, so the endpoint URL stays out of
   // the request URL and logs.
   r.delete('/notifications/push/subscriptions/:id', { preHandler: write, schema: { params: PushSubscriptionParams, response: { 200: OkResponse } } }, async (request) => {

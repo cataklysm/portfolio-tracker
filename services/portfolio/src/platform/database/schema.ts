@@ -71,7 +71,7 @@ export interface CashFlowsTable {
   position_id: string | null;
   corporate_action_id: string | null;
   corporate_action_application_id: string | null;
-  type: 'dividend' | 'deposit' | 'withdrawal' | 'cash_in_lieu';
+  type: 'dividend' | 'deposit' | 'withdrawal' | 'cash_in_lieu' | 'interest';
   gross_amount: Numeric;
   withholding_tax: ColumnType<string, string | number | undefined, string | number>;
   fee: ColumnType<string, string | number | undefined, string | number>;
@@ -80,6 +80,13 @@ export interface CashFlowsTable {
   payment_date: ColumnType<string, string, string>;
   tax_relevant_value_date: ColumnType<string, string, string>;
   note: string | null;
+  source_event_id: string | null;
+  source_event_version: number | null;
+  source_event_type: string | null;
+  ex_date: ColumnType<string | null, string | null | undefined, string | null>;
+  amount_per_share: Numeric | null;
+  quantity_at_ex_date: Numeric | null;
+  expected_gross_amount: Numeric | null;
   source: ColumnType<BookingSource, BookingSource | undefined, BookingSource>;
   created_at: Generated<Date>;
   updated_at: Timestamp;
@@ -94,9 +101,9 @@ export interface TaxEventsTable {
   currency: string;
   booking_date: ColumnType<string, string, string>;
   source: ColumnType<
-    'manual' | 'import' | 'broker_api' | 'provider' | 'corporate_action',
-    'manual' | 'import' | 'broker_api' | 'provider' | 'corporate_action' | undefined,
-    'manual' | 'import' | 'broker_api' | 'provider' | 'corporate_action'
+    'manual' | 'import' | 'broker_api' | 'provider' | 'corporate_action' | 'income_booking',
+    'manual' | 'import' | 'broker_api' | 'provider' | 'corporate_action' | 'income_booking' | undefined,
+    'manual' | 'import' | 'broker_api' | 'provider' | 'corporate_action' | 'income_booking'
   >;
   note: string | null;
   transaction_id: string | null;

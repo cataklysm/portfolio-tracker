@@ -157,9 +157,7 @@ export function AssetTransactionsTable({
                       >
                         <ChevronIcon collapsed={collapsed} />
                       </button>
-                    ) : (
-                      <span className="mr-2 inline-flex h-7 w-7" />
-                    )}
+                    ) : null}
                     {formatDate(locale, transaction.effective_at)}
                   </td>
                   <td className="px-3 py-2.5">

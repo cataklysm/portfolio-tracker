@@ -26,7 +26,7 @@ export function ReportsOverview({ summary, holdings, allocation, locale }: Props
         <Metric label="Current value" value={money(summary.current_value, locale, currency)} sub={`${summary.counts.open} open holdings`} />
         <Metric label="Total P&L" value={signedMoney(summary.total_pnl, locale, currency)} sub={summary.total_return_pct ? `${fmtPct(num(summary.total_return_pct) ?? 0)} total return` : "Return unavailable"} tone={tone(totalPnl)} />
         <Metric label="Today" value={signedMoney(summary.daily_change_amount, locale, currency)} sub={summary.daily_change_pct ? fmtPct(num(summary.daily_change_pct) ?? 0) : "Daily percentage unavailable"} tone={tone(daily)} />
-        <Metric label="Income received" value={money(summary.dividends, locale, currency)} sub={`${money(summary.fees, locale, currency)} total fees`} />
+        <Metric label="Income received" value={money(summary.income_net, locale, currency)} sub={`${money(summary.income_gross, locale, currency)} gross income`} />
       </section>
 
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -57,7 +57,10 @@ function SummaryDetails({ summary, locale }: { summary: PortfolioReportSummary; 
         <Detail label="Invested capital" value={money(summary.invested_capital, locale, currency)} />
         <Detail label="Unrealized P&L" value={signedMoney(summary.unrealized_pnl, locale, currency)} valueTone={tone(num(summary.unrealized_pnl) ?? 0)} />
         <Detail label="Realized P&L" value={signedMoney(summary.realized_pnl, locale, currency)} valueTone={tone(num(summary.realized_pnl) ?? 0)} />
-        <Detail label="Dividends" value={money(summary.dividends, locale, currency)} />
+        <Detail label="Dividends" value={money(summary.dividends_net, locale, currency)} />
+        <Detail label="Cash in lieu" value={money(summary.cash_in_lieu_net, locale, currency)} />
+        <Detail label="Interest" value={money(summary.interest_net, locale, currency)} />
+        <Detail label="Income tax" value={money(summary.income_tax, locale, currency)} />
         <Detail label="Fees" value={money(summary.fees, locale, currency)} />
         <Detail label="Open-position return" value={summary.simple_return_pct ? fmtPct(num(summary.simple_return_pct) ?? 0) : "—"} valueTone={summary.simple_return_pct ? tone(num(summary.simple_return_pct) ?? 0) : undefined} />
       </div>

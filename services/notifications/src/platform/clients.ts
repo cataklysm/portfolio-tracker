@@ -31,6 +31,7 @@ async function getJson<T>(url: URL, logger: Logger, timeoutMs = 4000): Promise<T
 
 export interface ResolvedListing {
   instrumentId: string;
+  name: string;
   currency: string;
   symbol: string;
 }
@@ -38,6 +39,7 @@ export interface ResolvedListing {
 interface ResolveItem {
   listing_id: string;
   instrument_id: string;
+  name: string;
   symbol: string;
   currency: string;
   provider_identifier: string | null;
@@ -58,6 +60,7 @@ export class ListingResolverClient {
     for (const item of items ?? []) {
       out.set(item.listing_id, {
         instrumentId: item.instrument_id,
+        name: item.name,
         currency: item.currency,
         symbol: item.symbol,
       });

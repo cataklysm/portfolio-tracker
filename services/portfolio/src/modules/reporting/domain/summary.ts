@@ -24,7 +24,20 @@ export interface PortfolioSummary {
   daily_change_pct: string | null;
   realized_pnl: string;
   unrealized_pnl: string;
+  /** Net dividend income (dividends + cash-in-lieu), reporting currency. Back-compat. */
   dividends: string;
+  /** Net dividend-only income, reporting currency. */
+  dividends_net: string;
+  /** Net cash-in-lieu income, reporting currency. */
+  cash_in_lieu_net: string;
+  /** Net interest income, reporting currency. */
+  interest_net: string;
+  /** Total net income (dividends + cash-in-lieu + interest), reporting currency. */
+  income_net: string;
+  /** Total gross income before fees and withheld tax, reporting currency. */
+  income_gross: string;
+  /** Total tax withheld on income (denormalized from the cash flows), reporting currency. */
+  income_tax: string;
   fees: string;
   total_pnl: string;
   /** Unrealized P&L over invested capital. */
@@ -38,12 +51,13 @@ export interface PortfolioSummary {
  * Aggregates per-position reporting-currency figures into one authoritative
  * portfolio snapshot. Percentages are derived from summed cash amounts and their
  * denominators — never by averaging position percentages. Realized P&L and fees
- * are already historical-FX converted by the position calculation; dividends are
- * passed in pre-converted to the reporting currency.
+ * are already historical-FX converted by the position calculation; income
+ * (dividends, cash-in-lieu, interest) is passed in pre-converted to the reporting
+ * currency, split so the back-compat `dividends` field excludes interest.
  */
 export function computeSummary(
   views: PositionView[],
-  dividends: { amount: Decimal; complete: boolean },
+  income: { dividends: Decimal; cashInLieu: Decimal; interest: Decimal; gross: Decimal; tax: Decimal; complete: boolean },
   reportingCurrency: string,
   snapshotAt: string,
   preferredHeadlineMetric: string | null,
@@ -83,7 +97,9 @@ export function computeSummary(
     daily = daily.plus(D(p.daily_change_amount_reporting) ?? 0);
   }
 
-  const totalPnl = realized.plus(unrealized).plus(dividends.amount);
+  const dividendsTotal = income.dividends.plus(income.cashInLieu);
+  const incomeNet = dividendsTotal.plus(income.interest);
+  const totalPnl = realized.plus(unrealized).plus(incomeNet);
   const priorValue = currentValue.minus(daily);
   const dailyPct = priorValue.gt(0) ? daily.div(priorValue).times(100) : null;
   const simpleReturn = invested.gt(0) ? unrealized.div(invested).times(100) : null;
@@ -93,14 +109,20 @@ export function computeSummary(
     snapshot_at: snapshotAt,
     reporting_currency: reportingCurrency,
     preferred_headline_metric: preferredHeadlineMetric,
-    completeness: priced && dividends.complete ? 'complete' : 'partial',
+    completeness: priced && income.complete ? 'complete' : 'partial',
     current_value: currentValue.toFixed(2),
     invested_capital: invested.toFixed(2),
     daily_change_amount: daily.toFixed(2),
     daily_change_pct: dailyPct ? dailyPct.toFixed(2) : null,
     realized_pnl: realized.toFixed(2),
     unrealized_pnl: unrealized.toFixed(2),
-    dividends: dividends.amount.toFixed(2),
+    dividends: dividendsTotal.toFixed(2),
+    dividends_net: income.dividends.toFixed(2),
+    cash_in_lieu_net: income.cashInLieu.toFixed(2),
+    interest_net: income.interest.toFixed(2),
+    income_net: incomeNet.toFixed(2),
+    income_gross: income.gross.toFixed(2),
+    income_tax: income.tax.toFixed(2),
     fees: fees.toFixed(2),
     total_pnl: totalPnl.toFixed(2),
     simple_return_pct: simpleReturn ? simpleReturn.toFixed(2) : null,

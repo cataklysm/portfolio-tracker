@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useEffect, useMemo, useState, useTransition } from "react"
+import { Fragment, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import {
   Autocomplete,
@@ -38,6 +38,7 @@ import {
   listAdminSymbolsAction,
   listAdminSymbolEditMetadataAction,
   purgeAdminSymbolQuotesAction,
+  rebuildAdminSymbolIntradayQuotesAction,
   rebuildAdminSymbolQuotesAction,
   searchProviderSymbolsAction,
   updateAdminSymbolAction,
@@ -97,6 +98,7 @@ export function SymbolsAdministration({
   const [editProviders, setEditProviders] = useState(providers)
   const [editMetadataLoaded, setEditMetadataLoaded] = useState(exchanges.length > 0 && providers.length > 0)
   const [editMetadataLoading, setEditMetadataLoading] = useState(false)
+  const editMetadataRequestInFlight = useRef(false)
   const [query, setQuery] = useState("")
   const [activeTab, setActiveTab] = useState<SymbolTab>("equity")
   const [page, setPage] = useState(1)
@@ -156,6 +158,11 @@ export function SymbolsAdministration({
     return () => { active = false }
   }, [activeTab, page, searchTerm])
 
+  useEffect(() => {
+    if (!showAdd && !editing) return
+    void ensureEditMetadata()
+  }, [editing, showAdd])
+
   function run(action: () => Promise<string | null>, success: string) {
     startTransition(async () => {
       const error = await action()
@@ -177,16 +184,21 @@ export function SymbolsAdministration({
   }
 
   async function ensureEditMetadata() {
-    if (editMetadataLoaded || editMetadataLoading) return
+    if (editMetadataLoaded || editMetadataRequestInFlight.current) return
+    editMetadataRequestInFlight.current = true
     setEditMetadataLoading(true)
-    const result = await listAdminSymbolEditMetadataAction()
-    if (result.error) showToast({ severity: "error", message: result.error })
-    else {
-      setEditExchanges(result.exchanges)
-      setEditProviders(result.providers)
-      setEditMetadataLoaded(true)
+    try {
+      const result = await listAdminSymbolEditMetadataAction()
+      if (result.error) showToast({ severity: "error", message: result.error })
+      else {
+        setEditExchanges(result.exchanges)
+        setEditProviders(result.providers)
+        setEditMetadataLoaded(true)
+      }
+    } finally {
+      editMetadataRequestInFlight.current = false
+      setEditMetadataLoading(false)
     }
-    setEditMetadataLoading(false)
   }
 
   return (
@@ -207,7 +219,6 @@ export function SymbolsAdministration({
         defaultTabValue="equity"
         onAdd={() => {
           setShowAdd(true)
-          void ensureEditMetadata()
         }}
         onSearchChange={setQuery}
         onTabChange={setActiveTab}
@@ -234,14 +245,14 @@ export function SymbolsAdministration({
         </Stack>
 
         <TableContainer>
-          <Table size="small" sx={{ minWidth: 900 }}>
+          <Table size="small" sx={{ minWidth: 900, tableLayout: "fixed" }}>
             <TableHead sx={tableHeadSx}>
               <TableRow>
                 <TableCell>Instrument</TableCell>
                 <TableCell align="right" sx={{ width: 140 }}>Listing</TableCell>
                 <TableCell align="right" sx={{ width: 100 }}>Providers</TableCell>
                 <TableCell align="right" sx={{ width: 96 }}>Usage</TableCell>
-                <TableCell align="right">Actions</TableCell>
+                <TableCell align="right" sx={{ width: 176 }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -262,9 +273,7 @@ export function SymbolsAdministration({
                     hover
                     onClick={() => {
                       setEditing((currentSymbol) => {
-                        const nextSymbol = currentSymbol?.id === symbol.id ? null : symbol
-                        if (nextSymbol) void ensureEditMetadata()
-                        return nextSymbol
+                        return currentSymbol?.id === symbol.id ? null : symbol
                       })
                     }}
                     aria-selected={editing?.id === symbol.id}
@@ -288,7 +297,7 @@ export function SymbolsAdministration({
                     <TableCell align="right" sx={{ width: 96 }}>
                       <AppBadge label={symbol.in_use ? "In use" : "Unused"} kind="status" tone={symbol.in_use ? "success" : "neutral"} />
                     </TableCell>
-                    <TableCell align="right" sx={{ width: 132 }}>
+                    <TableCell align="right" sx={{ width: 176 }}>
                       <Stack direction="row" spacing={0.5} sx={{ justifyContent: "flex-end" }}>
                         <Tooltip title="Purge quote history">
                           <IconButton
@@ -323,6 +332,24 @@ export function SymbolsAdministration({
                             <RebuildIcon />
                           </IconButton>
                         </Tooltip>
+                        <Tooltip title="Rebuild today's intraday quotes">
+                          <IconButton
+                            aria-label={`Rebuild intraday quotes for ${symbol.symbol}`}
+                            color="primary"
+                            size="small"
+                            disabled={pending}
+                            sx={appIconButtonSx("accent")}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              run(
+                                () => rebuildAdminSymbolIntradayQuotesAction(symbol.id),
+                                `${symbol.instrument_name} intraday quotes rebuilt.`,
+                              )
+                            }}
+                          >
+                            <RebuildIntradayIcon />
+                          </IconButton>
+                        </Tooltip>
                         <Tooltip title={symbol.in_use ? "Remove positions and watchlist entries first" : "Remove unused symbol"}>
                           <span>
                             <IconButton
@@ -346,8 +373,8 @@ export function SymbolsAdministration({
                   {editing?.id === symbol.id ? (
                     <InlineSymbolEditor
                       exchanges={editExchanges}
-                  metadataLoading={editMetadataLoading && !editMetadataLoaded}
-                  providers={symbolProviders}
+                      metadataLoading={editMetadataLoading && !editMetadataLoaded}
+                      providers={symbolProviders}
                       symbol={symbol}
                       pending={pending}
                       onClose={() => setEditing(null)}
@@ -949,6 +976,10 @@ function PurgeIcon() {
 
 function RebuildIcon() {
   return <AppIcon className="h-4 w-4" name="rebuild" strokeWidth={1.7} />
+}
+
+function RebuildIntradayIcon() {
+  return <AppIcon className="h-4 w-4" name="rebuildIntraday" strokeWidth={1.7} />
 }
 
 function TrashIcon() {

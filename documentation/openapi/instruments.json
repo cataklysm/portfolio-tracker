@@ -1859,6 +1859,7 @@
                     "required": [
                       "listing_id",
                       "instrument_id",
+                      "name",
                       "symbol",
                       "currency",
                       "provider_identifier"
@@ -1868,6 +1869,9 @@
                         "type": "string"
                       },
                       "instrument_id": {
+                        "type": "string"
+                      },
+                      "name": {
                         "type": "string"
                       },
                       "symbol": {

@@ -286,6 +286,271 @@
         }
       }
     },
+    "/quotes/{listingId}/ranges": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "listingId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "listing_id",
+                    "currency",
+                    "as_of",
+                    "ranges"
+                  ],
+                  "properties": {
+                    "listing_id": {
+                      "type": "string"
+                    },
+                    "currency": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "as_of": {
+                      "type": "string"
+                    },
+                    "ranges": {
+                      "type": "object",
+                      "required": [
+                        "daily",
+                        "weekly",
+                        "monthly",
+                        "yearly"
+                      ],
+                      "properties": {
+                        "daily": {
+                          "type": "object",
+                          "required": [
+                            "high",
+                            "low",
+                            "high_at",
+                            "low_at"
+                          ],
+                          "properties": {
+                            "high": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "low": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "high_at": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "low_at": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "weekly": {
+                          "type": "object",
+                          "required": [
+                            "high",
+                            "low",
+                            "high_at",
+                            "low_at"
+                          ],
+                          "properties": {
+                            "high": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "low": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "high_at": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "low_at": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "monthly": {
+                          "type": "object",
+                          "required": [
+                            "high",
+                            "low",
+                            "high_at",
+                            "low_at"
+                          ],
+                          "properties": {
+                            "high": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "low": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "high_at": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "low_at": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "yearly": {
+                          "type": "object",
+                          "required": [
+                            "high",
+                            "low",
+                            "high_at",
+                            "low_at"
+                          ],
+                          "properties": {
+                            "high": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "low": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "high_at": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "low_at": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/quotes/rebuild": {
       "post": {
         "requestBody": {
@@ -311,6 +576,9 @@
                     "format": "date",
                     "type": "string"
                   },
+                  "include_intraday": {
+                    "type": "boolean"
+                  },
                   "confirm": {
                     "type": "boolean"
                   }
@@ -328,13 +596,17 @@
                   "type": "object",
                   "required": [
                     "purged",
-                    "rebuilt"
+                    "rebuilt",
+                    "intraday"
                   ],
                   "properties": {
                     "purged": {
                       "type": "integer"
                     },
                     "rebuilt": {
+                      "type": "integer"
+                    },
+                    "intraday": {
                       "type": "integer"
                     }
                   }
@@ -386,6 +658,61 @@
                   ],
                   "properties": {
                     "purged": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/quotes/rebuild-intraday": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "listing_ids",
+                  "confirm"
+                ],
+                "properties": {
+                  "listing_ids": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "format": "uuid",
+                      "type": "string"
+                    }
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "purged",
+                    "intraday"
+                  ],
+                  "properties": {
+                    "purged": {
+                      "type": "integer"
+                    },
+                    "intraday": {
                       "type": "integer"
                     }
                   }
@@ -661,6 +988,9 @@
                     "format": "date",
                     "type": "string"
                   },
+                  "include_intraday": {
+                    "type": "boolean"
+                  },
                   "confirm": {
                     "type": "boolean"
                   }
@@ -678,13 +1008,72 @@
                   "type": "object",
                   "required": [
                     "purged",
-                    "rebuilt"
+                    "rebuilt",
+                    "intraday"
                   ],
                   "properties": {
                     "purged": {
                       "type": "integer"
                     },
                     "rebuilt": {
+                      "type": "integer"
+                    },
+                    "intraday": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/quotes/rebuild-intraday": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "listing_ids",
+                  "confirm"
+                ],
+                "properties": {
+                  "listing_ids": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "format": "uuid",
+                      "type": "string"
+                    }
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "purged",
+                    "intraday"
+                  ],
+                  "properties": {
+                    "purged": {
+                      "type": "integer"
+                    },
+                    "intraday": {
                       "type": "integer"
                     }
                   }

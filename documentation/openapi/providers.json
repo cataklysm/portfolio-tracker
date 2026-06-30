@@ -63,7 +63,8 @@
                           "capabilityQuality",
                           "maxBatchSize",
                           "rateLimitPerMin",
-                          "maxConcurrency"
+                          "maxConcurrency",
+                          "maxPerCycle"
                         ],
                         "properties": {
                           "provider": {
@@ -169,6 +170,16 @@
                           },
                           "maxConcurrency": {
                             "type": "integer"
+                          },
+                          "maxPerCycle": {
+                            "anyOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       }
@@ -264,7 +275,8 @@
                           "capabilityQuality",
                           "maxBatchSize",
                           "rateLimitPerMin",
-                          "maxConcurrency"
+                          "maxConcurrency",
+                          "maxPerCycle"
                         ],
                         "properties": {
                           "provider": {
@@ -370,6 +382,16 @@
                           },
                           "maxConcurrency": {
                             "type": "integer"
+                          },
+                          "maxPerCycle": {
+                            "anyOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       }
@@ -818,6 +840,17 @@
                   "max_concurrency": {
                     "minimum": 1,
                     "type": "integer"
+                  },
+                  "max_per_cycle": {
+                    "anyOf": [
+                      {
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 }
               }
@@ -849,7 +882,8 @@
                     "capabilityQuality",
                     "maxBatchSize",
                     "rateLimitPerMin",
-                    "maxConcurrency"
+                    "maxConcurrency",
+                    "maxPerCycle"
                   ],
                   "properties": {
                     "provider": {
@@ -955,6 +989,16 @@
                     },
                     "maxConcurrency": {
                       "type": "integer"
+                    },
+                    "maxPerCycle": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   }
                 }

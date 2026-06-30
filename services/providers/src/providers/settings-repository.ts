@@ -39,6 +39,7 @@ export class ProviderSettingsRepository {
     if (patch.maxBatchSize !== undefined) values.max_batch_size = patch.maxBatchSize;
     if (patch.rateLimitPerMin !== undefined) values.rate_limit_per_min = patch.rateLimitPerMin;
     if (patch.maxConcurrency !== undefined) values.max_concurrency = patch.maxConcurrency;
+    if (patch.maxPerCycle !== undefined) values.max_per_cycle = patch.maxPerCycle;
     await this.db
       .updateTable('providers.provider_settings')
       .set(values)
@@ -58,5 +59,6 @@ function toSettings(r: Selectable<ProviderSettingsTable>): ProviderSettings {
     maxBatchSize: r.max_batch_size,
     rateLimitPerMin: r.rate_limit_per_min,
     maxConcurrency: r.max_concurrency,
+    maxPerCycle: r.max_per_cycle,
   };
 }

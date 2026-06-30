@@ -1,62 +1,71 @@
 "use client"
 
-import { useMemo, useState, useTransition } from "react"
+import { useEffect, useMemo, useState, useTransition, type FormEvent, type InputHTMLAttributes, type MouseEventHandler, type ReactNode } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import {
-  Box,
-  Button,
-  Card,
-  Checkbox,
-  Chip,
-  Divider,
-  IconButton,
-  InputAdornment,
-  Stack,
-  Switch,
-  TextField,
-  Tooltip,
-  Typography,
-} from "@mui/material"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { markAllNotificationsReadAction, markNotificationReadAction } from "@/app/notifications/actions"
-import { deleteRuleAction, toggleRuleAction } from "@/app/notifications/settings/actions"
-import { ControlBar, type ControlBarFilterBadge } from "@/design/components/ControlBar"
-import { AppIcon } from "@/design/icons/AppIcon"
-import { PageMetricGrid, PageShell } from "@/application/shell/PageShell"
+import {
+  createRulePayloadAction,
+  deleteRuleAction,
+  toggleRuleAction,
+  updateRulePayloadAction,
+  type AlertRulePayload,
+} from "@/app/notifications/settings/actions"
+import { PageShell } from "@/application/shell/PageShell"
 import { useToast } from "@/application/toast/ToastProvider"
-import { repeatLabel } from "@/features/notifications/repeat"
-import type { AlertRule, AlertRuleKind, ListingSummary, NotificationInbox, NotificationItem, PositionView } from "@/lib/types"
+import { AppBadge, type AppBadgeTone } from "@/design/components/AppBadge"
+import { ControlBar, type ControlBarFilterBadge } from "@/design/components/ControlBar"
+import { MetricBar, MetricBarItem } from "@/design/components/MetricBar"
+import { AppIcon, type AppIconName } from "@/design/icons/AppIcon"
+import { REPEAT_OPTIONS, repeatLabel } from "@/features/notifications/repeat"
+import { fmtPriceAmount, num } from "@/lib/format"
+import type {
+  AlertRule,
+  AlertRuleKind,
+  ListingSummary,
+  NotificationInbox,
+  NotificationItem,
+  PositionView,
+  PriceTarget,
+  WatchlistItemView,
+} from "@/lib/types"
 
-type NotificationTab = "all" | "unread" | "price_moves" | "thresholds" | "earnings"
-type DateRange = "7d" | "30d" | "all"
+export type NotificationView = "all" | "unread" | "price_moves" | "thresholds" | "earnings" | "rules"
 
 interface NotificationsWorkspaceProps {
   inbox: NotificationInbox
+  initialView?: NotificationView
   locale: string
   positions: PositionView[]
+  priceTargets: PriceTarget[]
   rules: AlertRule[]
+  watchlistItems: WatchlistItemView[]
 }
 
 interface AssetContext extends ListingSummary {
   listing_id: string
-  position_id: string
-  state: PositionView["state"]
-  performance: PositionView["performance"]
+  position_id?: string
+  source: "held" | "watchlist"
+  state?: PositionView["state"]
+  performance?: PositionView["performance"]
 }
 
-const notificationTabs: Array<{ value: NotificationTab; label: string }> = [
+const notificationTabs: Array<{ value: NotificationView; label: string }> = [
   { value: "all", label: "All" },
   { value: "unread", label: "Unread" },
   { value: "price_moves", label: "Price moves" },
   { value: "thresholds", label: "Thresholds" },
   { value: "earnings", label: "Earnings" },
+  { value: "rules", label: "Rules" },
 ]
 
-const dateRangeOptions = [
-  { value: "7d", label: "Last 7 days" },
-  { value: "30d", label: "Last 30 days" },
-  { value: "all", label: "All time" },
-] as const
+const ruleKindOptions: Array<{ value: AlertRuleKind; label: string }> = [
+  { value: "price_threshold", label: "Price threshold" },
+  { value: "daily_move", label: "Daily move" },
+  { value: "earnings_lead", label: "Earnings reminder" },
+  { value: "cost_basis_move", label: "Move from cost basis" },
+  { value: "target_zone", label: "Target zone" },
+]
 
 const typeLabels: Record<NotificationItem["type"], string> = {
   cost_basis_move: "Cost basis",
@@ -64,6 +73,22 @@ const typeLabels: Record<NotificationItem["type"], string> = {
   earnings_upcoming: "Earnings",
   price_threshold: "Price threshold",
   target_zone: "Target zone",
+}
+
+const typeIcons: Record<NotificationItem["type"], AppIconName> = {
+  cost_basis_move: "value",
+  daily_move: "trendUp",
+  earnings_upcoming: "calendar",
+  price_threshold: "alert",
+  target_zone: "target",
+}
+
+const typeTones: Record<NotificationItem["type"], AppBadgeTone> = {
+  cost_basis_move: "success",
+  daily_move: "success",
+  earnings_upcoming: "accent",
+  price_threshold: "warning",
+  target_zone: "accent",
 }
 
 const ruleKindLabels: Record<AlertRuleKind, string> = {
@@ -74,142 +99,89 @@ const ruleKindLabels: Record<AlertRuleKind, string> = {
   target_zone: "Target zone",
 }
 
-const severityLabels: Record<NotificationItem["severity"], string> = {
-  critical: "High",
-  warning: "Medium",
-  info: "Info",
-}
+const collapsedGroupsStorageKey = "portfolio-tracker:notifications:collapsed-groups"
 
-const typeColors: Record<NotificationItem["type"], "primary" | "success" | "warning" | "secondary"> = {
-  cost_basis_move: "success",
-  daily_move: "success",
-  earnings_upcoming: "primary",
-  price_threshold: "warning",
-  target_zone: "secondary",
-}
-
-export function NotificationsWorkspace({ inbox, locale, positions, rules }: NotificationsWorkspaceProps) {
+export function NotificationsWorkspace({
+  inbox,
+  initialView = "all",
+  locale,
+  positions,
+  priceTargets,
+  rules,
+  watchlistItems,
+}: NotificationsWorkspaceProps) {
   const router = useRouter()
-  const { success, error } = useToast()
-  const [tab, setTab] = useState<NotificationTab>("all")
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const { error, success } = useToast()
+  const [view, setView] = useState<NotificationView>(initialView)
   const [searchTerm, setSearchTerm] = useState("")
-  const [range, setRange] = useState<DateRange>("30d")
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set())
-  const [selectedTypes, setSelectedTypes] = useState<Set<NotificationItem["type"]>>(new Set())
-  const [selectedSeverities, setSelectedSeverities] = useState<Set<NotificationItem["severity"]>>(new Set())
-  const [ruleStatuses, setRuleStatuses] = useState<Set<"active" | "disabled">>(new Set())
-  const [assetQuery, setAssetQuery] = useState("")
   const [selectedId, setSelectedId] = useState(inbox.notifications[0]?.id ?? null)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [addingRule, setAddingRule] = useState(false)
   const [pending, startTransition] = useTransition()
 
-  const assets = useMemo(() => positions.flatMap((position): AssetContext[] => {
-    if (!position.listing) return []
-    return [{ ...position.listing, listing_id: position.listing_id, position_id: position.id, state: position.state, performance: position.performance }]
-  }), [positions])
-
+  const assets = useMemo(() => buildAssets(positions, watchlistItems), [positions, watchlistItems])
   const assetByListing = useMemo(() => new Map(assets.map((asset) => [asset.listing_id, asset])), [assets])
   const assetByInstrument = useMemo(() => new Map(assets.map((asset) => [asset.instrument_id, asset])), [assets])
-  const notificationAssets = useMemo(() => new Map(inbox.notifications.map((item) => {
-    const asset = resolveAsset(item, assetByListing, assetByInstrument)
-    return [item.id, asset]
-  })), [assetByInstrument, assetByListing, inbox.notifications])
+  const targetById = useMemo(() => new Map(priceTargets.map((target) => [target.id, target])), [priceTargets])
+  const notificationAssets = useMemo(() => new Map(inbox.notifications.map((item) => [item.id, resolveAsset(item, assetByListing, assetByInstrument)])), [assetByInstrument, assetByListing, inbox.notifications])
 
-  const criteria = { assetIds: selectedAssetIds, range, ruleStatuses, searchTerm, severities: selectedSeverities, tab, types: selectedTypes }
-  const filteredNotifications = useMemo(() => inbox.notifications.filter((item) => matchesNotification(item, notificationAssets.get(item.id), criteria, rules)), [criteria, inbox.notifications, notificationAssets, rules])
+  const filteredNotifications = useMemo(() => inbox.notifications.filter((item) => matchesNotification(item, notificationAssets.get(item.id), { assetIds: selectedAssetIds, searchTerm, view })), [inbox.notifications, notificationAssets, searchTerm, selectedAssetIds, view])
+  const filteredRules = useMemo(() => filterRules(rules, assets, priceTargets, searchTerm, selectedAssetIds, locale), [assets, locale, priceTargets, rules, searchTerm, selectedAssetIds])
   const selected = filteredNotifications.find((item) => item.id === selectedId) ?? filteredNotifications[0] ?? inbox.notifications.find((item) => item.id === selectedId) ?? inbox.notifications[0] ?? null
   const selectedAsset = selected ? notificationAssets.get(selected.id) ?? null : null
-  const selectedRules = useMemo(() => selectedAsset ? rulesForAsset(rules, selectedAsset) : [], [rules, selectedAsset])
+  const selectedRules = selectedAsset ? rulesForAsset(rules, selectedAsset) : []
   const triggeredRule = selected && selectedAsset ? findTriggeredRule(selected, selectedAsset, selectedRules) : null
 
   const metrics = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10)
     const triggeredToday = inbox.notifications.filter((item) => item.created_at.slice(0, 10) === today).length
-    const activeRules = rules.filter((rule) => rule.enabled).length
-    const disabledRules = rules.filter((rule) => !rule.enabled).length
     return {
-      activeRules,
-      disabledRules,
+      activeRules: rules.filter((rule) => rule.enabled).length,
+      disabledRules: rules.filter((rule) => !rule.enabled).length,
+      heldAssets: assets.filter((asset) => asset.source === "held").length,
       total: inbox.notifications.length,
       triggeredToday,
       unread: inbox.unread_count,
     }
-  }, [inbox, rules])
+  }, [assets, inbox.notifications, inbox.unread_count, rules])
 
-  const typeCounts = useMemo(() => countBy(inbox.notifications, (item) => item.type), [inbox.notifications])
-  const severityCounts = useMemo(() => countBy(inbox.notifications, (item) => item.severity), [inbox.notifications])
-  const assetCounts = useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const notification of inbox.notifications) {
-      const asset = notificationAssets.get(notification.id)
-      if (!asset) continue
-      counts.set(asset.instrument_id, (counts.get(asset.instrument_id) ?? 0) + 1)
-    }
-    return counts
-  }, [inbox.notifications, notificationAssets])
-  const ruleStatusCounts = useMemo(() => {
-    const counts = new Map<"active" | "disabled", number>([["active", 0], ["disabled", 0]])
-    for (const notification of inbox.notifications) {
-      const asset = notificationAssets.get(notification.id)
-      if (!asset) continue
-      const relatedRules = rulesForAsset(rules, asset)
-      if (relatedRules.some((rule) => rule.enabled)) counts.set("active", (counts.get("active") ?? 0) + 1)
-      if (relatedRules.some((rule) => !rule.enabled)) counts.set("disabled", (counts.get("disabled") ?? 0) + 1)
-    }
-    return counts
-  }, [inbox.notifications, notificationAssets, rules])
+  const controlBadges = useMemo<ControlBarFilterBadge[]>(() => [...selectedAssetIds].map((assetId) => ({
+    id: `asset-${assetId}`,
+    label: "Asset",
+    value: assetByInstrument.get(assetId)?.name ?? assetId,
+    onClear: () => setSelectedAssetIds((current) => removeSetValue(current, assetId)),
+  })), [assetByInstrument, selectedAssetIds])
 
-  const controlBadges = useMemo<ControlBarFilterBadge[]>(() => [
-    ...[...selectedTypes].map((type) => ({
-      id: `type-${type}`,
-      label: "Type",
-      value: typeLabels[type],
-      onClear: () => setSelectedTypes((current) => removeSetValue(current, type)),
-    })),
-    ...[...selectedAssetIds].map((assetId) => ({
-      id: `asset-${assetId}`,
-      label: "Asset",
-      value: assetByInstrument.get(assetId)?.name ?? assetId,
-      onClear: () => setSelectedAssetIds((current) => removeSetValue(current, assetId)),
-    })),
-    ...[...ruleStatuses].map((status) => ({
-      id: `rule-status-${status}`,
-      label: "Rule status",
-      value: status === "active" ? "Active" : "Disabled",
-      onClear: () => setRuleStatuses((current) => removeSetValue(current, status)),
-    })),
-    ...[...selectedSeverities].map((severity) => ({
-      id: `severity-${severity}`,
-      label: "Severity",
-      value: severityLabels[severity],
-      onClear: () => setSelectedSeverities((current) => removeSetValue(current, severity)),
-    })),
-  ], [assetByInstrument, ruleStatuses, selectedAssetIds, selectedSeverities, selectedTypes])
-
-  const visibleAssets = assets
-    .filter((asset) => (assetCounts.get(asset.instrument_id) ?? 0) > 0)
-    .filter((asset) => {
-      const needle = assetQuery.trim().toLowerCase()
-      return !needle || asset.name.toLowerCase().includes(needle) || asset.symbol.toLowerCase().includes(needle)
-    })
-    .sort((a, b) => (assetCounts.get(b.instrument_id) ?? 0) - (assetCounts.get(a.instrument_id) ?? 0) || a.name.localeCompare(b.name))
-    .slice(0, 10)
-
-  function toggleSetValue<T>(setter: (next: Set<T>) => void, current: Set<T>, value: T) {
-    const next = new Set(current)
-    if (next.has(value)) next.delete(value)
-    else next.add(value)
-    setter(next)
-  }
+  const visibleAssetSuggestions = useMemo(() => {
+    const needle = searchTerm.trim().toLowerCase()
+    if (needle.length < 2) return []
+    return assets
+      .filter((asset) => !selectedAssetIds.has(asset.instrument_id))
+      .filter((asset) => asset.name.toLowerCase().includes(needle) || asset.symbol.toLowerCase().includes(needle))
+      .slice(0, 6)
+  }, [assets, searchTerm, selectedAssetIds])
 
   function clearFilters() {
-    setSelectedAssetIds(new Set())
-    setSelectedTypes(new Set())
-    setSelectedSeverities(new Set())
-    setRuleStatuses(new Set())
     setSearchTerm("")
-    setAssetQuery("")
-    setRange("30d")
-    setTab("all")
+    setSelectedAssetIds(new Set())
+    changeView("all")
+  }
+
+  function changeView(nextView: NotificationView) {
+    setView(nextView)
+    const params = new URLSearchParams(searchParams.toString())
+    if (nextView === "all") params.delete("view")
+    else params.set("view", nextView)
+    const query = params.toString()
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
+  }
+
+  function addAssetFilter(asset: AssetContext) {
+    setSelectedAssetIds((current) => new Set(current).add(asset.instrument_id))
+    setSearchTerm("")
   }
 
   function markRead(id: string) {
@@ -246,7 +218,8 @@ export function NotificationsWorkspace({ inbox, locale, positions, rules }: Noti
   }
 
   function deleteRule(rule: AlertRule) {
-    if (!confirm(`Delete rule "${rule.label ?? describeRule(rule)}"?`)) return
+    const asset = resolveRuleAsset(rule, assets)
+    if (!confirm(`Delete rule "${rule.label ?? describeRule(rule, targetById, locale, asset)}"?`)) return
     startTransition(async () => {
       const result = await deleteRuleAction(rule.id)
       if (result?.error) error(result.error)
@@ -257,180 +230,151 @@ export function NotificationsWorkspace({ inbox, locale, positions, rules }: Noti
     })
   }
 
+  function submitCreateRule(payload: AlertRulePayload, done: () => void) {
+    startTransition(async () => {
+      const result = await createRulePayloadAction(payload)
+      if (result?.error) error(result.error)
+      else {
+        success("Rule created.")
+        done()
+        router.refresh()
+      }
+    })
+  }
+
+  function submitUpdateRule(rule: AlertRule, payload: AlertRulePayload, done: () => void) {
+    startTransition(async () => {
+      const result = await updateRulePayloadAction(rule.id, {
+        label: payload.label,
+        notify_once: payload.notify_once,
+        params: payload.params,
+      })
+      if (result?.error) error(result.error)
+      else {
+        success("Rule updated.")
+        done()
+        router.refresh()
+      }
+    })
+  }
+
+  const rulesView = view === "rules"
+
   return (
     <PageShell kind="workspace">
-      <Stack spacing={0.5}>
-        <Typography sx={{ color: "var(--app-text-muted)", fontSize: 13, fontWeight: 700 }}>
-          Portfolio <Box component="span" sx={{ color: "var(--app-text-faint)", mx: 1 }}>/</Box>
-          <Box component="span" sx={{ color: "var(--app-text)" }}>Notifications</Box>
-        </Typography>
-      </Stack>
+      <div className="flex items-center gap-2 text-[13px] font-bold">
+        <span className="text-[var(--app-text-muted)]">Portfolio</span>
+        <span className="text-[var(--app-text-faint)]">/</span>
+        <span className="text-[var(--app-text)]">Notifications</span>
+      </div>
 
-      <PageMetricGrid columns={{ xs: "1fr", md: "repeat(2, minmax(0, 1fr))", lg: "repeat(4, minmax(0, 1fr))" }}>
-        <MetricCard label="Unread" value={metrics.unread} detail={`of ${metrics.total} total`} tone="primary" />
-        <MetricCard label="Active rules" value={metrics.activeRules} detail={`across ${assets.length} assets`} tone="success" />
-        <MetricCard label="Triggered today" value={metrics.triggeredToday} detail="new alerts today" tone="warning" />
-        <MetricCard label="Disabled rules" value={metrics.disabledRules} detail="waiting for reactivation" tone="purple" />
-      </PageMetricGrid>
+      <MetricBar columns={{ xs: "1fr", md: "repeat(2, minmax(0, 1fr))", xl: "repeat(4, minmax(0, 1fr))" }}>
+        <MetricBarItem icon={<AppIcon name="bell" />} label="Unread" primary sub={`of ${metrics.total} total`} tone="accent" value={metrics.unread} />
+        <MetricBarItem icon={<AppIcon name="check" />} label="Active rules" sub={`across ${metrics.heldAssets} held assets`} tone="positive" value={metrics.activeRules} />
+        <MetricBarItem icon={<AppIcon name="alert" />} label="Triggered today" sub="new alerts today" tone="warning" value={metrics.triggeredToday} />
+        <MetricBarItem icon={<AppIcon name="settings" />} label="Disabled rules" sub="waiting for reactivation" tone="neutral" value={metrics.disabledRules} />
+      </MetricBar>
 
       <ControlBar
-        addHref="/notifications/settings"
-        addLabel="Add rule"
+        addLabel={rulesView ? "Add rule inline" : "Add notification rule"}
         badges={controlBadges}
-        defaultPeriodValue="30d"
-        defaultTabValue="all"
+        defaultTabValue={view}
+        onAdd={() => rulesView ? setAddingRule(true) : setDialogOpen(true)}
         onClearFilters={clearFilters}
-        onPeriodChange={setRange}
         onReload={() => router.refresh()}
         onSearchChange={setSearchTerm}
-        onTabChange={setTab}
-        periodLabel="Range"
-        periodOptions={dateRangeOptions}
-        periodValue={range}
+        onTabChange={changeView}
         reloadLabel="Reload notifications"
-        searchPlaceholder="Search alerts, assets, or rules"
+        searchPlaceholder={rulesView ? "Search rules, assets, or conditions" : "Search notifications, assets, or rules"}
         searchValue={searchTerm}
         tabs={notificationTabs.map((option) => ({
           ...option,
-          count: option.value === "all" ? undefined : statusCount(option.value, metrics, inbox.notifications),
+          count: option.value === "all" ? undefined : statusCount(option.value, metrics, inbox.notifications, rules),
         }))}
-        tabValue={tab}
+        tabValue={view}
       />
 
-      <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", xl: "280px minmax(760px, 1fr) 480px" }, minHeight: 0 }}>
-        <FilterRail
-          assetCounts={assetCounts}
-          assetQuery={assetQuery}
-          onAssetQuery={setAssetQuery}
-          onClear={clearFilters}
-          onSeverity={(value) => toggleSetValue(setSelectedSeverities, selectedSeverities, value)}
-          onStatus={(value) => toggleSetValue(setRuleStatuses, ruleStatuses, value)}
-          onType={(value) => toggleSetValue(setSelectedTypes, selectedTypes, value)}
-          onAsset={(value) => toggleSetValue(setSelectedAssetIds, selectedAssetIds, value)}
-          ruleStatuses={ruleStatuses}
-          ruleStatusCounts={ruleStatusCounts}
-          selectedAssetIds={selectedAssetIds}
-          selectedSeverities={selectedSeverities}
-          selectedTypes={selectedTypes}
-          severityCounts={severityCounts}
-          typeCounts={typeCounts}
-          visibleAssets={visibleAssets}
-        />
-        <NotificationsInbox
-          items={filteredNotifications}
+      {!rulesView && visibleAssetSuggestions.length > 0 ? <AssetSearchSuggestions onPick={addAssetFilter} suggestions={visibleAssetSuggestions} /> : null}
+
+      {rulesView ? (
+        <RulesTable
+          adding={addingRule}
+          assets={assets}
           locale={locale}
-          notificationAssets={notificationAssets}
-          onClearFilters={clearFilters}
-          onMarkAllRead={markAllRead}
-          onMarkRead={markRead}
-          onSelect={(item) => setSelectedId(item.id)}
+          onCancelAdd={() => setAddingRule(false)}
+          onCreate={(payload) => submitCreateRule(payload, () => setAddingRule(false))}
+          onDelete={deleteRule}
+          onToggle={toggleRule}
+          onUpdate={submitUpdateRule}
           pending={pending}
-          selectedId={selected?.id ?? null}
+          priceTargets={priceTargets}
+          rules={filteredRules}
+          targetById={targetById}
         />
-        <NotificationDetails
-          asset={selectedAsset}
+      ) : (
+        <div className="grid min-h-0 items-start gap-3 xl:grid-cols-[minmax(0,1fr)_380px]">
+          <NotificationsInbox
+            items={filteredNotifications}
+            locale={locale}
+            notificationAssets={notificationAssets}
+            onClearFilters={clearFilters}
+            onMarkAllRead={markAllRead}
+            onMarkRead={markRead}
+            onSelect={(item) => setSelectedId(item.id)}
+            pending={pending}
+            selectedId={selected?.id ?? null}
+          />
+          <NotificationDetails
+            asset={selectedAsset}
+            locale={locale}
+            notification={selected}
+            onAdd={() => setDialogOpen(true)}
+            onDeleteRule={deleteRule}
+            onToggleRule={toggleRule}
+            pending={pending}
+            rules={selectedRules}
+            targetById={targetById}
+            triggeredRule={triggeredRule}
+          />
+        </div>
+      )}
+
+      {dialogOpen ? (
+        <RuleDialog
+          assets={assets}
           locale={locale}
-          notification={selected}
-          onDeleteRule={deleteRule}
-          onToggleRule={toggleRule}
+          onClose={() => setDialogOpen(false)}
+          onCreate={(payload) => submitCreateRule(payload, () => setDialogOpen(false))}
           pending={pending}
-          rules={selectedRules}
-          triggeredRule={triggeredRule}
+          priceTargets={priceTargets}
         />
-      </Box>
+      ) : null}
     </PageShell>
   )
 }
 
-function MetricCard({ detail, label, tone, value }: { detail: string; label: string; tone: "primary" | "success" | "warning" | "purple"; value: number }) {
-  const toneColor = tone === "primary" ? "var(--app-accent)" : tone === "success" ? "var(--app-positive)" : tone === "warning" ? "var(--app-warning)" : "#9b7cff"
-  return (
-    <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "var(--app-surface-raised)", p: 2 }}>
-      <Stack direction="row" spacing={2} sx={{ alignItems: "center", height: "100%" }}>
-        <Box sx={{ alignItems: "center", bgcolor: `color-mix(in srgb, ${toneColor} 18%, transparent)`, borderRadius: 2, color: toneColor, display: "flex", fontSize: 18, fontWeight: 900, height: 48, justifyContent: "center", width: 48 }}>
-          {label.slice(0, 1)}
-        </Box>
-        <Box>
-          <Typography sx={{ color: "var(--app-text-muted)", fontSize: 13, fontWeight: 700 }}>{label}</Typography>
-          <Typography sx={{ color: "var(--app-text)", fontSize: 28, fontWeight: 900, lineHeight: 1 }}>{value}</Typography>
-          <Typography sx={{ color: "var(--app-text-faint)", fontSize: 12, mt: 0.5 }}>{detail}</Typography>
-        </Box>
-      </Stack>
-    </Card>
-  )
-}
-
-function FilterRail(props: {
-  assetCounts: Map<string, number>
-  assetQuery: string
-  onAsset: (value: string) => void
-  onAssetQuery: (value: string) => void
-  onClear: () => void
-  onSeverity: (value: NotificationItem["severity"]) => void
-  onStatus: (value: "active" | "disabled") => void
-  onType: (value: NotificationItem["type"]) => void
-  ruleStatuses: Set<"active" | "disabled">
-  ruleStatusCounts: Map<"active" | "disabled", number>
-  selectedAssetIds: Set<string>
-  selectedSeverities: Set<NotificationItem["severity"]>
-  selectedTypes: Set<NotificationItem["type"]>
-  severityCounts: Map<NotificationItem["severity"], number>
-  typeCounts: Map<NotificationItem["type"], number>
-  visibleAssets: AssetContext[]
+function AssetSearchSuggestions({
+  onPick,
+  suggestions,
+}: {
+  onPick: (asset: AssetContext) => void
+  suggestions: AssetContext[]
 }) {
   return (
-    <Card variant="outlined" sx={{ alignSelf: "start", borderColor: "var(--app-border)", bgcolor: "var(--app-surface-raised)", overflow: "hidden" }}>
-      <Stack direction="row" sx={{ alignItems: "center", borderBottom: "1px solid var(--app-border)", justifyContent: "space-between", px: 2, py: 1.5 }}>
-        <Typography sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 800 }}>Filters</Typography>
-        <Button size="small" onClick={props.onClear}>Clear all</Button>
-      </Stack>
-      <FilterSection title="Type">
-        {(Object.keys(typeLabels) as NotificationItem["type"][]).map((type) => (
-          <FacetRow key={type} checked={props.selectedTypes.has(type)} count={props.typeCounts.get(type) ?? 0} label={typeLabels[type]} onChange={() => props.onType(type)} />
-        ))}
-      </FilterSection>
-      <FilterSection title="Asset">
-        <TextField
-          variant="standard"
-          value={props.assetQuery}
-          onChange={(event) => props.onAssetQuery(event.target.value)}
-          placeholder="Search assets..."
-          sx={{ mb: 1.25, width: "100%", "& input": { fontSize: 12, py: 0.5 } }}
-          slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon small /></InputAdornment> } }}
-        />
-        {props.visibleAssets.map((asset) => (
-          <FacetRow key={asset.instrument_id} checked={props.selectedAssetIds.has(asset.instrument_id)} count={props.assetCounts.get(asset.instrument_id) ?? 0} label={asset.name} onChange={() => props.onAsset(asset.instrument_id)} />
-        ))}
-      </FilterSection>
-      <FilterSection title="Rule status">
-        <FacetRow checked={props.ruleStatuses.has("active")} count={props.ruleStatusCounts.get("active") ?? 0} label="Active" onChange={() => props.onStatus("active")} />
-        <FacetRow checked={props.ruleStatuses.has("disabled")} count={props.ruleStatusCounts.get("disabled") ?? 0} label="Disabled" onChange={() => props.onStatus("disabled")} />
-      </FilterSection>
-      <FilterSection title="Severity">
-        {(Object.keys(severityLabels) as NotificationItem["severity"][]).map((severity) => (
-          <FacetRow key={severity} checked={props.selectedSeverities.has(severity)} count={props.severityCounts.get(severity) ?? 0} label={severityLabels[severity]} onChange={() => props.onSeverity(severity)} />
-        ))}
-      </FilterSection>
-    </Card>
-  )
-}
-
-function FilterSection({ children, title }: { children: React.ReactNode; title: string }) {
-  return (
-    <Box sx={{ borderBottom: "1px solid var(--app-border)", px: 2, py: 1.75, "&:last-of-type": { borderBottom: 0 } }}>
-      <Typography sx={{ color: "var(--app-text)", fontSize: 12, fontWeight: 900, mb: 1 }}>{title}</Typography>
-      <Stack spacing={0.75}>{children}</Stack>
-    </Box>
-  )
-}
-
-function FacetRow({ checked, count, label, onChange }: { checked: boolean; count: number; label: string; onChange: () => void }) {
-  return (
-    <Stack component="label" direction="row" spacing={1} sx={{ alignItems: "center", cursor: "pointer", minWidth: 0 }}>
-      <Checkbox checked={checked} onChange={onChange} size="small" sx={{ color: "var(--app-text-muted)", p: 0 }} />
-      <Typography noWrap sx={{ color: "var(--app-text-muted)", flex: 1, fontSize: 12 }}>{label}</Typography>
-      <Chip label={count} size="small" variant="outlined" sx={{ color: "var(--app-text-muted)", height: 22, minWidth: 28 }} />
-    </Stack>
+    <section className="app-panel rounded-lg px-3 py-2">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="shrink-0 text-[11px] font-extrabold uppercase tracking-[0.08em] text-[var(--app-text-faint)]">Assets</span>
+        <div className="flex min-w-0 flex-1 flex-wrap gap-2">
+          {suggestions.map((asset) => (
+            <button key={asset.listing_id} className="flex h-8 min-w-0 max-w-[280px] items-center gap-2 rounded-md border border-[var(--app-border)] bg-[var(--app-surface-inset)] px-2 text-left transition hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface-hover)]" onClick={() => onPick(asset)} type="button">
+              <span className="min-w-0 truncate text-[12px] font-extrabold text-[var(--app-text)]">{asset.name}</span>
+              <span className="shrink-0 text-[10.5px] font-medium text-[var(--app-text-faint)]">{asset.symbol}</span>
+              <AppBadge kind="category" label={asset.source === "held" ? "Held" : "Watchlist"} tone={asset.source === "held" ? "success" : "accent"} />
+            </button>
+          ))}
+        </div>
+      </div>
+    </section>
   )
 }
 
@@ -455,217 +399,610 @@ function NotificationsInbox({
   pending: boolean
   selectedId: string | null
 }) {
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const groups = useMemo(() => groupNotifications(items), [items])
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(collapsedGroupsStorageKey)
+      const value = raw ? JSON.parse(raw) : []
+      if (Array.isArray(value)) setCollapsed(new Set(value.filter((item): item is string => typeof item === "string")))
+    } catch {
+      setCollapsed(new Set())
+    }
+  }, [])
+
+  function toggleGroup(label: string) {
+    setCollapsed((current) => {
+      const next = new Set(current)
+      if (next.has(label)) next.delete(label)
+      else next.add(label)
+      window.localStorage.setItem(collapsedGroupsStorageKey, JSON.stringify([...next]))
+      return next
+    })
+  }
+
   return (
-    <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "var(--app-surface-raised)", overflow: "hidden" }}>
-      <Stack direction="row" sx={{ alignItems: "center", borderBottom: "1px solid var(--app-border)", justifyContent: "space-between", px: 2, py: 1.5 }}>
-        <Stack direction="row" spacing={1} sx={{ alignItems: "baseline" }}>
-          <Typography sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 900 }}>Notification inbox</Typography>
-          <Typography sx={{ color: "var(--app-text-faint)", fontSize: 11 }}>{items.length} alerts</Typography>
-        </Stack>
-        <Button size="small" disabled={pending} onClick={onMarkAllRead}>Mark all read</Button>
-      </Stack>
-      <Box sx={{ display: "grid", gridTemplateColumns: "minmax(210px, 1.4fr) 150px minmax(210px, 1.2fr) 92px 92px 96px", px: 2, py: 1, borderBottom: "1px solid var(--app-border)" }}>
-        {["Type", "Asset", "Alert", "Time", "Value", ""].map((heading) => (
-          <Typography key={heading} sx={{ color: "var(--app-text-faint)", fontSize: 11, fontWeight: 800 }}>{heading}</Typography>
-        ))}
-      </Box>
+    <section className="app-panel min-w-0 overflow-hidden rounded-lg">
+      <PanelHeader
+        action={<TextButton disabled={pending} onClick={onMarkAllRead}>Mark all read</TextButton>}
+        subtitle={`${items.length} alerts`}
+        title="Notification inbox"
+      />
+      <div className="grid grid-cols-[140px_minmax(130px,.9fr)_minmax(200px,1.3fr)_70px_72px_56px] gap-x-3 border-b border-[var(--app-border)] px-3 py-2 text-[11px] font-extrabold text-[var(--app-text-faint)]">
+        {["Type", "Asset", "Alert", "Time", "Value", ""].map((heading) => <span key={heading}>{heading}</span>)}
+      </div>
       {items.length === 0 ? (
-        <Stack spacing={1.5} sx={{ alignItems: "center", minHeight: 320, justifyContent: "center", px: 2 }}>
-          <Typography sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 900 }}>No notifications match these filters</Typography>
-          <Button onClick={onClearFilters}>Clear filters</Button>
-        </Stack>
+        <div className="flex min-h-80 flex-col items-center justify-center gap-3 px-4 text-center">
+          <p className="text-[14px] font-extrabold text-[var(--app-text)]">No notifications match these filters</p>
+          <TextButton onClick={onClearFilters}>Clear filters</TextButton>
+        </div>
       ) : (
-        <Box>
-          {groupNotifications(items).map((group) => (
-            <Box key={group.label}>
-              <Stack direction="row" spacing={1} sx={{ alignItems: "center", bgcolor: "color-mix(in srgb, var(--app-surface-raised) 84%, var(--app-accent) 16%)", borderBottom: "1px solid var(--app-border)", px: 2, py: 1 }}>
-                <Typography sx={{ color: "var(--app-text)", fontSize: 13, fontWeight: 900 }}>{group.label}</Typography>
-                <Chip label={group.items.length} size="small" variant="outlined" color="primary" sx={{ height: 22 }} />
-              </Stack>
-              {group.items.map((item) => (
-                <NotificationRow
-                  key={item.id}
-                  asset={notificationAssets.get(item.id)}
-                  item={item}
-                  locale={locale}
-                  onMarkRead={onMarkRead}
-                  onSelect={() => onSelect(item)}
-                  pending={pending}
-                  selected={item.id === selectedId}
-                />
-              ))}
-            </Box>
-          ))}
-        </Box>
+        <div>
+          {groups.map((group) => {
+            const isCollapsed = collapsed.has(group.label)
+            return (
+              <div key={group.label}>
+                <button className="flex h-10 w-full items-center gap-2 border-b border-[var(--app-border)] bg-[var(--app-surface-header)] px-3 text-left text-[12px] font-extrabold text-[var(--app-text)]" onClick={() => toggleGroup(group.label)} type="button">
+                  <AppIcon className={`h-4 w-4 transition ${isCollapsed ? "-rotate-90" : ""}`} name="chevronDown" />
+                  <span>{group.label}</span>
+                  <AppBadge kind="count" label={group.items.length} tone="accent" />
+                </button>
+                {!isCollapsed ? group.items.map((item) => (
+                  <NotificationRow
+                    asset={notificationAssets.get(item.id)}
+                    item={item}
+                    key={item.id}
+                    locale={locale}
+                    onMarkRead={onMarkRead}
+                    onSelect={() => onSelect(item)}
+                    pending={pending}
+                    selected={item.id === selectedId}
+                  />
+                )) : null}
+              </div>
+            )
+          })}
+        </div>
       )}
-    </Card>
+    </section>
   )
 }
 
-function NotificationRow({ asset, item, locale, onMarkRead, onSelect, pending, selected }: { asset: AssetContext | undefined; item: NotificationItem; locale: string; onMarkRead: (id: string) => void; onSelect: () => void; pending: boolean; selected: boolean }) {
+function NotificationRow({
+  asset,
+  item,
+  locale,
+  onMarkRead,
+  onSelect,
+  pending,
+  selected,
+}: {
+  asset: AssetContext | undefined
+  item: NotificationItem
+  locale: string
+  onMarkRead: (id: string) => void
+  onSelect: () => void
+  pending: boolean
+  selected: boolean
+}) {
   const unread = item.read_at === null
   return (
-    <Box
-      role="button"
-      tabIndex={0}
+    <div
+      className={`grid cursor-pointer grid-cols-[140px_minmax(130px,.9fr)_minmax(200px,1.3fr)_70px_72px_56px] items-center gap-x-3 border-b border-[var(--app-border)] px-3 py-2.5 transition last:border-b-0 ${selected ? "bg-[color-mix(in_srgb,var(--app-accent)_18%,transparent)] shadow-[inset_3px_0_0_var(--app-accent)]" : "hover:bg-[var(--app-surface-hover)]"}`}
       onClick={onSelect}
       onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onSelect() }}
-      sx={{
-        bgcolor: selected ? "color-mix(in srgb, var(--app-accent) 20%, transparent)" : "transparent",
-        borderBottom: "1px solid var(--app-border)",
-        cursor: "pointer",
-        display: "grid",
-        gridTemplateColumns: "minmax(210px, 1.4fr) 150px minmax(210px, 1.2fr) 92px 92px 96px",
-        px: 2,
-        py: 1.25,
-        transition: "background 120ms ease",
-        "&:hover": { bgcolor: selected ? "color-mix(in srgb, var(--app-accent) 24%, transparent)" : "var(--app-surface-hover)" },
-      }}
+      role="button"
+      tabIndex={0}
     >
-      <Stack direction="row" spacing={1} sx={{ alignItems: "center", minWidth: 0 }}>
-        <Box sx={{ bgcolor: unread ? "var(--app-accent)" : "var(--app-border)", borderRadius: "50%", height: 8, width: 8 }} />
-        <Chip label={typeLabels[item.type]} color={typeColors[item.type]} size="small" variant="outlined" sx={{ fontWeight: 800 }} />
-      </Stack>
-      <Box sx={{ minWidth: 0 }}>
-        <Typography noWrap sx={{ color: "var(--app-text)", fontSize: 12, fontWeight: 800 }}>{asset?.symbol ?? "Global"}</Typography>
-        <Typography noWrap sx={{ color: "var(--app-text-faint)", fontSize: 10 }}>{asset?.name ?? "All holdings"}</Typography>
-      </Box>
-      <Box sx={{ minWidth: 0 }}>
-        <Typography noWrap sx={{ color: "var(--app-text)", fontSize: 12, fontWeight: 800 }}>{item.title}</Typography>
-        {item.body ? <Typography noWrap sx={{ color: "var(--app-text-muted)", fontSize: 11 }}>{item.body}</Typography> : null}
-      </Box>
-      <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12 }}>{formatTime(item.created_at, locale)}</Typography>
-      <Typography sx={{ color: valueTone(item) === "negative" ? "var(--app-negative)" : valueTone(item) === "positive" ? "var(--app-positive)" : "var(--app-text-muted)", fontSize: 12, fontWeight: 800 }}>
-        {formatNotificationValue(item, asset, locale)}
-      </Typography>
-      <Stack direction="row" spacing={0.5} sx={{ justifyContent: "flex-end" }}>
+      <div className="flex min-w-0 items-center gap-2">
+        <span className={`h-2 w-2 shrink-0 rounded-full ${unread ? "bg-[var(--app-accent)]" : "bg-[var(--app-border)]"}`} />
+        <AppBadge icon={<AppIcon name={typeIcons[item.type]} />} kind="category" label={typeLabels[item.type]} tone={typeTones[item.type]} />
+      </div>
+      <div className="min-w-0">
+        <p className="truncate text-[12px] font-extrabold text-[var(--app-text)]">{asset?.name ?? "All holdings"}</p>
+        <p className="truncate text-[10.5px] font-medium text-[var(--app-text-faint)]">{asset ? `${asset.symbol} - ${asset.currency}` : "Global"}</p>
+      </div>
+      <div className="min-w-0">
+        <p className="truncate text-[12px] font-extrabold text-[var(--app-text)]">{item.title}</p>
+        {item.body ? <p className="truncate text-[11px] font-medium text-[var(--app-text-muted)]">{item.body}</p> : null}
+      </div>
+      <p className="text-[12px] font-medium tabular-nums text-[var(--app-text-muted)]">{formatTime(item.created_at, locale)}</p>
+      <p className={`text-[12px] font-extrabold tabular-nums ${valueToneClass(valueTone(item))}`}>{formatNotificationValue(item, asset, locale)}</p>
+      <div className="flex justify-end gap-1">
         {unread ? (
-          <Tooltip title="Mark read">
-            <IconButton size="small" disabled={pending} onClick={(event) => { event.stopPropagation(); onMarkRead(item.id) }}>
-              <MailIcon />
-            </IconButton>
-          </Tooltip>
+          <AppIconButton disabled={pending} label="Mark read" onClick={(event) => { event.stopPropagation(); onMarkRead(item.id) }}>
+            <AppIcon name="mail" />
+          </AppIconButton>
         ) : null}
         {asset ? (
-          <Tooltip title="Open asset">
-            <IconButton component={Link} href={`/positions/${asset.position_id}`} size="small" onClick={(event) => event.stopPropagation()}>
-              <OpenIcon />
-            </IconButton>
-          </Tooltip>
+          <Link className={iconButtonClass()} href={`/assets/${asset.listing_id}?returnTo=/notifications`} onClick={(event) => event.stopPropagation()} title="Open asset">
+            <AppIcon className="h-4 w-4" name="openExternal" />
+          </Link>
         ) : null}
-      </Stack>
-    </Box>
+      </div>
+    </div>
   )
 }
 
-function NotificationDetails({ asset, locale, notification, onDeleteRule, onToggleRule, pending, rules, triggeredRule }: { asset: AssetContext | null; locale: string; notification: NotificationItem | null; onDeleteRule: (rule: AlertRule) => void; onToggleRule: (rule: AlertRule) => void; pending: boolean; rules: AlertRule[]; triggeredRule: AlertRule | null }) {
+function NotificationDetails({
+  asset,
+  locale,
+  notification,
+  onAdd,
+  onDeleteRule,
+  onToggleRule,
+  pending,
+  rules,
+  targetById,
+  triggeredRule,
+}: {
+  asset: AssetContext | null
+  locale: string
+  notification: NotificationItem | null
+  onAdd: () => void
+  onDeleteRule: (rule: AlertRule) => void
+  onToggleRule: (rule: AlertRule) => void
+  pending: boolean
+  rules: AlertRule[]
+  targetById: Map<string, PriceTarget>
+  triggeredRule: AlertRule | null
+}) {
   return (
-    <Card variant="outlined" sx={{ alignSelf: "start", borderColor: "var(--app-border)", bgcolor: "var(--app-surface-raised)", overflow: "hidden" }}>
-      <Stack direction="row" sx={{ alignItems: "center", borderBottom: "1px solid var(--app-border)", justifyContent: "space-between", px: 2, py: 1.5 }}>
-        <Typography sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 900 }}>Asset rules</Typography>
-        <Stack direction="row" spacing={0.75}>
-          <IconButton size="small" component={Link} href="/notifications/settings"><OpenIcon /></IconButton>
-        </Stack>
-      </Stack>
+    <section className="app-panel min-w-0 overflow-hidden rounded-lg">
+      <PanelHeader action={<TextButton onClick={onAdd}>Add rule</TextButton>} title="Asset rules" />
       {!notification ? (
-        <Typography sx={{ color: "var(--app-text-faint)", p: 3, textAlign: "center" }}>Select a notification to inspect its rule context.</Typography>
+        <p className="px-4 py-12 text-center text-[12px] font-medium text-[var(--app-text-faint)]">Select a notification to inspect its rule context.</p>
       ) : (
-        <Stack spacing={2} sx={{ p: 2 }}>
-          <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-            <Box sx={{ alignItems: "center", bgcolor: "var(--app-accent-soft)", borderRadius: "50%", color: "var(--app-accent)", display: "flex", fontSize: 12, fontWeight: 900, height: 48, justifyContent: "center", width: 48 }}>
+        <div className="space-y-3 p-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-[color-mix(in_srgb,var(--app-accent)_30%,var(--app-border))] bg-[var(--app-accent-soft)] text-[11px] font-extrabold text-[var(--app-accent)]">
               {(asset?.symbol ?? "PT").slice(0, 3)}
-            </Box>
-            <Box sx={{ minWidth: 0 }}>
-              <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                <Typography noWrap sx={{ color: "var(--app-text)", fontSize: 16, fontWeight: 900 }}>{asset ? `${asset.symbol} · ${asset.name}` : "All holdings"}</Typography>
-                {asset ? <Chip label={asset.asset_type} size="small" variant="outlined" /> : null}
-              </Stack>
-              <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12 }}>
-                {asset ? `${money(asset.performance.current_price, locale, asset.currency)}${pct(asset.performance.daily_change_pct)}` : "Global notification"}
-              </Typography>
-            </Box>
-          </Stack>
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-[14px] font-extrabold text-[var(--app-text)]">{asset?.name ?? "All holdings"}</p>
+              <p className="mt-0.5 text-[11px] font-medium text-[var(--app-text-muted)]">
+                {asset ? `${asset.symbol} - ${asset.currency}${asset.performance ? pct(asset.performance.daily_change_pct) : ""}` : "Global notification"}
+              </p>
+            </div>
+          </div>
 
-          <Card variant="outlined" sx={{ borderColor: "color-mix(in srgb, var(--app-positive) 40%, var(--app-border))", bgcolor: "color-mix(in srgb, var(--app-positive) 10%, transparent)", p: 1.5 }}>
-            <Stack spacing={1}>
-              <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                <Chip label={typeLabels[notification.type]} color={typeColors[notification.type]} size="small" variant="outlined" sx={{ fontWeight: 800 }} />
-                <Typography sx={{ color: "var(--app-text-faint)", fontSize: 12 }}>{formatDateTime(notification.created_at, locale)}</Typography>
-              </Stack>
-              <Typography sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 900 }}>{notification.title}</Typography>
-              {notification.body ? <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12 }}>{notification.body}</Typography> : null}
-              {triggeredRule ? (
-                <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12 }}>Triggered rule: <Box component="span" sx={{ color: "var(--app-text)", fontWeight: 800 }}>{triggeredRule.label ?? describeRule(triggeredRule)}</Box></Typography>
-              ) : null}
-            </Stack>
-          </Card>
+          <div className="rounded-md border border-[color-mix(in_srgb,var(--app-positive)_34%,var(--app-border))] bg-[color-mix(in_srgb,var(--app-positive)_9%,transparent)] p-3">
+            <div className="mb-2 flex items-center gap-2">
+              <AppBadge icon={<AppIcon name={typeIcons[notification.type]} />} kind="category" label={typeLabels[notification.type]} tone={typeTones[notification.type]} />
+              <span className="text-[11px] font-medium text-[var(--app-text-faint)]">{formatDateTime(notification.created_at, locale)}</span>
+            </div>
+            <p className="text-[13px] font-extrabold text-[var(--app-text)]">{notification.title}</p>
+            {notification.body ? <p className="mt-1 text-[12px] font-medium leading-5 text-[var(--app-text-muted)]">{notification.body}</p> : null}
+            {triggeredRule ? (
+              <p className="mt-2 text-[12px] font-medium text-[var(--app-text-muted)]">
+                Triggered rule: <span className="font-extrabold text-[var(--app-text)]">{triggeredRule.label ?? describeRule(triggeredRule, targetById, locale, asset ?? undefined)}</span>
+              </p>
+            ) : null}
+          </div>
 
-          <Divider sx={{ borderColor: "var(--app-border)" }} />
-          <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
-            <Typography sx={{ color: "var(--app-text)", fontSize: 14, fontWeight: 900 }}>Rules for this asset</Typography>
-            <Typography sx={{ color: "var(--app-text-faint)", fontSize: 12 }}>{rules.length} rules</Typography>
-          </Stack>
+          <div className="flex items-center justify-between border-t border-[var(--app-border)] pt-3">
+            <p className="text-[13px] font-extrabold text-[var(--app-text)]">Rules for this asset</p>
+            <AppBadge kind="count" label={rules.length} tone="neutral" />
+          </div>
           {rules.length === 0 ? (
-            <Typography sx={{ color: "var(--app-text-faint)", fontSize: 12 }}>No rules are configured for this asset.</Typography>
+            <p className="text-[12px] font-medium text-[var(--app-text-faint)]">No rules are configured for this asset.</p>
           ) : (
-            <Stack spacing={1}>
+            <div className="space-y-2">
               {rules.map((rule) => (
-                <RuleCard key={rule.id} pending={pending} rule={rule} triggered={rule.id === triggeredRule?.id} onDelete={() => onDeleteRule(rule)} onToggle={() => onToggleRule(rule)} />
+                <RuleCard asset={asset ?? undefined} key={rule.id} locale={locale} pending={pending} rule={rule} targetById={targetById} triggered={rule.id === triggeredRule?.id} onDelete={() => onDeleteRule(rule)} onToggle={() => onToggleRule(rule)} />
               ))}
-            </Stack>
+            </div>
           )}
-          <Button component={Link} href="/notifications/settings" variant="outlined" fullWidth>
-            Add rule{asset ? ` for ${asset.symbol}` : ""}
-          </Button>
-        </Stack>
+        </div>
       )}
-    </Card>
+    </section>
   )
 }
 
-function RuleCard({ onDelete, onToggle, pending, rule, triggered }: { onDelete: () => void; onToggle: () => void; pending: boolean; rule: AlertRule; triggered: boolean }) {
+function RulesTable({
+  adding,
+  assets,
+  locale,
+  onCancelAdd,
+  onCreate,
+  onDelete,
+  onToggle,
+  onUpdate,
+  pending,
+  priceTargets,
+  rules,
+  targetById,
+}: {
+  adding: boolean
+  assets: AssetContext[]
+  locale: string
+  onCancelAdd: () => void
+  onCreate: (payload: AlertRulePayload) => void
+  onDelete: (rule: AlertRule) => void
+  onToggle: (rule: AlertRule) => void
+  onUpdate: (rule: AlertRule, payload: AlertRulePayload, done: () => void) => void
+  pending: boolean
+  priceTargets: PriceTarget[]
+  rules: AlertRule[]
+  targetById: Map<string, PriceTarget>
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null)
+
   return (
-    <Card variant="outlined" sx={{ borderColor: triggered ? "color-mix(in srgb, var(--app-accent) 60%, var(--app-border))" : "var(--app-border)", bgcolor: "var(--app-bg-muted)", p: 1.25 }}>
-      <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-        <Switch checked={rule.enabled} disabled={pending} onChange={onToggle} size="small" />
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-            <Typography noWrap sx={{ color: "var(--app-text)", fontSize: 13, fontWeight: 900 }}>{rule.label ?? ruleKindLabels[rule.kind]}</Typography>
-            <Chip label={rule.enabled ? "Active" : triggered ? "Triggered" : "Disabled"} color={rule.enabled ? "success" : triggered ? "primary" : "default"} size="small" variant="outlined" />
-            <Chip label={repeatLabel(rule)} size="small" variant="outlined" sx={{ borderColor: "var(--app-border)", color: "var(--app-text-muted)" }} />
-          </Stack>
-          <Typography noWrap sx={{ color: "var(--app-text-muted)", fontSize: 11 }}>{describeRule(rule)}</Typography>
-        </Box>
-        <Tooltip title="Delete rule">
-          <IconButton disabled={pending} size="small" onClick={onDelete}><TrashIcon /></IconButton>
-        </Tooltip>
-      </Stack>
-    </Card>
+    <section className="app-panel min-w-0 overflow-hidden rounded-lg">
+      <PanelHeader subtitle={`${rules.length} rules`} title="Rules" />
+      <div className="grid grid-cols-[minmax(220px,1.2fr)_160px_minmax(260px,1.4fr)_120px_100px_104px] border-b border-[var(--app-border)] px-3 py-2 text-[11px] font-extrabold text-[var(--app-text-faint)]">
+        {["Asset", "Type", "Condition", "Repeat", "Status", ""].map((heading) => <span key={heading}>{heading}</span>)}
+      </div>
+      {adding ? (
+        <div className="border-b border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-accent)_7%,transparent)] p-3 shadow-[inset_3px_0_0_var(--app-accent)]">
+          <RuleForm assets={assets} locale={locale} onCancel={onCancelAdd} onSubmit={onCreate} pending={pending} priceTargets={priceTargets} submitLabel="Create rule" />
+        </div>
+      ) : null}
+      {rules.length === 0 && !adding ? (
+        <p className="px-4 py-12 text-center text-[12px] font-medium text-[var(--app-text-faint)]">No rules match these filters.</p>
+      ) : (
+        rules.map((rule) => {
+          const asset = resolveRuleAsset(rule, assets)
+          const editing = editingId === rule.id
+          return (
+            <div key={rule.id}>
+              <div className={`grid grid-cols-[minmax(220px,1.2fr)_160px_minmax(260px,1.4fr)_120px_100px_104px] items-center border-b border-[var(--app-border)] px-3 py-2.5 ${editing ? "bg-[color-mix(in_srgb,var(--app-accent)_10%,transparent)] shadow-[inset_3px_0_0_var(--app-accent)]" : ""}`}>
+                <AssetCell asset={asset} />
+                <div className="justify-self-start">
+                  <AppBadge kind="category" label={ruleKindLabels[rule.kind]} tone={rule.kind === "target_zone" ? "accent" : "neutral"} />
+                </div>
+                <p className="min-w-0 truncate text-[12px] font-semibold text-[var(--app-text-muted)]">{describeRule(rule, targetById, locale, asset)}</p>
+                <div className="justify-self-start">
+                  <AppBadge kind="category" label={repeatLabel(rule)} tone="neutral" />
+                </div>
+                <button className={`h-7 rounded-md border px-2 text-[11px] font-extrabold ${rule.enabled ? "border-[color-mix(in_srgb,var(--app-positive)_34%,var(--app-border))] text-[var(--app-positive)]" : "border-[var(--app-border)] text-[var(--app-text-faint)]"}`} disabled={pending} onClick={() => onToggle(rule)} type="button">
+                  {rule.enabled ? "Active" : "Disabled"}
+                </button>
+                <div className="flex justify-end gap-1">
+                  <AppIconButton disabled={pending} label={editing ? "Close edit" : "Edit rule"} onClick={() => setEditingId(editing ? null : rule.id)}>
+                    <AppIcon name={editing ? "x" : "edit"} />
+                  </AppIconButton>
+                  <AppIconButton disabled={pending} label="Delete rule" onClick={() => onDelete(rule)} tone="danger">
+                    <AppIcon name="trash" />
+                  </AppIconButton>
+                </div>
+              </div>
+              {editing ? (
+                <div className="border-b border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-accent)_7%,transparent)] p-3 shadow-[inset_3px_0_0_var(--app-accent)]">
+                  <RuleForm
+                    assets={assets}
+                    initialRule={rule}
+                    locale={locale}
+                    onCancel={() => setEditingId(null)}
+                    onSubmit={(payload) => onUpdate(rule, payload, () => setEditingId(null))}
+                    pending={pending}
+                    priceTargets={priceTargets}
+                    submitLabel="Save changes"
+                  />
+                </div>
+              ) : null}
+            </div>
+          )
+        })
+      )}
+      <div className="app-panel-footer flex min-h-[42px] items-center px-3 text-[11px] font-medium text-[var(--app-text-faint)]">
+        Updated {new Date().toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" })}
+      </div>
+    </section>
   )
 }
 
-function statusCount(tab: NotificationTab, metrics: { unread: number }, notifications: NotificationItem[]): number {
-  if (tab === "unread") return metrics.unread
-  if (tab === "price_moves") return notifications.filter((item) => item.type === "daily_move" || item.type === "cost_basis_move").length
-  if (tab === "thresholds") return notifications.filter((item) => item.type === "price_threshold" || item.type === "target_zone").length
-  if (tab === "earnings") return notifications.filter((item) => item.type === "earnings_upcoming").length
+function RuleDialog({
+  assets,
+  locale,
+  onClose,
+  onCreate,
+  pending,
+  priceTargets,
+}: {
+  assets: AssetContext[]
+  locale: string
+  onClose: () => void
+  onCreate: (payload: AlertRulePayload) => void
+  pending: boolean
+  priceTargets: PriceTarget[]
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4">
+      <section className="app-panel w-full max-w-[760px] overflow-hidden rounded-lg shadow-[var(--app-shadow)]">
+        <PanelHeader title="Create notification rule" />
+        <div className="p-4">
+          <RuleForm assets={assets} locale={locale} onCancel={onClose} onSubmit={onCreate} pending={pending} priceTargets={priceTargets} submitLabel="Create rule" />
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function RuleForm({
+  assets,
+  initialRule,
+  locale,
+  onCancel,
+  onSubmit,
+  pending,
+  priceTargets,
+  submitLabel,
+}: {
+  assets: AssetContext[]
+  initialRule?: AlertRule
+  locale: string
+  onCancel: () => void
+  onSubmit: (payload: AlertRulePayload) => void
+  pending: boolean
+  priceTargets: PriceTarget[]
+  submitLabel: string
+}) {
+  const initialAsset = initialRule ? resolveRuleAsset(initialRule, assets) ?? assets[0] : assets[0]
+  const [assetKey, setAssetKey] = useState(initialAsset?.listing_id ?? "")
+  const [kind, setKind] = useState<AlertRuleKind>(initialRule?.kind ?? "price_threshold")
+  const [repeat, setRepeat] = useState(initialRule?.notify_once === false ? "recurring" : "once")
+  const selectedAsset = assets.find((asset) => asset.listing_id === assetKey) ?? initialAsset
+  const targetOptions = selectedAsset ? ownTargetsForAsset(priceTargets, selectedAsset) : []
+  const initialTargetId = typeof initialRule?.params.target_id === "string" ? initialRule.params.target_id : targetOptions[0]?.id ?? ""
+  const [targetId, setTargetId] = useState(initialTargetId)
+  const selectedTargetId = targetOptions.some((target) => target.id === targetId) ? targetId : targetOptions[0]?.id ?? ""
+  const locked = Boolean(initialRule)
+  const showDirection = kind === "price_threshold" || kind === "cost_basis_move"
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!selectedAsset) return
+    const formData = new FormData(event.currentTarget)
+    const payload = buildRulePayload(formData, selectedAsset, kind, repeat, selectedTargetId)
+    if (!payload) return
+    onSubmit(payload)
+  }
+
+  return (
+    <form className="space-y-4" onSubmit={submit}>
+      <div className="grid gap-3 lg:grid-cols-2">
+        <FieldShell label="Asset">
+          <select className={inputClass} disabled={locked} onChange={(event) => setAssetKey(event.target.value)} value={assetKey}>
+            {assets.map((asset) => (
+              <option key={asset.listing_id} value={asset.listing_id}>{asset.name} ({asset.symbol})</option>
+            ))}
+          </select>
+        </FieldShell>
+        <FieldShell label="Rule type">
+          <select className={inputClass} disabled={locked} name="kind" onChange={(event) => setKind(event.target.value as AlertRuleKind)} value={kind}>
+            {ruleKindOptions.map((option) => (
+              <option disabled={option.value === "target_zone" && targetOptions.length === 0} key={option.value} value={option.value}>
+                {option.label}{option.value === "target_zone" && targetOptions.length === 0 ? " (no zones)" : ""}
+              </option>
+            ))}
+          </select>
+        </FieldShell>
+      </div>
+
+      {kind === "target_zone" ? (
+        <FieldShell label="Target zone">
+          <select className={inputClass} name="target_id" onChange={(event) => setTargetId(event.target.value)} required value={selectedTargetId}>
+            {targetOptions.map((target) => (
+              <option key={target.id} value={target.id}>{formatTarget(target, locale, selectedAsset?.asset_type ?? "equity")}</option>
+            ))}
+          </select>
+        </FieldShell>
+      ) : (
+        <div className={`grid gap-3 ${showDirection ? "lg:grid-cols-2" : ""}`}>
+          {showDirection ? (
+            <FieldShell label="Direction">
+              <select className={inputClass} defaultValue={String(initialRule?.params.direction ?? "above")} name="direction">
+                <option value="above">Above</option>
+                <option value="below">Below</option>
+              </select>
+            </FieldShell>
+          ) : null}
+          {kind === "price_threshold" ? <NumberField defaultValue={String(initialRule?.params.price ?? "")} label={`Price (${selectedAsset?.currency ?? "EUR"})`} min="0.000001" name="price" /> : null}
+          {kind === "daily_move" ? <NumberField defaultValue={String(initialRule?.params.threshold_pct ?? "5")} label="Daily move (%)" min="0.1" name="threshold_pct" /> : null}
+          {kind === "earnings_lead" ? <NumberField defaultValue={String(initialRule?.params.days ?? "7")} label="Days before earnings" max="365" min="1" name="days" step="1" /> : null}
+          {kind === "cost_basis_move" ? <NumberField defaultValue={String(initialRule?.params.threshold_pct ?? "10")} label="Move from cost (%)" min="0.1" name="threshold_pct" /> : null}
+        </div>
+      )}
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <FieldShell label="Label">
+          <input className={inputClass} defaultValue={initialRule?.label ?? ""} maxLength={100} name="label" placeholder="Optional label" />
+        </FieldShell>
+        <FieldShell label="When it triggers">
+          <select className={inputClass} name="repeat" onChange={(event) => setRepeat(event.target.value)} value={repeat}>
+            {REPEAT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        </FieldShell>
+      </div>
+
+      <div className="app-panel-footer flex items-center justify-end gap-2 border-t border-[var(--app-border)] pt-3">
+        <TextButton disabled={pending} onClick={onCancel}>Cancel</TextButton>
+        <button className="h-9 rounded-md bg-[var(--app-accent)] px-4 text-[12px] font-extrabold text-white transition hover:bg-[color-mix(in_srgb,var(--app-accent)_88%,white)] disabled:cursor-not-allowed disabled:opacity-50" disabled={pending || (kind === "target_zone" && targetOptions.length === 0)} type="submit">
+          {pending ? "Saving..." : submitLabel}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+function RuleCard({
+  asset,
+  locale,
+  onDelete,
+  onToggle,
+  pending,
+  rule,
+  targetById,
+  triggered,
+}: {
+  asset?: AssetContext
+  locale: string
+  onDelete: () => void
+  onToggle: () => void
+  pending: boolean
+  rule: AlertRule
+  targetById: Map<string, PriceTarget>
+  triggered: boolean
+}) {
+  return (
+    <div className={`rounded-md border p-2.5 ${triggered ? "border-[color-mix(in_srgb,var(--app-accent)_56%,var(--app-border))] bg-[color-mix(in_srgb,var(--app-accent)_12%,transparent)]" : "border-[var(--app-border)] bg-[var(--app-surface-inset)]"}`}>
+      <div className="flex min-w-0 items-center gap-2">
+        <button
+          aria-label={rule.enabled ? "Disable rule" : "Enable rule"}
+          className={`relative h-5 w-9 shrink-0 rounded-full border transition ${rule.enabled ? "border-[color-mix(in_srgb,var(--app-positive)_42%,var(--app-border))] bg-[color-mix(in_srgb,var(--app-positive)_24%,transparent)]" : "border-[var(--app-border)] bg-[var(--app-surface-panel)]"}`}
+          disabled={pending}
+          onClick={onToggle}
+          type="button"
+        >
+          <span className={`absolute top-0.5 h-4 w-4 rounded-full transition ${rule.enabled ? "left-4 bg-[var(--app-positive)]" : "left-0.5 bg-[var(--app-text-faint)]"}`} />
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <p className="truncate text-[12px] font-extrabold text-[var(--app-text)]">{rule.label ?? ruleKindLabels[rule.kind]}</p>
+            <AppBadge kind="status" label={rule.enabled ? "Active" : triggered ? "Triggered" : "Disabled"} tone={rule.enabled ? "success" : triggered ? "accent" : "neutral"} />
+            <AppBadge kind="category" label={repeatLabel(rule)} tone="neutral" />
+          </div>
+          <p className="mt-0.5 truncate text-[11px] font-medium text-[var(--app-text-muted)]">{describeRule(rule, targetById, locale, asset)}</p>
+        </div>
+        <AppIconButton disabled={pending} label="Delete rule" onClick={onDelete} tone="danger">
+          <AppIcon name="trash" />
+        </AppIconButton>
+      </div>
+    </div>
+  )
+}
+
+function PanelHeader({ action, subtitle, title }: { action?: ReactNode; subtitle?: string; title: string }) {
+  return (
+    <div className="app-panel-header flex min-h-[43px] items-center justify-between gap-3 px-4 py-2.5">
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-baseline gap-2">
+          <h2 className="truncate text-[13px] font-extrabold text-[var(--app-text)]">{title}</h2>
+          {subtitle ? <span className="shrink-0 text-[11px] font-semibold text-[var(--app-text-faint)]">{subtitle}</span> : null}
+        </div>
+      </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
+    </div>
+  )
+}
+
+function FieldShell({ children, label }: { children: ReactNode; label: string }) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-[10.5px] font-extrabold uppercase tracking-[0.08em] text-[var(--app-text-faint)]">{label}</span>
+      {children}
+    </label>
+  )
+}
+
+function NumberField({ label, name, ...props }: { label: string; name: string } & InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <FieldShell label={label}>
+      <input className={inputClass} name={name} required step="any" type="number" {...props} />
+    </FieldShell>
+  )
+}
+
+const inputClass = "h-10 w-full rounded-md border border-[var(--app-border)] bg-[var(--app-surface-inset)] px-3 text-[13px] font-semibold text-[var(--app-text)] outline-none transition focus:border-[color-mix(in_srgb,var(--app-accent)_54%,var(--app-border))] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--app-accent)_18%,transparent)] disabled:cursor-not-allowed disabled:opacity-60"
+
+function TextButton({ children, disabled = false, onClick }: { children: ReactNode; disabled?: boolean; onClick: () => void }) {
+  return (
+    <button
+      className="inline-flex h-8 items-center justify-center rounded-md border border-[var(--app-border)] px-3 text-[12px] font-extrabold text-[var(--app-text-muted)] transition hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text)] disabled:cursor-not-allowed disabled:opacity-50"
+      disabled={disabled}
+      onClick={onClick}
+      type="button"
+    >
+      {children}
+    </button>
+  )
+}
+
+function AppIconButton({ children, disabled = false, label, onClick, tone = "neutral" }: { children: ReactNode; disabled?: boolean; label: string; onClick: MouseEventHandler<HTMLButtonElement>; tone?: "danger" | "neutral" }) {
+  return (
+    <button aria-label={label} className={iconButtonClass(tone)} disabled={disabled} onClick={onClick} title={label} type="button">
+      {children}
+    </button>
+  )
+}
+
+function iconButtonClass(tone: "danger" | "neutral" = "neutral") {
+  const toneClass = tone === "danger"
+    ? "text-[var(--app-negative)] hover:text-[var(--app-negative)]"
+    : "text-[var(--app-text-muted)] hover:text-[var(--app-text)]"
+  return `flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--app-border)] ${toneClass} transition hover:bg-[var(--app-surface-hover)] disabled:cursor-not-allowed disabled:opacity-50 [&>.app-icon]:h-4 [&>.app-icon]:w-4`
+}
+
+function AssetCell({ asset }: { asset: AssetContext | undefined }) {
+  return (
+    <div className="min-w-0">
+      <p className="truncate text-[12px] font-extrabold text-[var(--app-text)]">{asset?.name ?? "Unknown asset"}</p>
+      <p className="truncate text-[10.5px] font-medium text-[var(--app-text-faint)]">{asset ? `${asset.symbol} - ${asset.source === "held" ? "Held" : "Watchlist"}` : "Not in current asset set"}</p>
+    </div>
+  )
+}
+
+function buildAssets(positions: PositionView[], watchlistItems: WatchlistItemView[]): AssetContext[] {
+  const assets = new Map<string, AssetContext>()
+  for (const position of positions) {
+    if (!position.listing || position.state !== "open") continue
+    assets.set(position.listing_id, {
+      ...position.listing,
+      listing_id: position.listing_id,
+      position_id: position.id,
+      performance: position.performance,
+      source: "held",
+      state: position.state,
+    })
+  }
+  for (const item of watchlistItems) {
+    if (!item.listing || assets.has(item.listing_id)) continue
+    assets.set(item.listing_id, { ...item.listing, listing_id: item.listing_id, source: "watchlist" })
+  }
+  return [...assets.values()].sort((first, second) => first.name.localeCompare(second.name))
+}
+
+function buildRulePayload(formData: FormData, asset: AssetContext, kind: AlertRuleKind, repeat: string, targetId: string): AlertRulePayload | null {
+  const numberValue = (key: string) => Number(formData.get(key))
+  let params: Record<string, unknown>
+  if (kind === "price_threshold") params = { direction: formData.get("direction"), price: numberValue("price") }
+  else if (kind === "daily_move") params = { threshold_pct: numberValue("threshold_pct") }
+  else if (kind === "earnings_lead") params = { days: numberValue("days") }
+  else if (kind === "cost_basis_move") params = { direction: formData.get("direction"), threshold_pct: numberValue("threshold_pct") }
+  else {
+    if (!targetId) return null
+    params = { target_id: targetId }
+  }
+  const label = String(formData.get("label") ?? "").trim()
+  return {
+    kind,
+    instrument_id: asset.instrument_id,
+    listing_id: asset.listing_id,
+    label: label || null,
+    notify_once: repeat !== "recurring",
+    params,
+  }
+}
+
+function statusCount(view: NotificationView, metrics: { unread: number }, notifications: NotificationItem[], rules: AlertRule[]): number {
+  if (view === "unread") return metrics.unread
+  if (view === "price_moves") return notifications.filter((item) => item.type === "daily_move" || item.type === "cost_basis_move").length
+  if (view === "thresholds") return notifications.filter((item) => item.type === "price_threshold" || item.type === "target_zone").length
+  if (view === "earnings") return notifications.filter((item) => item.type === "earnings_upcoming").length
+  if (view === "rules") return rules.length
   return notifications.length
 }
 
-function matchesNotification(item: NotificationItem, asset: AssetContext | undefined, criteria: { assetIds: Set<string>; range: DateRange; ruleStatuses: Set<"active" | "disabled">; searchTerm: string; severities: Set<NotificationItem["severity"]>; tab: NotificationTab; types: Set<NotificationItem["type"]> }, rules: AlertRule[]): boolean {
-  if (criteria.tab === "unread" && item.read_at !== null) return false
-  if (criteria.tab === "price_moves" && item.type !== "daily_move" && item.type !== "cost_basis_move") return false
-  if (criteria.tab === "thresholds" && item.type !== "price_threshold" && item.type !== "target_zone") return false
-  if (criteria.tab === "earnings" && item.type !== "earnings_upcoming") return false
-  if (criteria.types.size > 0 && !criteria.types.has(item.type)) return false
-  if (criteria.severities.size > 0 && !criteria.severities.has(item.severity)) return false
+function matchesNotification(item: NotificationItem, asset: AssetContext | undefined, criteria: { assetIds: Set<string>; searchTerm: string; view: NotificationView }): boolean {
+  if (criteria.view === "rules") return false
+  if (criteria.view === "unread" && item.read_at !== null) return false
+  if (criteria.view === "price_moves" && item.type !== "daily_move" && item.type !== "cost_basis_move") return false
+  if (criteria.view === "thresholds" && item.type !== "price_threshold" && item.type !== "target_zone") return false
+  if (criteria.view === "earnings" && item.type !== "earnings_upcoming") return false
   if (criteria.assetIds.size > 0 && (!asset || !criteria.assetIds.has(asset.instrument_id))) return false
-  if (!matchesRange(item.created_at, criteria.range)) return false
-  if (criteria.ruleStatuses.size > 0 && asset) {
-    const relatedRules = rulesForAsset(rules, asset)
-    const hasSelectedStatus = relatedRules.some((rule) => criteria.ruleStatuses.has(rule.enabled ? "active" : "disabled"))
-    if (!hasSelectedStatus) return false
-  }
   const needle = criteria.searchTerm.trim().toLowerCase()
   if (needle) {
     const haystack = [item.title, item.body, item.type, asset?.name, asset?.symbol].filter(Boolean).join(" ").toLowerCase()
@@ -674,16 +1011,32 @@ function matchesNotification(item: NotificationItem, asset: AssetContext | undef
   return true
 }
 
-function matchesRange(createdAt: string, range: DateRange): boolean {
-  if (range === "all") return true
-  const days = range === "7d" ? 7 : 30
-  return Date.parse(createdAt) >= Date.now() - days * 24 * 60 * 60 * 1000
+function filterRules(rules: AlertRule[], assets: AssetContext[], priceTargets: PriceTarget[], searchTerm: string, selectedAssetIds: Set<string>, locale: string): AlertRule[] {
+  const targetById = new Map(priceTargets.map((target) => [target.id, target]))
+  const needle = searchTerm.trim().toLowerCase()
+  return rules.filter((rule) => {
+    const asset = resolveRuleAsset(rule, assets)
+    if (selectedAssetIds.size > 0 && (!asset || !selectedAssetIds.has(asset.instrument_id))) return false
+    if (!needle) return true
+    const haystack = [
+      asset?.name,
+      asset?.symbol,
+      rule.label,
+      ruleKindLabels[rule.kind],
+      describeRule(rule, targetById, locale, asset),
+    ].filter(Boolean).join(" ").toLowerCase()
+    return haystack.includes(needle)
+  })
 }
 
 function resolveAsset(item: NotificationItem, byListing: Map<string, AssetContext>, byInstrument: Map<string, AssetContext>): AssetContext | undefined {
   if (item.listing_id && byListing.has(item.listing_id)) return byListing.get(item.listing_id)
   if (item.instrument_id && byInstrument.has(item.instrument_id)) return byInstrument.get(item.instrument_id)
   return undefined
+}
+
+function resolveRuleAsset(rule: AlertRule, assets: AssetContext[]): AssetContext | undefined {
+  return assets.find((asset) => asset.listing_id === rule.listing_id) ?? assets.find((asset) => asset.instrument_id === rule.instrument_id)
 }
 
 function rulesForAsset(rules: AlertRule[], asset: AssetContext): AlertRule[] {
@@ -711,47 +1064,87 @@ function ruleMatchesData(rule: AlertRule, data: unknown): boolean {
   if (rule.kind === "cost_basis_move") return String(rule.params.direction) === String(payload.direction) && Number(rule.params.threshold_pct) === Number(payload.threshold_pct)
   if (rule.kind === "daily_move") return Number.isFinite(Number(payload.daily_change_pct))
   if (rule.kind === "earnings_lead") return typeof payload.report_date === "string"
-  return rule.kind === "target_zone"
+  if (rule.kind === "target_zone") {
+    const targetId = typeof rule.params.target_id === "string" ? rule.params.target_id : null
+    return targetId === null || targetId === payload.target_id || (Array.isArray(payload.target_ids) && payload.target_ids.includes(targetId))
+  }
+  return false
 }
 
-function describeRule(rule: AlertRule): string {
+function ownTargetsForAsset(priceTargets: PriceTarget[], asset: AssetContext): PriceTarget[] {
+  return priceTargets
+    .filter((target) => target.source === "own")
+    .filter((target) => target.instrument_id === asset.instrument_id)
+    .filter((target) => target.listing_id === null || target.listing_id === asset.listing_id)
+    .sort((first, second) => first.horizon.localeCompare(second.horizon) || first.effective_date.localeCompare(second.effective_date))
+}
+
+function describeRule(rule: AlertRule, targetById: Map<string, PriceTarget>, locale: string, asset?: AssetContext): string {
   const params = rule.params
-  if (rule.kind === "price_threshold") return `Price ${String(params.direction)} ${String(params.price)}`
+  if (rule.kind === "price_threshold") {
+    const price = readRuleNumber(params.price)
+    const value = price === null ? String(params.price) : fmtPriceAmount(locale, price, asset?.currency ?? "EUR", asset?.asset_type ?? "equity")
+    return `Price ${String(params.direction)} ${value}`
+  }
   if (rule.kind === "daily_move") return `Daily move above ${String(params.threshold_pct)}%`
   if (rule.kind === "earnings_lead") return `Earnings ${String(params.days)} day(s) before report`
   if (rule.kind === "cost_basis_move") return `Cost basis ${String(params.direction)} ${String(params.threshold_pct)}%`
-  if (rule.kind === "target_zone") return "Target zone"
+  if (rule.kind === "target_zone") {
+    const targetId = typeof params.target_id === "string" ? params.target_id : null
+    return targetId ? `Target zone: ${formatTarget(targetById.get(targetId), locale, asset?.asset_type ?? "equity")}` : "Target zone"
+  }
   return rule.kind
 }
 
-function countBy<T, K>(items: T[], key: (item: T) => K): Map<K, number> {
-  const map = new Map<K, number>()
+function readRuleNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value
+  if (typeof value === "string") return num(value)
+  return null
+}
+
+function formatTarget(target: PriceTarget | undefined, locale: string, assetType: string): string {
+  if (!target) return "Unknown zone"
+  const lowValue = num(target.zone_low)
+  const highValue = num(target.zone_high)
+  const low = lowValue !== null ? fmtPriceAmount(locale, lowValue, target.currency, assetType) : null
+  const high = highValue !== null ? fmtPriceAmount(locale, highValue, target.currency, assetType) : null
+  const zone = low && high ? `${low} - ${high}` : low ? `from ${low}` : high ? `up to ${high}` : "open zone"
+  return `${titleCase(target.horizon)} - ${zone}`
+}
+
+function groupNotifications(items: NotificationItem[]): Array<{ label: string; items: NotificationItem[] }> {
+  const now = new Date()
+  const todayStart = startOfDay(now)
+  const thisWeekStart = startOfWeek(todayStart)
+  const lastWeekStart = new Date(thisWeekStart)
+  lastWeekStart.setDate(thisWeekStart.getDate() - 7)
+  const groups = new Map<string, NotificationItem[]>()
   for (const item of items) {
-    const k = key(item)
-    map.set(k, (map.get(k) ?? 0) + 1)
+    const date = new Date(item.created_at)
+    const label = date >= todayStart ? "Today" : date >= thisWeekStart ? "This week" : date >= lastWeekStart ? "Last week" : "Earlier"
+    groups.set(label, [...(groups.get(label) ?? []), item])
   }
-  return map
+  return ["Today", "This week", "Last week", "Earlier"].flatMap((label) => {
+    const rows = groups.get(label)
+    return rows ? [{ label, items: rows }] : []
+  })
+}
+
+function startOfDay(value: Date): Date {
+  return new Date(value.getFullYear(), value.getMonth(), value.getDate())
+}
+
+function startOfWeek(value: Date): Date {
+  const date = startOfDay(value)
+  const day = date.getDay() || 7
+  date.setDate(date.getDate() - day + 1)
+  return date
 }
 
 function removeSetValue<T>(current: Set<T>, value: T): Set<T> {
   const next = new Set(current)
   next.delete(value)
   return next
-}
-
-function groupNotifications(items: NotificationItem[]): Array<{ label: string; items: NotificationItem[] }> {
-  const today = new Date().toISOString().slice(0, 10)
-  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-  const groups = new Map<string, NotificationItem[]>()
-  for (const item of items) {
-    const day = item.created_at.slice(0, 10)
-    const label = day === today ? "Today" : day === yesterday ? "Yesterday" : "Earlier"
-    groups.set(label, [...(groups.get(label) ?? []), item])
-  }
-  return ["Today", "Yesterday", "Earlier"].flatMap((label) => {
-    const rows = groups.get(label)
-    return rows ? [{ label, items: rows }] : []
-  })
 }
 
 function formatTime(value: string, locale: string): string {
@@ -768,7 +1161,7 @@ function formatNotificationValue(item: NotificationItem, asset: AssetContext | u
   if (typeof data.latest === "number" && asset) return money(String(data.latest), locale, asset.currency)
   if (typeof data.daily_change_pct === "number") return `${data.daily_change_pct >= 0 ? "+" : ""}${data.daily_change_pct.toFixed(2)}%`
   if (typeof data.unrealized_pct === "number") return `${data.unrealized_pct >= 0 ? "+" : ""}${data.unrealized_pct.toFixed(2)}%`
-  return "—"
+  return "-"
 }
 
 function valueTone(item: NotificationItem): "positive" | "negative" | "neutral" {
@@ -778,35 +1171,28 @@ function valueTone(item: NotificationItem): "positive" | "negative" | "neutral" 
   return value >= 0 ? "positive" : "negative"
 }
 
+function valueToneClass(tone: "positive" | "negative" | "neutral") {
+  if (tone === "positive") return "text-[var(--app-positive)]"
+  if (tone === "negative") return "text-[var(--app-negative)]"
+  return "text-[var(--app-text-muted)]"
+}
+
 function money(value: string | null, locale: string, currency: string): string {
   const number = value === null ? null : Number(value)
-  if (number === null || Number.isNaN(number)) return "—"
+  if (number === null || Number.isNaN(number)) return "-"
   return new Intl.NumberFormat(locale, { currency, style: "currency" }).format(number)
 }
 
 function pct(value: string | null): string {
   const number = value === null ? null : Number(value)
   if (number === null || Number.isNaN(number)) return ""
-  return ` · ${number >= 0 ? "+" : ""}${number.toFixed(2)}%`
+  return ` - ${number >= 0 ? "+" : ""}${number.toFixed(2)}%`
+}
+
+function titleCase(value: string): string {
+  return value.slice(0, 1).toUpperCase() + value.slice(1)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null
-}
-
-function SearchIcon({ small = false }: { small?: boolean }) {
-  return <AppIcon className={small ? "h-3.5 w-3.5" : "h-4 w-4"} name="search" strokeWidth={1.8} />
-}
-
-
-function MailIcon() {
-  return <AppIcon className="h-4 w-4" name="mail" strokeWidth={1.8} />
-}
-
-function OpenIcon() {
-  return <AppIcon className="h-4 w-4" name="openExternal" strokeWidth={1.8} />
-}
-
-function TrashIcon() {
-  return <AppIcon className="h-4 w-4" name="trash" strokeWidth={1.8} />
 }

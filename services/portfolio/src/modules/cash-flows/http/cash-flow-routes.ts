@@ -4,24 +4,30 @@ import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import { AppError } from '@portfolio/platform';
 import type { CashFlowService } from '../application/cash-flow-service.js';
 import type { CashFlowType } from '../application/ports.js';
-import { CashFlowRecordSchema, OkResponse } from '../../../schemas.js';
+import { CashFlowKindSchema, CashFlowRecordSchema, OkResponse, TaxComponentSchema } from '../../../schemas.js';
 
-const CashFlowKind = Type.Union([
-  Type.Literal('dividend'),
-  Type.Literal('deposit'),
-  Type.Literal('withdrawal'),
-  Type.Literal('cash_in_lieu'),
-]);
 const Amount = Type.String({ pattern: '^-?\\d+(\\.\\d+)?$' });
 const DateStr = Type.String({ format: 'date' });
 
+const TaxComponentInput = Type.Object({
+  component: TaxComponentSchema,
+  amount: Amount,
+  currency: Type.String({ minLength: 3, maxLength: 3 }),
+  booking_date: DateStr,
+});
+
 const ListQuery = Type.Object({
-  type: Type.Optional(CashFlowKind),
+  // `types` (CSV, e.g. "dividend,interest") takes precedence over single `type`.
+  type: Type.Optional(CashFlowKindSchema),
+  types: Type.Optional(Type.String({ minLength: 1 })),
   position_id: Type.Optional(Type.String({ format: 'uuid' })),
+  // Inclusive value-date (tax_relevant_value_date) range.
+  date_from: Type.Optional(DateStr),
+  date_to: Type.Optional(DateStr),
 });
 
 const CreateBody = Type.Object({
-  type: CashFlowKind,
+  type: CashFlowKindSchema,
   gross_amount: Amount,
   withholding_tax: Type.Optional(Amount),
   fee: Type.Optional(Amount),
@@ -30,6 +36,15 @@ const CreateBody = Type.Object({
   tax_relevant_value_date: Type.Optional(DateStr),
   position_id: Type.Optional(Type.String({ format: 'uuid' })),
   note: Type.Optional(Type.String({ maxLength: 280 })),
+  // Event linkage (dividend/cash-in-lieu booked from an `events` corporate action).
+  source_event_id: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
+  source_event_version: Type.Optional(Type.Integer({ minimum: 0 })),
+  source_event_type: Type.Optional(Type.String({ maxLength: 100 })),
+  ex_date: Type.Optional(DateStr),
+  amount_per_share: Type.Optional(Amount),
+  // Withheld-tax breakdown (income types); sets withholding_tax = their sum and
+  // creates linked tax events. Mutually exclusive with withholding_tax.
+  tax_components: Type.Optional(Type.Array(TaxComponentInput, { minItems: 1 })),
 });
 
 const UpdateBody = Type.Object({
@@ -59,8 +74,10 @@ export function registerCashFlowRoutes(app: FastifyInstance, deps: CashFlowRoute
     { preHandler: read, schema: { querystring: ListQuery, response: { 200: Type.Array(CashFlowRecordSchema) } } },
     async (request) =>
       deps.service.list(uid(request.user?.sub), (request.params as { portfolioId: string }).portfolioId, {
-        type: request.query.type as CashFlowType | undefined,
+        types: parseTypes(request.query.types, request.query.type as CashFlowType | undefined),
         positionId: request.query.position_id,
+        dateFrom: request.query.date_from,
+        dateTo: request.query.date_to,
       }),
   );
 
@@ -81,6 +98,17 @@ export function registerCashFlowRoutes(app: FastifyInstance, deps: CashFlowRoute
           taxRelevantValueDate: request.body.tax_relevant_value_date,
           positionId: request.body.position_id ?? null,
           note: request.body.note ?? null,
+          sourceEventId: request.body.source_event_id ?? null,
+          sourceEventVersion: request.body.source_event_version ?? null,
+          sourceEventType: request.body.source_event_type ?? null,
+          exDate: request.body.ex_date ?? null,
+          amountPerShare: request.body.amount_per_share ?? null,
+          taxComponents: request.body.tax_components?.map((c) => ({
+            component: c.component,
+            amount: c.amount,
+            currency: c.currency,
+            bookingDate: c.booking_date,
+          })),
         },
       );
       reply.code(201);
@@ -112,4 +140,20 @@ export function registerCashFlowRoutes(app: FastifyInstance, deps: CashFlowRoute
 function uid(sub: string | undefined): string {
   if (!sub) throw AppError.unauthorized('missing_subject', 'Token missing subject');
   return sub;
+}
+
+const KNOWN_TYPES: readonly CashFlowType[] = ['dividend', 'deposit', 'withdrawal', 'cash_in_lieu', 'interest'];
+
+/**
+ * Resolves the type filter: a CSV `types` (validated against the known set) takes
+ * precedence over the single schema-validated `type`; neither given → no filter.
+ */
+function parseTypes(csv: string | undefined, single: CashFlowType | undefined): CashFlowType[] | undefined {
+  if (csv !== undefined) {
+    const parts = csv.split(',').map((s) => s.trim()).filter((s) => s.length > 0);
+    const invalid = parts.filter((p) => !KNOWN_TYPES.includes(p as CashFlowType));
+    if (invalid.length > 0) throw AppError.badRequest('invalid_filter', `Unknown cash-flow type(s): ${invalid.join(', ')}`);
+    return parts.length > 0 ? (parts as CashFlowType[]) : undefined;
+  }
+  return single ? [single] : undefined;
 }

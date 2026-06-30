@@ -29,6 +29,7 @@ export interface NotificationsTable {
   rule_id: string | null;
   data: Json | null;
   read_at: ColumnType<Date | null, Date | string | null, Date | string | null>;
+  snoozed_until: ColumnType<Date | null, Date | string | null, Date | string | null>;
   created_at: Generated<Date>;
 }
 
@@ -76,7 +77,6 @@ export interface AlertRulesTable {
   label: string | null;
   enabled: ColumnType<boolean, boolean | undefined, boolean>;
   notify_once: ColumnType<boolean, boolean | undefined, boolean>;
-  remind_after_minutes: number | null;
   created_at: Generated<Date>;
   updated_at: ColumnType<Date, Date | string | undefined, Date | string>;
 }

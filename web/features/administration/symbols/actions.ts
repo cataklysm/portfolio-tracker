@@ -231,3 +231,21 @@ export async function rebuildAdminSymbolQuotesAction(listingId: string, quotePro
   revalidatePath("/administration/symbols")
   return null
 }
+
+export async function rebuildAdminSymbolIntradayQuotesAction(listingId: string): Promise<string | null> {
+  try {
+    const resp = await apiFetch("/quotes/rebuild-intraday", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        listing_ids: [listingId],
+        confirm: true,
+      }),
+    })
+    if (!resp.ok) return problemDetail(resp, "Failed to rebuild intraday quotes.")
+  } catch {
+    return "Cannot reach the gateway."
+  }
+  revalidatePath("/administration/symbols")
+  return null
+}

@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { logoutAction } from "@/app/actions"
+import { DesktopNotificationToggle } from "@/application/notifications/DesktopNotificationToggle"
 import { AppIcon } from "@/design/icons/AppIcon"
 import { ThemeToggle } from "./ThemeToggle"
 import type { MeData, PositionView } from "@/lib/types"
@@ -107,6 +108,7 @@ export function AppHeader({ me, unreadCount, positions }: { me: MeData | null; u
                   <p className="mt-0.5 truncate text-[10px] text-[var(--app-text-faint)]">{me.email}</p>
                 </div>
                 <div className="p-1.5">
+                  <DesktopNotificationToggle />
                   <Link href="/settings" role="menuitem" onClick={() => setUserOpen(false)} className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text)]"><MenuIcon type="settings" /> Settings</Link>
                   <form action={logoutAction}><button role="menuitem" className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-negative)]"><MenuIcon type="logout" /> Sign out</button></form>
                 </div>

@@ -109,6 +109,7 @@ export interface ListingSessionCalendar {
 export interface ProviderListing {
   listing_id: string;
   instrument_id: string;
+  name: string;
   symbol: string;
   currency: string;
   provider_identifier: string | null;

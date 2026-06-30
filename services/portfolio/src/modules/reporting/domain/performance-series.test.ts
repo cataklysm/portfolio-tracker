@@ -223,6 +223,7 @@ describe('computePerformanceSeries — cash flows', () => {
     { type: 'deposit', amount: dec('1000'), currency: 'EUR', valueDate: '2026-01-05' },
     { type: 'withdrawal', amount: dec('200'), currency: 'EUR', valueDate: '2026-01-12' },
     { type: 'dividend', amount: dec('30'), currency: 'EUR', valueDate: '2026-01-12' },
+    { type: 'interest', amount: dec('15'), currency: 'EUR', valueDate: '2026-01-12' },
   ];
 
   const series = computePerformanceSeries({
@@ -239,7 +240,9 @@ describe('computePerformanceSeries — cash flows', () => {
     assert.equal(at(series, 1).dividends, '0.00');
     assert.equal(at(series, 2).net_contributed, '800.00'); // 1000 − 200
     assert.equal(at(series, 2).dividends, '30.00');
-    assert.equal(at(series, 2).total_pnl, '30.00'); // dividends only (no holdings)
+    assert.equal(at(series, 1).interest, '0.00'); // interest dated 01-12
+    assert.equal(at(series, 2).interest, '15.00');
+    assert.equal(at(series, 2).total_pnl, '45.00'); // dividends + interest (no holdings)
   });
 });
 

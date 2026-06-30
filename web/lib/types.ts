@@ -103,6 +103,7 @@ export interface TransactionView {
 }
 
 export type BookingSource = "manual" | "import" | "broker_api" | "provider" | "corporate_action"
+export type IncomeBookingSource = "income_booking"
 
 export interface RealizationAllocationView {
   position_id: string
@@ -171,6 +172,7 @@ export interface PerformancePoint {
   realized_pnl: string
   unrealized_pnl: string
   dividends: string
+  interest: string
   total_pnl: string
   complete: boolean
 }
@@ -259,6 +261,12 @@ export interface PortfolioReportSummary {
   realized_pnl: string
   unrealized_pnl: string
   dividends: string
+  dividends_net: string
+  cash_in_lieu_net: string
+  interest_net: string
+  income_net: string
+  income_gross: string
+  income_tax: string
   fees: string
   total_pnl: string
   simple_return_pct: string | null
@@ -316,6 +324,7 @@ export interface AllocationReport {
 
 export type TaxComponent = "capital_income" | "solidarity" | "church" | "foreign_withholding" | "generic"
 export type TaxDirection = "withheld" | "refunded"
+export type TaxSource = BookingSource | IncomeBookingSource
 
 export interface TaxEvent {
   id: string
@@ -324,7 +333,7 @@ export interface TaxEvent {
   amount: string
   currency: string
   booking_date: string
-  source: string
+  source: TaxSource
   note: string | null
   transaction_id: string | null
   cash_flow_id: string | null
@@ -334,7 +343,7 @@ export interface TaxEvent {
   updated_at: string
 }
 
-export type CashFlowType = "dividend" | "deposit" | "withdrawal" | "cash_in_lieu"
+export type CashFlowType = "dividend" | "deposit" | "withdrawal" | "cash_in_lieu" | "interest"
 
 export interface CashFlow {
   id: string
@@ -348,6 +357,13 @@ export interface CashFlow {
   currency: string
   payment_date: string
   tax_relevant_value_date: string
+  source_event_id: string | null
+  source_event_version: number | null
+  source_event_type: string | null
+  ex_date: string | null
+  amount_per_share: string | null
+  quantity_at_ex_date: string | null
+  expected_gross_amount: string | null
   note: string | null
   created_at: string
   updated_at: string
@@ -443,6 +459,25 @@ export interface Quote {
   freshness_status: "fresh" | "stale" | "unavailable"
   provider: string | null
   provider_timestamp: string | null
+}
+
+export interface QuoteRange {
+  high: string | null
+  low: string | null
+  high_at: string | null
+  low_at: string | null
+}
+
+export interface QuoteRanges {
+  listing_id: string
+  currency: string | null
+  as_of: string
+  ranges: {
+    daily: QuoteRange
+    weekly: QuoteRange
+    monthly: QuoteRange
+    yearly: QuoteRange
+  }
 }
 
 export interface TaxResidency {
@@ -685,6 +720,7 @@ export interface ProviderSettingsView {
   maxBatchSize: number | null
   rateLimitPerMin: number | null
   maxConcurrency: number
+  maxPerCycle: number | null
 }
 
 export interface ProviderUsageView {
@@ -723,6 +759,15 @@ export interface FairValueEstimate {
     present_value_of_cash_flows: number
     present_value_of_terminal: number
   }
+}
+
+export type FairValueFxStatus = "same_currency" | "converted" | "unavailable"
+
+export interface ConvertedFairValueEstimate extends FairValueEstimate {
+  display_currency: string
+  display_value: string | null
+  fx_rate_date: string | null
+  fx_status: FairValueFxStatus
 }
 
 export interface PriceTarget {
@@ -780,8 +825,6 @@ export interface AlertRule {
   enabled: boolean
   /** When true, the rule disables itself after firing once. */
   notify_once: boolean
-  /** "Remind me later" cooldown in minutes (5..1440); null = no cooldown. */
-  remind_after_minutes: number | null
   created_at: string
   updated_at: string
 }
@@ -798,6 +841,7 @@ export interface NotificationItem {
   rule_id: string | null
   data: unknown
   read_at: string | null
+  snoozed_until: string | null
   created_at: string
 }
 

@@ -14,7 +14,6 @@ export interface CreateRuleInput {
   params: Record<string, unknown>;
   label?: string | null;
   notifyOnce?: boolean;
-  remindAfterMinutes?: number | null;
 }
 
 export interface UpdateRuleInput {
@@ -22,7 +21,6 @@ export interface UpdateRuleInput {
   label?: string | null;
   enabled?: boolean;
   notifyOnce?: boolean;
-  remindAfterMinutes?: number | null;
 }
 
 /**
@@ -44,10 +42,8 @@ export class RuleService {
     // Rules are always instrument-scoped; global ("all holdings") rules were removed.
     const instrumentId = requireInstrument(input.instrumentId);
     const params = validateParams(input.kind, input.params);
-    // Default to one-shot; the caller opts into recurring / remind-later explicitly.
+    // Default to one-shot; the caller opts into recurring explicitly.
     const notifyOnce = input.notifyOnce ?? true;
-    // A one-shot rule never reminds; otherwise validate the cooldown range.
-    const remindAfterMinutes = notifyOnce ? null : validateRemind(input.remindAfterMinutes);
     return this.repo.create({
       userId,
       kind: input.kind,
@@ -56,23 +52,29 @@ export class RuleService {
       params,
       label: input.label ?? null,
       notifyOnce,
-      remindAfterMinutes,
     });
   }
 
   async update(userId: string, id: string, patch: UpdateRuleInput): Promise<AlertRule> {
+    const existing = patch.params !== undefined || patch.enabled === true
+      ? (await this.repo.listByUser(userId)).find((r) => r.id === id)
+      : undefined;
+    if ((patch.params !== undefined || patch.enabled === true) && !existing) {
+      throw AppError.notFound('alert_rule_not_found', 'Alert rule not found');
+    }
+
     const next: UpdateAlertRule = {};
     if (patch.label !== undefined) next.label = patch.label;
     if (patch.enabled !== undefined) next.enabled = patch.enabled;
     if (patch.notifyOnce !== undefined) next.notifyOnce = patch.notifyOnce;
-    if (patch.remindAfterMinutes !== undefined) next.remindAfterMinutes = validateRemind(patch.remindAfterMinutes);
     if (patch.params !== undefined) {
-      const existing = (await this.repo.listByUser(userId)).find((r) => r.id === id);
-      if (!existing) throw AppError.notFound('alert_rule_not_found', 'Alert rule not found');
-      next.params = validateParams(existing.kind, patch.params);
+      next.params = validateParams(existing!.kind, patch.params);
     }
     const updated = await this.repo.update(userId, id, next);
     if (!updated) throw AppError.notFound('alert_rule_not_found', 'Alert rule not found');
+    if (patch.params !== undefined || (patch.enabled === true && existing?.enabled === false)) {
+      await this.alertState.clearByAlertType(userId, `rule:${id}`);
+    }
     return updated;
   }
 
@@ -87,15 +89,6 @@ export class RuleService {
 function requireInstrument(instrumentId: string | null | undefined): string {
   if (!instrumentId) throw AppError.badRequest('missing_instrument', 'An instrument is required for this rule');
   return instrumentId;
-}
-
-/** Validates the "remind me later" cooldown: null or an integer in [5, 1440] minutes. */
-function validateRemind(value: number | null | undefined): number | null {
-  if (value === null || value === undefined) return null;
-  if (!Number.isInteger(value) || value < 5 || value > 1440) {
-    throw AppError.badRequest('invalid_remind_interval', 'remind_after_minutes must be an integer between 5 and 1440');
-  }
-  return value;
 }
 
 function num(value: unknown): number {
@@ -133,9 +126,13 @@ function validateParams(kind: RuleKind, raw: Record<string, unknown>): Record<st
       if (!Number.isFinite(threshold_pct)) bad('threshold_pct must be a number');
       return { direction: direction(raw.direction), threshold_pct };
     }
-    case 'target_zone':
-      // No params — the rule reads the user's own price targets from insights.
-      return {};
+    case 'target_zone': {
+      const normalizedTargetId = typeof raw.target_id === 'string' ? raw.target_id.trim() : '';
+      if (normalizedTargetId.length === 0) {
+        bad('target_id is required for target_zone rules');
+      }
+      return { target_id: normalizedTargetId };
+    }
     default:
       return bad('unknown rule kind');
   }

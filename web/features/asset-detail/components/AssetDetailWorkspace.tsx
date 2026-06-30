@@ -2,6 +2,7 @@ import Link from "next/link"
 import { AppBadge } from "@/design/components/AppBadge"
 import { PageShell } from "@/application/shell/PageShell"
 import { MetricBar, MetricBarItem, type MetricBarTone } from "@/design/components/MetricBar"
+import { SnapshotKpi, SnapshotKpiGrid, SnapshotPanel, SnapshotRow, SnapshotRows, SnapshotSection, type SnapshotTone } from "@/design/components/SnapshotPanel"
 import { AppIcon } from "@/design/icons/AppIcon"
 import { AssetBackButton } from "@/features/asset-detail/components/AssetBackButton"
 import { AssetPriceChart, type AssetTradeMarker } from "@/features/asset-detail/components/AssetPriceChart"
@@ -15,11 +16,12 @@ import { AddTransactionModal } from "@/features/positions/components/AddTransact
 import { CorporateActionsManager } from "@/features/positions/components/CorporateActionsManager"
 import { DeletePositionButton } from "@/features/positions/components/DeletePositionButton"
 import { TransferPositionControl } from "@/features/positions/components/TransferPositionControl"
+import { BookCorporateActionCashFlow } from "@/features/events/components/BookCorporateActionCashFlow"
 import { fmtCompact, fmtCurrency, fmtPct, fmtPrice, fmtQty, num } from "@/lib/format"
 import { getTranslations } from "@/lib/i18n"
 import type { AppBadgeTone } from "@/design/components/AppBadge"
 import type { AssetDetailModel, AssetPositionContext, AttentionItem, QuoteStatus } from "@/features/asset-detail/model/asset-detail-model"
-import type { Quote, TransactionView } from "@/lib/types"
+import type { CashFlow, CorporateAction, EarningsRow, Quote, TransactionView } from "@/lib/types"
 
 interface AssetDetailWorkspaceProperties {
   model: AssetDetailModel
@@ -40,6 +42,7 @@ export function AssetDetailWorkspace({ model, returnHref }: AssetDetailWorkspace
   const hasPositions = model.positions.length > 0
   const quoteStatus = model.quoteStatus
   const tradeMarkers = buildTradeMarkers(model.positions)
+  const incomeRows = buildIncomeRows(model.positions)
 
   return (
     <PageShell kind="workspace" maxWidth={1680}>
@@ -57,7 +60,7 @@ export function AssetDetailWorkspace({ model, returnHref }: AssetDetailWorkspace
         symbol={listing?.symbol ?? model.listingId}
       />
 
-      <MetricBar className="grid gap-px bg-[var(--app-border)] sm:grid-cols-2 xl:grid-cols-6">
+      <MetricBar columns={{ xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", xl: "repeat(6, minmax(0, 1fr))" }}>
         <AssetMetric icon={<AppIcon name="value" />} label="Market value" primary sub={hasPositions ? `${model.positions.length} position${model.positions.length === 1 ? "" : "s"}` : "No open position"} tone="accent" value={aggregate.currentValue !== null ? fmtCurrency(model.locale, aggregate.currentValue, model.reportingCurrency) : "-"} />
         <AssetMetric icon={<AppIcon name="list" />} label="Quantity" sub={hasPositions ? "Across visible positions" : "Watchlist only"} value={fmtQty(model.locale, aggregate.quantity, assetType)} />
         <AssetMetric icon={<AppIcon name="calculator" />} label="Cost basis" sub={aggregate.cost !== null && aggregate.quantity > 0 ? `${fmtPrice(model.locale, aggregate.cost / aggregate.quantity, model.reportingCurrency, assetType)} avg` : "No cost basis"} value={aggregate.cost !== null ? fmtCurrency(model.locale, aggregate.cost, model.reportingCurrency) : "-"} />
@@ -69,12 +72,18 @@ export function AssetDetailWorkspace({ model, returnHref }: AssetDetailWorkspace
       <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-3">
           <Panel className="min-w-0 overflow-hidden" padding={false}>
-            <AssetPriceChart currency={listingCurrency} dailyData={model.dailyChartSeries} dailyPositive={isDailyUp} data={model.chartSeries} locale={model.locale} targetZones={model.priceTargets} tradeMarkers={tradeMarkers} />
+            <AssetPriceChart assetType={assetType} currency={listingCurrency} dailyData={model.dailyChartSeries} dailyPositive={isDailyUp} data={model.chartSeries} fairValues={model.fairValues} locale={model.locale} targetZones={model.priceTargets} tradeMarkers={tradeMarkers} />
           </Panel>
 
           <Panel title={hasPositions ? "Positions across portfolios" : "Portfolio positions"} subtitle={hasPositions ? `${model.positions.length} portfolio${model.positions.length === 1 ? "" : "s"}` : "No position exists yet; this asset can still be analysed from the watchlist."} padding={false}>
             {hasPositions ? <PositionsTable contexts={model.positions} currency={model.reportingCurrency} locale={model.locale} assetType={assetType} /> : <EmptyPanelText>No portfolio position currently holds this asset.</EmptyPanelText>}
           </Panel>
+
+          {hasPositions ? (
+            <Panel title="Income received" subtitle={incomeRows.length > 0 ? `${incomeRows.length} booked income cash flow${incomeRows.length === 1 ? "" : "s"}` : "No dividends, interest, or cash-in-lieu recorded yet"} padding={false}>
+              {incomeRows.length > 0 ? <IncomeCashFlowTable assetType={assetType} locale={model.locale} rows={incomeRows} /> : <EmptyPanelText>No dividends, interest, or cash-in-lieu have been booked for this asset yet.</EmptyPanelText>}
+            </Panel>
+          ) : null}
 
           {model.positions.map((context) => (
             <Panel
@@ -106,10 +115,10 @@ export function AssetDetailWorkspace({ model, returnHref }: AssetDetailWorkspace
                     <FundamentalsSection currency={listingCurrency} data={model.fundamentals} density="compact" emptyReason={model.sections.fundamentals.reason} locale={model.locale} />
                   </ResearchTile>
                   <ResearchTile title={translations("positionDetail.fairValue")}>
-                    <FairValueSection currentPrice={currentPrice} currency={listingCurrency} detailContext={model.detailContext} instrumentId={instrumentId} items={model.fairValues} />
+                    <FairValueSection assetType={assetType} currentPrice={currentPrice} currency={listingCurrency} detailContext={model.detailContext} instrumentId={instrumentId} items={model.fairValues} />
                   </ResearchTile>
                   <ResearchTile title={translations("positionDetail.priceTargets")}>
-                    <PriceTargetsSection availableCurrencies={model.availableCurrencies} currentPrice={currentPrice} currency={listingCurrency} detailContext={model.detailContext} instrumentId={instrumentId} items={model.priceTargets} listingId={model.listingId} />
+                    <PriceTargetsSection assetType={assetType} availableCurrencies={model.availableCurrencies} canDeleteAnalystTargets={model.currentUserRole === "admin"} currentPrice={currentPrice} currency={listingCurrency} detailContext={model.detailContext} instrumentId={instrumentId} items={model.priceTargets} listingId={model.listingId} />
                   </ResearchTile>
                 </div>
               </Panel>
@@ -119,7 +128,7 @@ export function AssetDetailWorkspace({ model, returnHref }: AssetDetailWorkspace
               </Panel>
 
               <Panel title={translations("positionDetail.events")}>
-                <EventsSection corporateActions={model.events.corporateActions} currency={listingCurrency} earnings={model.events.earnings} emptyReason={model.sections.events.reason} locale={model.locale} />
+                <EventsSection corporateActions={model.events.corporateActions} currency={listingCurrency} earnings={model.events.earnings} emptyReason={model.sections.events.reason} locale={model.locale} portfolios={model.portfolios} positions={model.positions.map((context) => context.position)} revalidatePath={model.detailContext} />
               </Panel>
             </>
           ) : null}
@@ -130,7 +139,15 @@ export function AssetDetailWorkspace({ model, returnHref }: AssetDetailWorkspace
             assetType={assetType}
             currentPrice={currentPrice}
             dailyChange={dailyChange}
+            isDailyUp={isDailyUp}
             listingCurrency={listingCurrency}
+            locale={model.locale}
+            model={model}
+          />
+
+          <PositionSnapshotPanel
+            assetType={assetType}
+            hasPositions={hasPositions}
             locale={model.locale}
             model={model}
           />
@@ -138,6 +155,7 @@ export function AssetDetailWorkspace({ model, returnHref }: AssetDetailWorkspace
           {instrumentId ? (
             <Panel action={<span className="text-[10px] font-semibold text-[var(--app-accent)]">View all</span>} title="Alerts & zones">
               <AssetAlerts
+                assetType={assetType}
                 currency={listingCurrency}
                 currentPrice={currentPrice}
                 detailContext={model.detailContext}
@@ -146,6 +164,7 @@ export function AssetDetailWorkspace({ model, returnHref }: AssetDetailWorkspace
                 locale={model.locale}
                 notifications={model.notificationData.notifications}
                 notificationPreviewLimit={3}
+                priceTargets={model.priceTargets}
                 rules={model.notificationData.rules}
                 symbol={listing?.symbol ?? model.listingId}
               />
@@ -156,16 +175,6 @@ export function AssetDetailWorkspace({ model, returnHref }: AssetDetailWorkspace
           <DataQualityPanel locale={model.locale} model={model} />
 
           {model.positions.length > 0 ? <ActionsPanel model={model} /> : null}
-
-          <Panel title={hasPositions ? "Position snapshot" : "Asset facts"} padding={false}>
-            <FactRow label="Quantity" value={fmtQty(model.locale, aggregate.quantity, assetType)} />
-            <FactRow label="Cost basis" value={aggregate.cost !== null ? fmtCurrency(model.locale, aggregate.cost, model.reportingCurrency) : "-"} />
-            <FactRow label="Average cost" value={aggregate.cost !== null && aggregate.quantity > 0 ? fmtPrice(model.locale, aggregate.cost / aggregate.quantity, model.reportingCurrency, assetType) : "-"} />
-            <FactRow label="Total fees" value={aggregate.fees !== null ? fmtCurrency(model.locale, aggregate.fees, model.reportingCurrency) : "-"} />
-            <FactRow label="After-tax realized P&L" tone={factToneFromNumber(aggregate.afterTaxRealized)} value={aggregate.afterTaxRealized !== null ? signedCurrency(model.locale, aggregate.afterTaxRealized, model.reportingCurrency) : "-"} />
-            <FactRow label="Transactions" value={String(aggregate.txCount)} />
-            <FactRow label="Quote status" tone={quoteStatus.tone === "positive" ? "positive" : quoteStatus.tone === "neutral" ? undefined : "warning"} value={quoteStatus.label} />
-          </Panel>
 
           {model.positions.map((context) => (
             <Panel key={context.position.id} title={`Corporate actions - ${context.portfolioName}`}>
@@ -299,6 +308,7 @@ function AssetSnapshotPanel({
   assetType,
   currentPrice,
   dailyChange,
+  isDailyUp,
   listingCurrency,
   locale,
   model,
@@ -306,28 +316,91 @@ function AssetSnapshotPanel({
   assetType: string
   currentPrice: number | null
   dailyChange: number | null
+  isDailyUp: boolean
   listingCurrency: string
   locale: string
   model: AssetDetailModel
 }) {
-  const range = chartRange(model.dailyChartSeries)
+  const dailyRange = model.priceRanges?.ranges.daily ?? null
   const fundamentals = model.fundamentals
   const marketCap = num(fundamentals?.market_cap ?? null)
   const shares = num(fundamentals?.shares_outstanding ?? null)
   const sector = extraString(fundamentals?.extra, ["sector", "Sector"])
   const industry = extraString(fundamentals?.extra, ["industry", "Industry"])
+  const rangeValue = formatSnapshotRangeValue(locale, dailyRange?.low ?? null, dailyRange?.high ?? null, assetType)
+  const rangeTimeSummary = dailyRange ? formatRangeTimeSummary(locale, dailyRange.low_at, dailyRange.high_at) : "Range unavailable"
+  const quoteTone = model.quoteStatus.tone === "positive" ? "positive" : model.quoteStatus.tone === "critical" ? "negative" : model.quoteStatus.tone === "warning" ? "warning" : "neutral"
 
   return (
-    <Panel title="Asset snapshot" subtitle={`Values in ${listingCurrency}`} padding={false}>
-      <FactRow label="Current price" value={currentPrice !== null ? fmtPrice(locale, currentPrice, listingCurrency, assetType) : "-"} />
-      <FactRow label="Day change" tone={dailyChange === null ? undefined : dailyChange >= 0 ? "positive" : "negative"} value={dailyChange === null ? "-" : fmtPct(dailyChange)} />
-      <FactRow label="52W range" value={range ? `${fmtPrice(locale, range.low, listingCurrency, assetType)} - ${fmtPrice(locale, range.high, listingCurrency, assetType)}` : "-"} />
-      <FactRow label="Market cap" value={marketCap !== null ? fmtCompact(locale, marketCap, fundamentals?.currency ?? listingCurrency) : "-"} />
-      <FactRow label="Shares outstanding" value={shares !== null ? fmtCompact(locale, shares) : "-"} />
-      <FactRow label="Provider" value={model.quoteStatus.provider ?? fundamentals?.provider ?? "-"} />
-      <FactRow label="Sector" value={sector ?? "-"} />
-      <FactRow label="Industry" value={industry ?? "-"} />
-    </Panel>
+    <SnapshotPanel action={<span className={`text-[10px] font-semibold ${snapshotTextToneClass(quoteTone)}`}>{model.quoteStatus.label}</span>} title="Asset snapshot" subtitle={`Values in ${listingCurrency}`}>
+      <SnapshotKpiGrid columns={2}>
+        <SnapshotKpi label="Price" sub={dailyChange === null ? "Daily unavailable" : `${fmtPct(dailyChange)} today`} tone={dailyChange === null ? "neutral" : isDailyUp ? "positive" : "negative"} value={currentPrice !== null ? fmtPrice(locale, currentPrice, listingCurrency, assetType) : "-"} />
+        <SnapshotKpi label="Daily range" sub={rangeTimeSummary} value={rangeValue} />
+      </SnapshotKpiGrid>
+
+      <SnapshotSection title="Market facts">
+        <SnapshotRows>
+          <SnapshotRow label="Market cap" value={marketCap !== null ? fmtCompact(locale, marketCap, fundamentals?.currency ?? listingCurrency) : "-"} />
+          <SnapshotRow label="Shares outstanding" value={shares !== null ? fmtCompact(locale, shares) : "-"} />
+          <SnapshotRow label="Exchange" value={model.session?.mic ?? "-"} />
+          <SnapshotRow label="Provider" value={model.quoteStatus.provider ?? fundamentals?.provider ?? "-"} />
+        </SnapshotRows>
+      </SnapshotSection>
+
+      <SnapshotSection title="Classification">
+        <SnapshotRows>
+          <SnapshotRow label="Sector" value={sector ?? "-"} />
+          <SnapshotRow label="Industry" value={industry ?? "-"} />
+        </SnapshotRows>
+      </SnapshotSection>
+    </SnapshotPanel>
+  )
+}
+
+function PositionSnapshotPanel({
+  assetType,
+  hasPositions,
+  locale,
+  model,
+}: {
+  assetType: string
+  hasPositions: boolean
+  locale: string
+  model: AssetDetailModel
+}) {
+  const aggregate = model.aggregate
+  const averageCost = aggregate.cost !== null && aggregate.quantity > 0
+    ? fmtPrice(locale, aggregate.cost / aggregate.quantity, model.reportingCurrency, assetType)
+    : "-"
+  const contextLabel = hasPositions ? model.scope.label : "No open position"
+  const incomeNetByCurrency = sumCashFlowCurrency(buildIncomeRows(model.positions), (flow) => flow.net_amount)
+
+  return (
+    <SnapshotPanel title={hasPositions ? "Position snapshot" : "Asset facts"} subtitle={contextLabel}>
+      <SnapshotKpiGrid columns={3}>
+        <SnapshotKpi label="Value" sub={hasPositions ? "Market value" : "No position"} value={aggregate.currentValue !== null ? fmtCurrency(locale, aggregate.currentValue, model.reportingCurrency) : "-"} />
+        <SnapshotKpi label="Qty" sub={hasPositions ? "Open qty" : "Watchlist only"} value={fmtQty(locale, aggregate.quantity, assetType)} />
+        <SnapshotKpi label="Return" sub={aggregate.unrealized !== null ? signedCurrency(locale, aggregate.unrealized, model.reportingCurrency) : "No open P&L"} tone={snapshotToneFromNumber(aggregate.totalReturnPct)} value={aggregate.totalReturnPct !== null ? fmtPct(aggregate.totalReturnPct) : "-"} />
+      </SnapshotKpiGrid>
+
+      <SnapshotSection title="Profit & loss">
+        <SnapshotRows>
+          <SnapshotRow label="Unrealized P&L" tone={snapshotToneFromNumber(aggregate.unrealized)} value={aggregate.unrealized !== null ? signedCurrency(locale, aggregate.unrealized, model.reportingCurrency) : "-"} />
+          <SnapshotRow label="Realized P&L" tone={snapshotToneFromNumber(aggregate.realized)} value={aggregate.realized !== null ? signedCurrency(locale, aggregate.realized, model.reportingCurrency) : "-"} />
+          <SnapshotRow label="Income received" tone={incomeNetByCurrency.size > 0 ? "positive" : "neutral"} value={formatCurrencyMap(locale, incomeNetByCurrency)} />
+          <SnapshotRow label="After-tax realized" tone={snapshotToneFromNumber(aggregate.afterTaxRealized)} value={aggregate.afterTaxRealized !== null ? signedCurrency(locale, aggregate.afterTaxRealized, model.reportingCurrency) : "-"} />
+        </SnapshotRows>
+      </SnapshotSection>
+
+      <SnapshotSection title="Costs">
+        <SnapshotRows>
+          <SnapshotRow label="Cost basis" value={aggregate.cost !== null ? fmtCurrency(locale, aggregate.cost, model.reportingCurrency) : "-"} />
+          <SnapshotRow label="Average cost" value={averageCost} />
+          <SnapshotRow label="Total fees" value={aggregate.fees !== null ? fmtCurrency(locale, aggregate.fees, model.reportingCurrency) : "-"} />
+          <SnapshotRow label="Transactions" value={String(aggregate.txCount)} />
+        </SnapshotRows>
+      </SnapshotSection>
+    </SnapshotPanel>
   )
 }
 
@@ -340,39 +413,35 @@ function UpcomingEventsPanel({
   locale: string
   model: AssetDetailModel
 }) {
-  const upcomingEarnings = model.events.earnings
-    .filter((item) => item.is_upcoming && item.report_date)
-    .sort((a, b) => (a.report_date ?? "").localeCompare(b.report_date ?? ""))
-    .slice(0, 2)
-  const corporateActions = model.events.corporateActions
-    .filter((item) => item.ex_date)
-    .sort((a, b) => a.ex_date.localeCompare(b.ex_date))
-    .slice(0, 2)
-  const hasEvents = upcomingEarnings.length > 0 || corporateActions.length > 0
+  const events = buildSidebarEvents(model.events.earnings, model.events.corporateActions, currency, locale)
+  const positions = model.positions.map((context) => context.position)
 
   return (
     <Panel action={<span className="text-[10px] font-semibold text-[var(--app-accent)]">View all</span>} title="Upcoming events" padding={false}>
-      {hasEvents ? (
+      {events.length > 0 ? (
         <div className="divide-y divide-[var(--app-border)]">
-          {upcomingEarnings.map((event) => (
+          {events.map((event) => (
             <SideEventRow
-              key={`earnings-${event.instrument_id}-${event.report_date}`}
-              label="Earnings report"
-              meta={`FY${event.fiscal_year}${event.fiscal_quarter ? ` Q${event.fiscal_quarter}` : ""} - ${event.provider}`}
-              value={event.report_date ? formatShortDate(locale, event.report_date) : "-"}
-            />
-          ))}
-          {corporateActions.map((event) => (
-            <SideEventRow
-              key={event.stable_action_id}
-              label={event.type}
-              meta={event.provider}
-              value={event.dividend_amount ? fmtCurrency(locale, num(event.dividend_amount) ?? 0, event.dividend_currency ?? currency) : formatShortDate(locale, event.ex_date)}
+              action={event.corporateAction ? (
+                <BookCorporateActionCashFlow
+                  action={event.corporateAction}
+                  fallbackCurrency={currency}
+                  portfolios={model.portfolios}
+                  positions={positions}
+                  revalidatePath={model.detailContext}
+                  triggerClassName="inline-flex h-7 items-center justify-center rounded-md border border-[color-mix(in_srgb,var(--app-accent)_34%,var(--app-border))] px-2 text-[10px] font-extrabold text-[var(--app-accent)] transition hover:border-[var(--app-accent)] hover:bg-[color-mix(in_srgb,var(--app-accent)_10%,transparent)]"
+                  triggerLabel="Book"
+                />
+              ) : null}
+              key={event.id}
+              label={event.label}
+              meta={event.meta}
+              value={event.value}
             />
           ))}
         </div>
       ) : (
-        <EmptyPanelText>{model.sections.events.reason ?? "No upcoming events for this asset."}</EmptyPanelText>
+        <EmptyPanelText>{model.sections.events.reason ?? "No upcoming or recent events for this asset."}</EmptyPanelText>
       )}
     </Panel>
   )
@@ -418,16 +487,103 @@ function ActionsPanel({ model }: { model: AssetDetailModel }) {
   )
 }
 
-function SideEventRow({ label, meta, value }: { label: string; meta: string; value: string }) {
+function SideEventRow({ action, label, meta, value }: { action?: React.ReactNode; label: string; meta: string; value: string }) {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 px-3 py-2.5">
       <div className="min-w-0">
         <p className="truncate text-[11.5px] font-semibold text-[var(--app-text)]">{label}</p>
         <p className="mt-0.5 truncate text-[10px] font-medium text-[var(--app-text-faint)]">{meta}</p>
       </div>
-      <p className="text-right text-[11px] font-semibold tabular-nums text-[var(--app-text)]">{value}</p>
+      <div className="flex items-center gap-2">
+        <p className="text-right text-[11px] font-semibold tabular-nums text-[var(--app-text)]">{value}</p>
+        {action}
+      </div>
     </div>
   )
+}
+
+interface SidebarEvent {
+  corporateAction?: CorporateAction
+  dateKey: string
+  id: string
+  label: string
+  meta: string
+  value: string
+}
+
+const RECENT_EVENT_LOOKBACK_DAYS = 30
+const SIDEBAR_EVENT_LIMIT = 4
+
+function buildSidebarEvents(
+  earnings: EarningsRow[],
+  corporateActions: CorporateAction[],
+  fallbackCurrency: string,
+  locale: string,
+): SidebarEvent[] {
+  const today = todayDateKey()
+  const recentCutoff = shiftDateKey(today, -RECENT_EVENT_LOOKBACK_DAYS)
+  const events: SidebarEvent[] = []
+
+  for (const event of earnings) {
+    if (!event.report_date) continue
+    const reportDateKey = dateKey(event.report_date)
+    if (!isRelevantSidebarEvent(reportDateKey, today, recentCutoff)) continue
+    events.push({
+      dateKey: reportDateKey,
+      id: `earnings-${event.instrument_id}-${event.report_date}-${event.fiscal_year}-${event.fiscal_quarter ?? "fy"}`,
+      label: "Earnings report",
+      meta: `FY${event.fiscal_year}${event.fiscal_quarter ? ` Q${event.fiscal_quarter}` : ""} - ${event.provider}`,
+      value: formatShortDate(locale, reportDateKey),
+    })
+  }
+
+  for (const event of corporateActions) {
+    const dateKeyValue = dateKey(event.ex_date)
+    if (!isRelevantSidebarEvent(dateKeyValue, today, recentCutoff)) continue
+    events.push({
+      dateKey: dateKeyValue,
+      id: event.stable_action_id,
+      label: corporateActionLabel(event),
+      meta: `Ex-date ${formatShortDate(locale, dateKeyValue)} - ${event.provider}`,
+      value: corporateActionValue(event, fallbackCurrency, locale),
+      corporateAction: event,
+    })
+  }
+
+  return events
+    .sort((first, second) => compareSidebarEvents(first, second, today))
+    .slice(0, SIDEBAR_EVENT_LIMIT)
+}
+
+function isRelevantSidebarEvent(eventDateKey: string, today: string, recentCutoff: string): boolean {
+  return eventDateKey >= today || eventDateKey >= recentCutoff
+}
+
+function compareSidebarEvents(first: SidebarEvent, second: SidebarEvent, today: string): number {
+  const firstFuture = first.dateKey >= today
+  const secondFuture = second.dateKey >= today
+  if (firstFuture !== secondFuture) return firstFuture ? -1 : 1
+  return firstFuture
+    ? first.dateKey.localeCompare(second.dateKey)
+    : second.dateKey.localeCompare(first.dateKey)
+}
+
+function corporateActionLabel(event: CorporateAction): string {
+  if (event.type === "dividend") return "Dividend"
+  if (event.type === "split") return "Split"
+  if (event.type === "reverse_split") return "Reverse split"
+  return event.type.replace(/_/g, " ")
+}
+
+function corporateActionValue(event: CorporateAction, fallbackCurrency: string, locale: string): string {
+  const amount = num(event.dividend_amount)
+  if (event.type === "dividend" && amount !== null) {
+    return fmtCurrency(locale, amount, event.dividend_currency ?? fallbackCurrency)
+  }
+  if (event.ratio_numerator && event.ratio_denominator) {
+    return `${event.ratio_numerator}:${event.ratio_denominator}`
+  }
+  return formatShortDate(locale, event.ex_date)
 }
 
 function ResearchTile({ children, title }: { children: React.ReactNode; title: string }) {
@@ -437,6 +593,103 @@ function ResearchTile({ children, title }: { children: React.ReactNode; title: s
       {children}
     </div>
   )
+}
+
+interface IncomeCashFlowRow {
+  flow: CashFlow
+  portfolioName: string
+}
+
+function IncomeCashFlowTable({ assetType, locale, rows }: { assetType: string; locale: string; rows: IncomeCashFlowRow[] }) {
+  const grossByCurrency = sumCashFlowCurrency(rows, (flow) => flow.gross_amount)
+  const taxByCurrency = sumCashFlowCurrency(rows, (flow) => flow.withholding_tax)
+  const netByCurrency = sumCashFlowCurrency(rows, (flow) => flow.net_amount)
+
+  return (
+    <div>
+      <div className="grid border-b border-[var(--app-border)] bg-[var(--app-surface-inset)] sm:grid-cols-3">
+        <IncomeSummaryCell label="Gross income" value={formatCurrencyMap(locale, grossByCurrency)} />
+        <IncomeSummaryCell label="Withholding tax" tone="negative" value={formatCurrencyMap(locale, taxByCurrency, true)} />
+        <IncomeSummaryCell label="Net income" tone="positive" value={formatCurrencyMap(locale, netByCurrency)} />
+      </div>
+      <div className="overflow-x-auto">
+        <div className="min-w-[980px]">
+          <div className="grid grid-cols-[120px_150px_minmax(180px,1fr)_120px_160px_130px_130px_130px] gap-3 border-b border-[var(--app-border)] bg-[var(--app-surface-inset)] px-4 py-2 text-[10.5px] font-semibold text-[var(--app-text-faint)]">
+            <span>Payment</span>
+            <span>Type</span>
+            <span>Portfolio</span>
+            <span>Ex-date</span>
+            <span className="text-right">Per share / qty</span>
+            <span className="text-right">Gross</span>
+            <span className="text-right">Tax + fee</span>
+            <span className="text-right">Net</span>
+          </div>
+          {rows.map(({ flow, portfolioName }) => {
+            const withholding = num(flow.withholding_tax) ?? 0
+            const fee = num(flow.fee) ?? 0
+            const perShare = num(flow.amount_per_share)
+            const quantityAtExDate = num(flow.quantity_at_ex_date)
+            return (
+              <div className="grid grid-cols-[120px_150px_minmax(180px,1fr)_120px_160px_130px_130px_130px] items-center gap-3 border-b border-[var(--app-border)] px-4 py-2.5 last:border-b-0" key={flow.id}>
+                <span className="tabular-nums text-[11.5px] font-medium text-[var(--app-text-muted)]">{formatShortDate(locale, flow.payment_date)}</span>
+                <span className="min-w-0">
+                  <span className="block truncate text-[12px] font-semibold text-[var(--app-text)]">{cashFlowTypeLabel(flow.type)}</span>
+                  {flow.source_event_id ? <span className="mt-0.5 block text-[10px] font-medium text-[var(--app-accent)]">Linked event</span> : null}
+                </span>
+                <span className="truncate text-[12px] font-semibold text-[var(--app-text)]">{portfolioName}</span>
+                <span className="tabular-nums text-[11.5px] font-medium text-[var(--app-text-muted)]">{flow.ex_date ? formatShortDate(locale, flow.ex_date) : "-"}</span>
+                <span className="text-right text-[11.5px] font-semibold tabular-nums text-[var(--app-text-muted)]">
+                  {perShare !== null ? fmtPrice(locale, perShare, flow.currency, assetType) : "-"}
+                  {quantityAtExDate !== null ? <span className="ml-1 text-[var(--app-text-faint)]">x {fmtQty(locale, quantityAtExDate, assetType)}</span> : null}
+                </span>
+                <span className="text-right text-[12px] font-semibold tabular-nums text-[var(--app-text)]">{fmtCurrency(locale, num(flow.gross_amount) ?? 0, flow.currency)}</span>
+                <span className="text-right text-[12px] font-semibold tabular-nums text-[var(--app-negative)]">{withholding + fee > 0 ? `-${fmtCurrency(locale, withholding + fee, flow.currency)}` : fmtCurrency(locale, 0, flow.currency)}</span>
+                <span className="text-right text-[12px] font-semibold tabular-nums text-[var(--app-positive)]">{fmtCurrency(locale, num(flow.net_amount) ?? 0, flow.currency)}</span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function IncomeSummaryCell({ label, tone, value }: { label: string; tone?: "positive" | "negative"; value: string }) {
+  const toneClass = tone === "positive" ? "text-[var(--app-positive)]" : tone === "negative" ? "text-[var(--app-negative)]" : "text-[var(--app-text)]"
+  return (
+    <div className="border-b border-[var(--app-border)] px-4 py-3 last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0">
+      <p className="text-[10px] font-semibold text-[var(--app-text-faint)]">{label}</p>
+      <p className={`mt-1 text-[15px] font-extrabold tabular-nums ${toneClass}`}>{value}</p>
+    </div>
+  )
+}
+
+function buildIncomeRows(contexts: AssetPositionContext[]): IncomeCashFlowRow[] {
+  return contexts
+    .flatMap((context) => context.incomeCashFlows.map((flow) => ({ flow, portfolioName: context.portfolioName })))
+    .sort((first, second) => second.flow.payment_date.localeCompare(first.flow.payment_date))
+}
+
+function sumCashFlowCurrency(rows: IncomeCashFlowRow[], selector: (flow: CashFlow) => string): Map<string, number> {
+  const sums = new Map<string, number>()
+  for (const { flow } of rows) {
+    const value = num(selector(flow)) ?? 0
+    sums.set(flow.currency, (sums.get(flow.currency) ?? 0) + value)
+  }
+  return sums
+}
+
+function formatCurrencyMap(locale: string, values: Map<string, number>, negative = false): string {
+  if (values.size === 0) return "-"
+  return [...values.entries()]
+    .sort(([firstCurrency], [secondCurrency]) => firstCurrency.localeCompare(secondCurrency))
+    .map(([currency, value]) => `${negative && value > 0 ? "-" : ""}${fmtCurrency(locale, value, currency)}`)
+    .join(" + ")
+}
+
+function cashFlowTypeLabel(type: CashFlow["type"]): string {
+  if (type === "cash_in_lieu") return "Cash in lieu"
+  return type.charAt(0).toUpperCase() + type.slice(1)
 }
 
 function PositionsTable({
@@ -559,12 +812,6 @@ function AttentionRow({ item }: { item: AttentionItem }) {
   )
 }
 
-function chartRange(points: AssetDetailModel["dailyChartSeries"]): { high: number; low: number } | null {
-  const values = points.map((point) => num(point.price)).filter((value): value is number => value !== null)
-  if (values.length === 0) return null
-  return { high: Math.max(...values), low: Math.min(...values) }
-}
-
 function extraString(extra: Record<string, unknown> | null | undefined, keys: string[]): string | null {
   if (!extra) return null
   for (const key of keys) {
@@ -576,6 +823,20 @@ function extraString(extra: Record<string, unknown> | null | undefined, keys: st
 
 function formatShortDate(locale: string, iso: string): string {
   return new Date(iso).toLocaleDateString(locale, { day: "2-digit", month: "short", year: "numeric" })
+}
+
+function todayDateKey(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function dateKey(iso: string): string {
+  return iso.slice(0, 10)
+}
+
+function shiftDateKey(iso: string, days: number): string {
+  const date = new Date(`${iso}T00:00:00.000Z`)
+  date.setUTCDate(date.getUTCDate() + days)
+  return date.toISOString().slice(0, 10)
 }
 
 function marketStatusLabel(status: QuoteStatus["marketStatus"]): string {
@@ -616,14 +877,51 @@ function signedCurrency(locale: string, value: number, currency: string): string
   return `${value > 0 ? "+" : ""}${fmtCurrency(locale, value, currency)}`
 }
 
+function formatPriceNumber(locale: string, value: number, assetType: string): string {
+  const maximumFractionDigits = assetType === "crypto" && Math.abs(value) < 1 ? 8 : 4
+  return new Intl.NumberFormat(locale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits,
+  }).format(value)
+}
+
+function formatSnapshotRangeValue(locale: string, lowValue: string | null, highValue: string | null, assetType: string): string {
+  const low = num(lowValue)
+  const high = num(highValue)
+  if (low === null && high === null) return "-"
+  if (low !== null && high !== null) return `${formatPriceNumber(locale, low, assetType)}-${formatPriceNumber(locale, high, assetType)}`
+  const singleValue = low ?? high
+  return singleValue !== null ? formatPriceNumber(locale, singleValue, assetType) : "-"
+}
+
+function formatRangeTimeSummary(locale: string, lowAt: string | null, highAt: string | null): string {
+  const low = lowAt ? formatTime(locale, lowAt) : null
+  const high = highAt ? formatTime(locale, highAt) : null
+  if (low && high) return `L ${low} / H ${high}`
+  if (low) return `L ${low}`
+  if (high) return `H ${high}`
+  return "Time unavailable"
+}
+
+function formatTime(locale: string, iso: string): string {
+  return new Date(iso).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })
+}
+
 function toneFromNumber(value: number | null): MetricBarTone {
   if (value === null || value === 0) return "neutral"
   return value > 0 ? "positive" : "danger"
 }
 
-function factToneFromNumber(value: number | null): "positive" | "negative" | "warning" | undefined {
-  if (value === null || value === 0) return undefined
+function snapshotToneFromNumber(value: number | null): SnapshotTone {
+  if (value === null || value === 0) return "neutral"
   return value > 0 ? "positive" : "negative"
+}
+
+function snapshotTextToneClass(tone: SnapshotTone): string {
+  if (tone === "positive") return "text-[var(--app-positive)]"
+  if (tone === "negative") return "text-[var(--app-negative)]"
+  if (tone === "warning") return "text-[var(--app-warning)]"
+  return "text-[var(--app-text-faint)]"
 }
 
 function formatAccountingMethod(method: string | undefined): string {

@@ -3,7 +3,7 @@ import { useActionState, useEffect, useRef, useState, useTransition } from "reac
 import { createPriceTargetAction, deletePriceTargetAction, updatePriceTargetAction } from "@/features/insights/actions"
 import { useLocale } from "@/lib/locale-context"
 import { useTranslations, type MessageKey } from "@/lib/i18n"
-import { fmtCurrency, num } from "@/lib/format"
+import { fmtPriceAmount, num } from "@/lib/format"
 import type { ConvertedPriceTarget, PriceTarget } from "@/lib/types"
 
 const inputClass =
@@ -27,6 +27,8 @@ const HORIZON_ORDER: PriceTarget["horizon"][] = ["short", "medium", "long"]
 
 interface Props {
   availableCurrencies: string[]
+  assetType: string
+  canDeleteAnalystTargets?: boolean
   detailContext: string
   instrumentId: string
   listingId: string
@@ -35,7 +37,7 @@ interface Props {
   items: ConvertedPriceTarget[]
 }
 
-export function PriceTargetsSection({ availableCurrencies, detailContext, instrumentId, listingId, currency, currentPrice, items }: Props) {
+export function PriceTargetsSection({ assetType, availableCurrencies, canDeleteAnalystTargets = false, detailContext, instrumentId, listingId, currency, currentPrice, items }: Props) {
   const locale = useLocale()
   const t = useTranslations()
   const [open, setOpen] = useState(false)
@@ -57,7 +59,7 @@ export function PriceTargetsSection({ availableCurrencies, detailContext, instru
                 {items
                   .filter((target) => target.horizon === h)
                   .map((target) => (
-                    <TargetRow availableCurrencies={availableCurrencies} key={target.id} target={target} detailContext={detailContext} currentPrice={currentPrice} locale={locale} />
+                    <TargetRow assetType={assetType} availableCurrencies={availableCurrencies} canDeleteAnalystTargets={canDeleteAnalystTargets} key={target.id} target={target} detailContext={detailContext} currentPrice={currentPrice} locale={locale} />
                   ))}
               </ul>
             </div>
@@ -123,12 +125,16 @@ export function PriceTargetsSection({ availableCurrencies, detailContext, instru
 
 function TargetRow({
   availableCurrencies,
+  assetType,
+  canDeleteAnalystTargets,
   target,
   detailContext,
   currentPrice,
   locale,
 }: {
   availableCurrencies: string[]
+  assetType: string
+  canDeleteAnalystTargets: boolean
   target: ConvertedPriceTarget
   detailContext: string
   currentPrice: number | null
@@ -144,18 +150,19 @@ function TargetRow({
   const compareLow = target.fx_status === "unavailable" ? null : displayLow
   const compareHigh = target.fx_status === "unavailable" ? null : displayHigh
   const isOwn = target.user_id !== null && target.source === "own"
+  const canDelete = isOwn || (canDeleteAnalystTargets && target.user_id === null && target.source === "analyst")
   const sourceLabel =
     target.source === "analyst" ? tr("priceTargets.sourceAnalyst") : target.source === "own" ? tr("priceTargets.sourceOwn") : target.source
 
   const displayedZone =
     displayLow !== null && displayHigh !== null
-      ? `${fmtCurrency(locale, displayLow, target.display_currency)} - ${fmtCurrency(locale, displayHigh, target.display_currency)}`
+      ? `${fmtPriceAmount(locale, displayLow, target.display_currency, assetType)} - ${fmtPriceAmount(locale, displayHigh, target.display_currency, assetType)}`
       : displayLow !== null
-        ? `>= ${fmtCurrency(locale, displayLow, target.display_currency)}`
+        ? `>= ${fmtPriceAmount(locale, displayLow, target.display_currency, assetType)}`
         : displayHigh !== null
-          ? `<= ${fmtCurrency(locale, displayHigh, target.display_currency)}`
+          ? `<= ${fmtPriceAmount(locale, displayHigh, target.display_currency, assetType)}`
           : "-"
-  const sourceZone = formatZone(locale, originalLow, originalHigh, target.currency)
+  const sourceZone = formatZone(locale, originalLow, originalHigh, target.currency, assetType)
   const zone = target.fx_status === "unavailable" ? sourceZone : displayedZone
   const conversionNote = target.fx_status === "converted"
     ? `from ${sourceZone}`
@@ -195,15 +202,17 @@ function TargetRow({
           <p className="truncate text-[11px] text-[var(--app-text-faint)]">{conversionNote}</p>
         )}
       </div>
-      {isOwn && (
+      {canDelete && (
         <div className="flex shrink-0 items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className={ghostButtonClass}
-          >
-            {tr("priceTargets.edit")}
-          </button>
+          {isOwn ? (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className={ghostButtonClass}
+            >
+              {tr("priceTargets.edit")}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => startDelete(async () => void (await deletePriceTargetAction(detailContext, target.id)))}
@@ -297,9 +306,9 @@ function CurrencySelect({ currencies: rawCurrencies, id, value }: { currencies: 
   )
 }
 
-function formatZone(locale: string, low: number | null, high: number | null, currency: string): string {
-  if (low !== null && high !== null) return `${fmtCurrency(locale, low, currency)} - ${fmtCurrency(locale, high, currency)}`
-  if (low !== null) return `>= ${fmtCurrency(locale, low, currency)}`
-  if (high !== null) return `<= ${fmtCurrency(locale, high, currency)}`
+function formatZone(locale: string, low: number | null, high: number | null, currency: string, assetType: string): string {
+  if (low !== null && high !== null) return `${fmtPriceAmount(locale, low, currency, assetType)} - ${fmtPriceAmount(locale, high, currency, assetType)}`
+  if (low !== null) return `>= ${fmtPriceAmount(locale, low, currency, assetType)}`
+  if (high !== null) return `<= ${fmtPriceAmount(locale, high, currency, assetType)}`
   return "-"
 }

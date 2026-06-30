@@ -16,7 +16,7 @@ import type { TaxEventRecord, TaxEventRepository } from '../../tax-events/applic
 import { computeSummary, type PortfolioSummary } from '../domain/summary.js';
 import { computeHoldings, type HoldingGroup } from '../domain/holdings.js';
 import { computeAllocation, type AllocationReport } from '../domain/allocation.js';
-import { computeTaxReport, type ConvertedTaxEvent, type TaxReport } from '../domain/tax-report.js';
+import { computeTaxReport, isRealizedGainTaxEvent, type ConvertedTaxEvent, type TaxReport } from '../domain/tax-report.js';
 import {
   computePerformanceSeries,
   buildSampleDates,
@@ -101,8 +101,9 @@ export interface ReportingSnapshot {
   tax: TaxReport;
 }
 
-// "Dividend income" for the summary/holdings = received dividends and cash-in-lieu.
-const INCOME_TYPES = new Set<CashFlowRecord['type']>(['dividend', 'cash_in_lieu']);
+// Dividend income (the back-compat `dividends` figure + per-instrument attribution)
+// = received dividends and cash-in-lieu. Interest income is summed separately.
+const DIVIDEND_TYPES = new Set<CashFlowRecord['type']>(['dividend', 'cash_in_lieu']);
 
 /**
  * Authoritative portfolio reporting. Builds on the verified per-position
@@ -121,12 +122,12 @@ export class ReportingService {
       this.deps.portfolios.list(userId, true),
     ]);
 
-    const dividends = await this.sumDividends(flows, settings.reportingCurrency, bearerToken);
+    const income = await this.sumIncome(flows, settings.reportingCurrency, bearerToken);
     const headlineMetric = portfolioId
       ? (portfolios.find((p) => p.id === portfolioId)?.preferred_headline_metric ?? null)
       : null;
 
-    return computeSummary(views, dividends, settings.reportingCurrency, new Date().toISOString(), headlineMetric);
+    return computeSummary(views, income, settings.reportingCurrency, new Date().toISOString(), headlineMetric);
   }
 
   async getHoldings(userId: string, bearerToken: string, portfolioId?: string): Promise<HoldingGroup[]> {
@@ -188,12 +189,12 @@ export class ReportingService {
       ? (portfolios.find((p) => p.id === portfolioId)?.preferred_headline_metric ?? null)
       : null;
 
-    const [dividends, dividendsByInstrument] = await Promise.all([
-      this.sumDividends(flows, reportingCurrency, bearerToken),
+    const [income, dividendsByInstrument] = await Promise.all([
+      this.sumIncome(flows, reportingCurrency, bearerToken),
       this.dividendsByInstrument(flows, views, reportingCurrency, bearerToken),
     ]);
 
-    const summary = computeSummary(views, dividends, reportingCurrency, snapshotAt, headlineMetric);
+    const summary = computeSummary(views, income, reportingCurrency, snapshotAt, headlineMetric);
     const holdings = computeHoldings(views, portfolioNames, dividendsByInstrument);
     const allocation = computeAllocation(views, portfolioNames);
     const tax = await this.buildTaxReport(events, new Decimal(summary.realized_pnl), reportingCurrency, bearerToken);
@@ -208,8 +209,12 @@ export class ReportingService {
     reportingCurrency: string,
     bearerToken: string,
   ): Promise<TaxReport> {
-    const convert = await this.taxConverter(events, reportingCurrency, bearerToken);
-    const converted: ConvertedTaxEvent[] = events.map((event) => ({
+    // Income tax (dividend/interest/cash-in-lieu withholding) reduces income, not
+    // realized price gains, so only realized-gain tax events feed the after-tax
+    // realized-P&L report; income tax is surfaced separately via summary income_tax.
+    const realizedGainEvents = events.filter(isRealizedGainTaxEvent);
+    const convert = await this.taxConverter(realizedGainEvents, reportingCurrency, bearerToken);
+    const converted: ConvertedTaxEvent[] = realizedGainEvents.map((event) => ({
       component: event.component,
       direction: event.direction,
       amount: convert(new Decimal(event.amount), event.currency, event.booking_date),
@@ -467,26 +472,41 @@ export class ReportingService {
     return { reportingCurrency, sampleDates, from, to, positions, cashFlows, rateOnOrBefore, points };
   }
 
-  /** Total received dividends/cash-in-lieu in the reporting currency, at value-date FX. */
-  private async sumDividends(
+  /**
+   * Net income in the reporting currency at value-date FX, split into dividends
+   * (dividend + cash-in-lieu) and interest. `complete` is false when any income
+   * flow lacked a historical rate (mirrors the summary's partial completeness).
+   */
+  private async sumIncome(
     flows: CashFlowRecord[],
     reportingCurrency: string,
     bearerToken: string,
-  ): Promise<{ amount: Decimal; complete: boolean }> {
-    const income = flows.filter((f) => INCOME_TYPES.has(f.type));
+  ): Promise<{ dividends: Decimal; cashInLieu: Decimal; interest: Decimal; gross: Decimal; tax: Decimal; complete: boolean }> {
+    const income = flows.filter((f) => DIVIDEND_TYPES.has(f.type) || f.type === 'interest');
     const convert = await this.datedConverter(income, reportingCurrency, bearerToken);
 
-    let amount = new Decimal(0);
+    let dividends = new Decimal(0);
+    let cashInLieu = new Decimal(0);
+    let interest = new Decimal(0);
+    let gross = new Decimal(0);
+    let tax = new Decimal(0);
     let complete = true;
     for (const flow of income) {
-      const converted = convert(new Decimal(flow.net_amount), flow.currency, flow.tax_relevant_value_date);
-      if (converted === null) {
-        complete = false; // a foreign dividend with no historical rate
+      // net, gross, and tax share the flow's currency + value date, so one rate
+      // converts all three; income_tax is the cash flow's own withheld tax (the
+      // denormalized summary), kept distinct from the realized-P&L tax report.
+      const net = convert(new Decimal(flow.net_amount), flow.currency, flow.tax_relevant_value_date);
+      if (net === null) {
+        complete = false; // a foreign income flow with no historical rate
         continue;
       }
-      amount = amount.plus(converted);
+      if (flow.type === 'interest') interest = interest.plus(net);
+      else if (flow.type === 'cash_in_lieu') cashInLieu = cashInLieu.plus(net);
+      else dividends = dividends.plus(net);
+      gross = gross.plus(convert(new Decimal(flow.gross_amount), flow.currency, flow.tax_relevant_value_date) ?? new Decimal(0));
+      tax = tax.plus(convert(new Decimal(flow.withholding_tax), flow.currency, flow.tax_relevant_value_date) ?? new Decimal(0));
     }
-    return { amount, complete };
+    return { dividends, cashInLieu, interest, gross, tax, complete };
   }
 
   private async dividendsByInstrument(
@@ -499,7 +519,7 @@ export class ReportingService {
     for (const view of views) {
       if (view.listing) instrumentByPosition.set(view.id, view.listing.instrument_id);
     }
-    const income = flows.filter((f) => INCOME_TYPES.has(f.type) && f.position_id !== null);
+    const income = flows.filter((f) => DIVIDEND_TYPES.has(f.type) && f.position_id !== null);
     const convert = await this.datedConverter(income, reportingCurrency, bearerToken);
 
     const out = new Map<string, Decimal>();

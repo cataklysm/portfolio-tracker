@@ -3,6 +3,8 @@ import { getLocale } from "@/lib/locale"
 import { num } from "@/lib/format"
 import type {
   AlertRule,
+  CashFlow,
+  ConvertedFairValueEstimate,
   ConvertedPriceTarget,
   CorporateAction,
   EarningsRow,
@@ -19,6 +21,7 @@ import type {
   PositionDetail,
   PriceTarget,
   Quote,
+  QuoteRanges,
   RealizationAllocationView,
   RealizationView,
   SparklinePoint,
@@ -56,6 +59,7 @@ export interface AssetPositionContext {
   /** Authoritative, UI-ready realization rows from the service (theme 3). */
   realizations: RealizationView | null
   appliedCorporateActions: AppliedCorporateAction[]
+  incomeCashFlows: CashFlow[]
   portfolioName: string
   position: PositionDetail
   tax: PositionTaxSummary
@@ -141,11 +145,12 @@ export interface AssetSections {
 
 export interface AssetDetailModel {
   availableCurrencies: string[]
+  currentUserRole: MeData["role"] | null
   detailContext: string
   chartSeries: SparklinePoint[]
   dailyChartSeries: SparklinePoint[]
   events: EventsData
-  fairValues: FairValueEstimate[]
+  fairValues: ConvertedFairValueEstimate[]
   fundamentals: Fundamentals | null
   listing: ListingSummary | null
   listingId: string
@@ -164,6 +169,8 @@ export interface AssetDetailModel {
   session: ListingSession | null
   /** Latest listing-level quote (works for watchlist-only assets without a position). */
   quote: Quote | null
+  /** Precomputed daily/weekly/monthly/yearly price ranges including high/low timestamps. */
+  priceRanges: QuoteRanges | null
   /** Exchange-aware combined quote status for the header badge (themes 8/9). */
   quoteStatus: QuoteStatus
   /** Held / watchlist-only / not-held (theme 6). */
@@ -195,6 +202,7 @@ export async function fetchAssetDetailByPositionId(positionId: string): Promise<
   return {
     ...common,
     aggregate: buildAssetAggregate([positionContext]),
+    currentUserRole: profile?.role ?? null,
     holdingStatus: "held",
     otherPortfolios: portfolios
       .filter((portfolio) => portfolio.id !== position.portfolio_id)
@@ -244,6 +252,7 @@ export async function fetchAssetDetailByListingId(listingId: string, portfolioId
   return {
     ...common,
     aggregate: buildAssetAggregate(positions),
+    currentUserRole: profile?.role ?? null,
     holdingStatus: positions.length === 0 ? "watchlist_only" : "held",
     otherPortfolios: portfolios.map((portfolio) => ({ id: portfolio.id, name: portfolio.name })),
     portfolios,
@@ -262,14 +271,15 @@ async function fetchCommonAssetData(
   locale: string,
   reportingCurrency: string,
   detailContext: string,
-): Promise<Omit<AssetDetailModel, "otherPortfolios" | "portfolios" | "positions" | "scope" | "aggregate" | "holdingStatus">> {
+): Promise<Omit<AssetDetailModel, "currentUserRole" | "otherPortfolios" | "portfolios" | "positions" | "scope" | "aggregate" | "holdingStatus">> {
   const instrumentId = listing?.instrument_id ?? null
   const chartHistoryTo = new Date().toISOString().slice(0, 10)
-  const [seriesResponse, dailySeriesResponse, sessionsResponse, quoteResponse, currenciesLoad, fairValuesLoad, priceTargetsLoad, fundamentalsLoad, eventsLoad, notificationLoad] = await Promise.all([
+  const [seriesResponse, dailySeriesResponse, sessionsResponse, quoteResponse, rangesResponse, currenciesLoad, fairValuesLoad, priceTargetsLoad, fundamentalsLoad, eventsLoad, notificationLoad] = await Promise.all([
     apiFetch(`/quotes/${listingId}/series?limit=365`, { cache: "no-store" }),
     apiFetch(`/quotes/${listingId}/history?from=2000-01-01&to=${chartHistoryTo}`, { cache: "no-store" }),
     apiFetch(`/listings/sessions?ids=${listingId}`, { cache: "no-store" }),
     apiFetch(`/quotes?listing_ids=${listingId}`, { cache: "no-store" }),
+    apiFetch(`/quotes/${listingId}/ranges`, { cache: "no-store" }),
     fetchAvailableCurrencies(),
     fetchInsights<FairValueEstimate>(instrumentId, "fair-values"),
     fetchPriceTargets(instrumentId, listingId),
@@ -278,8 +288,8 @@ async function fetchCommonAssetData(
     fetchNotificationData(instrumentId),
   ])
 
-  const fairValues = fairValuesLoad.value
   const displayCurrency = listing?.currency ?? reportingCurrency
+  const fairValues = await enrichFairValues(fairValuesLoad.value, displayCurrency, chartHistoryTo)
   const priceTargets = await enrichPriceTargets(priceTargetsLoad.value, displayCurrency, chartHistoryTo)
   const fundamentals = fundamentalsLoad.value
   const events = eventsLoad.value
@@ -292,6 +302,7 @@ async function fetchCommonAssetData(
     : []
   const session = sessionsResponse.ok ? ((await sessionsResponse.json()) as ListingSession[])[0] ?? null : null
   const quote = quoteResponse.ok ? ((await quoteResponse.json()) as Quote[])[0] ?? null : null
+  const priceRanges = rangesResponse.ok ? ((await rangesResponse.json()) as QuoteRanges) : null
   const quoteStatus = deriveQuoteStatus(quote, session)
   const currentPrice = num(quote?.latest ?? null)
   const sections: AssetSections = {
@@ -319,6 +330,7 @@ async function fetchCommonAssetData(
     notificationData,
     priceTargets,
     quote,
+    priceRanges,
     quoteStatus,
     reportingCurrency,
     sections,
@@ -471,10 +483,15 @@ function sumNullable(values: (number | null)[]): number | null {
 }
 
 async function fetchPositionContext(position: PositionDetail, reportingCurrency: string, portfolios: Portfolio[]): Promise<AssetPositionContext> {
-  const [allocationResponse, realizationsResponse, appliedCorporateActionsResponse] = await Promise.all([
+  const cashFlowParams = new URLSearchParams({
+    position_id: position.id,
+    types: "dividend,cash_in_lieu,interest",
+  })
+  const [allocationResponse, realizationsResponse, appliedCorporateActionsResponse, incomeCashFlowsResponse] = await Promise.all([
     apiFetch(`/positions/${position.id}/allocations`, { cache: "no-store" }),
     apiFetch(`/positions/${position.id}/realizations`, { cache: "no-store" }),
     apiFetch(`/positions/${position.id}/corporate-actions`, { cache: "no-store" }),
+    apiFetch(`/portfolios/${position.portfolio_id}/cash-flows?${cashFlowParams.toString()}`, { cache: "no-store" }),
   ])
   const realized = num(position.performance.realized_pnl_reporting)
 
@@ -485,6 +502,7 @@ async function fetchPositionContext(position: PositionDetail, reportingCurrency:
     allocations,
     realizations,
     appliedCorporateActions: appliedCorporateActionsResponse.ok ? ((await appliedCorporateActionsResponse.json()) as AppliedCorporateAction[]) : [],
+    incomeCashFlows: incomeCashFlowsResponse.ok ? ((await incomeCashFlowsResponse.json()) as CashFlow[]) : [],
     lotsPersisted: realizations?.source === "persisted" || (allocations !== null && allocations.calculation_version !== null),
     portfolioName: portfolios.find((portfolio) => portfolio.id === position.portfolio_id)?.name ?? "Portfolio",
     position,
@@ -556,6 +574,31 @@ async function enrichPriceTargets(targets: PriceTarget[], displayCurrency: strin
       display_currency: normalizedDisplayCurrency,
       display_zone_low: fxAvailable ? formatNumericString(convertedLow) : null,
       display_zone_high: fxAvailable ? formatNumericString(convertedHigh) : null,
+      fx_rate_date: sameCurrency ? null : sourceRate?.date ?? displayRate?.date ?? null,
+      fx_status: sameCurrency ? "same_currency" : fxAvailable ? "converted" : "unavailable",
+    }
+  })
+}
+
+async function enrichFairValues(fairValues: FairValueEstimate[], displayCurrency: string, rateDate: string): Promise<ConvertedFairValueEstimate[]> {
+  const normalizedDisplayCurrency = displayCurrency.toUpperCase()
+  const currencies = [...new Set(fairValues.map((fairValue) => fairValue.currency.toUpperCase()).concat(normalizedDisplayCurrency))]
+  const rates = await fetchLatestFxRates(currencies, rateDate)
+
+  return fairValues.map((fairValue) => {
+    const sourceCurrency = fairValue.currency.toUpperCase()
+    const value = num(fairValue.value)
+    const convertedValue = convertCurrencyValue(value, sourceCurrency, normalizedDisplayCurrency, rates)
+    const sourceRate = rates.get(sourceCurrency)
+    const displayRate = rates.get(normalizedDisplayCurrency)
+    const sameCurrency = sourceCurrency === normalizedDisplayCurrency
+    const fxAvailable = sameCurrency || (sourceRate !== undefined && displayRate !== undefined && (value === null || convertedValue !== null))
+
+    return {
+      ...fairValue,
+      currency: sourceCurrency,
+      display_currency: normalizedDisplayCurrency,
+      display_value: fxAvailable ? formatNumericString(convertedValue) : null,
       fx_rate_date: sameCurrency ? null : sourceRate?.date ?? displayRate?.date ?? null,
       fx_status: sameCurrency ? "same_currency" : fxAvailable ? "converted" : "unavailable",
     }

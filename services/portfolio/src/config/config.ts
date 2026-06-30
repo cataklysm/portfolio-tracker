@@ -1,4 +1,4 @@
-import { intEnv, optionalEnv, requireEnv } from '@portfolio/platform';
+import { boolEnv, intEnv, optionalEnv, requireEnv } from '@portfolio/platform';
 
 /**
  * Portfolio service configuration. The database URL is service-specific
@@ -20,6 +20,12 @@ export interface PortfolioConfig {
     issuer: string;
     audience: string;
   };
+  /**
+   * Live position updates: tail the market quote stream and push SSE pings to
+   * connected clients whose open positions were affected. Disable to drop the
+   * extra Redis tail (the `/positions/stream` endpoint then returns 503).
+   */
+  liveQuotes: { enabled: boolean };
 }
 
 export function loadConfig(): PortfolioConfig {
@@ -38,5 +44,6 @@ export function loadConfig(): PortfolioConfig {
       issuer,
       audience: optionalEnv('AUTH_JWT_AUDIENCE') ?? 'portfolio-platform',
     },
+    liveQuotes: { enabled: boolEnv('PORTFOLIO_LIVE_QUOTES_ENABLED', true) },
   };
 }

@@ -1,4 +1,5 @@
-import type { LstcClient } from './clients/lstc-client.js';
+import { wallClockEpochToUtc } from '@portfolio/platform';
+import type { LstcClient, LstcPoint } from './clients/lstc-client.js';
 import type {
   Capability,
   ChartDto,
@@ -11,6 +12,8 @@ import type {
 const LSTC_CURRENCY = 'EUR';
 const LSTC_EXCHANGE = 'Lang & Schwarz TradeCenter';
 const LSTC_MIC = 'LSSI';
+/** Venue timezone. L&S intraday timestamps are this wall-clock stamped as if UTC. */
+const LSTC_TIMEZONE = 'Europe/Berlin';
 
 /**
  * Lang & Schwarz TradeCenter provider. Translates the L&S chart API into the
@@ -64,7 +67,10 @@ export class LstcProvider implements MarketDataProvider {
         series = await this.client.getHistory(instrumentId);
         intraday = false;
       }
-      const last = series?.points.at(-1);
+      // Intraday points are venue wall-clock stamped as UTC — normalize to real
+      // UTC. Daily history points are date-anchored at UTC midnight, leave as-is.
+      const points = intraday ? series!.points.map(normalizeIntradayPoint) : series!.points;
+      const last = points.at(-1);
       if (!last) continue;
       out.set(symbol, {
         symbol,
@@ -74,7 +80,7 @@ export class LstcProvider implements MarketDataProvider {
         timestampMs: last.timeMs,
         // Only the intraday feed is fine-grained enough to downsample; the daily
         // history fallback is a single recent close, so don't pass it as a series.
-        series: intraday ? series!.points.map((p) => ({ timeMs: p.timeMs, close: String(p.price) })) : undefined,
+        series: intraday ? points.map((p) => ({ timeMs: p.timeMs, close: String(p.price) })) : undefined,
       });
     }
     return out;
@@ -101,6 +107,11 @@ export class LstcProvider implements MarketDataProvider {
       series: points.map((p) => ({ timeMs: p.timeMs, close: String(p.price) })),
     };
   }
+}
+
+/** Shifts an intraday point's venue wall-clock timestamp to the real UTC instant. */
+function normalizeIntradayPoint(point: LstcPoint): LstcPoint {
+  return { timeMs: wallClockEpochToUtc(point.timeMs, LSTC_TIMEZONE), price: point.price };
 }
 
 /** Parses the provider symbol (a numeric L&S instrument id); null if malformed. */

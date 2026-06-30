@@ -18,4 +18,6 @@ export interface UserInterestRepository {
   upsertInterest(input: InterestUpsert): Promise<void>;
   /** Distinct active (user, listing) pairs across all users. */
   listActiveInterests(): Promise<ActiveInterest[]>;
+  /** Distinct active (user, listing) pairs for the given listings. */
+  listActiveInterestsByListings(listingIds: string[]): Promise<ActiveInterest[]>;
 }

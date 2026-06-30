@@ -39,4 +39,16 @@ export class KyselyUserInterestRepository implements UserInterestRepository {
       .execute();
     return rows.map((row) => ({ userId: row.user_id, listingId: row.listing_id }));
   }
+
+  async listActiveInterestsByListings(listingIds: string[]): Promise<ActiveInterest[]> {
+    if (listingIds.length === 0) return [];
+    const rows = await this.db
+      .selectFrom('notifications.user_interests')
+      .select(['user_id', 'listing_id'])
+      .distinct()
+      .where('active', '=', true)
+      .where('listing_id', 'in', listingIds)
+      .execute();
+    return rows.map((row) => ({ userId: row.user_id, listingId: row.listing_id }));
+  }
 }

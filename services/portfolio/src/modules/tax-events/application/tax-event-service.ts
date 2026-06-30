@@ -80,6 +80,7 @@ export class TaxEventService {
   async update(userId: string, id: string, input: UpdateTaxEventInput): Promise<TaxEventRecord> {
     const existing = await this.repo.get(userId, id);
     if (!existing) throw AppError.notFound('tax_event_not_found', 'Tax event not found');
+    assertNotManaged(existing);
 
     const patch: UpdateTaxEvent = {};
     if (input.component !== undefined) patch.component = input.component;
@@ -110,6 +111,7 @@ export class TaxEventService {
   async delete(userId: string, id: string): Promise<void> {
     const existing = await this.repo.get(userId, id);
     if (!existing) throw AppError.notFound('tax_event_not_found', 'Tax event not found');
+    assertNotManaged(existing);
     const deleted = await this.repo.delete(userId, id, (ok) =>
       ok
         ? {
@@ -157,6 +159,18 @@ export class TaxEventService {
       portfolioId ??= owning;
     }
     return portfolioId;
+  }
+}
+
+/** Income-booking tax events are owned by their cash flow and immutable via this API. */
+function assertNotManaged(event: TaxEventRecord): void {
+  if (event.source === 'income_booking') {
+    throw new AppError({
+      status: 409,
+      code: 'tax_event_managed',
+      title: 'Conflict',
+      detail: 'This tax event is managed by its income cash flow and cannot be edited or deleted directly',
+    });
   }
 }
 

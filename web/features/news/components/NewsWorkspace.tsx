@@ -23,8 +23,9 @@ import {
   Typography,
 } from "@mui/material"
 import { ControlBar, type ControlBarFilterBadge } from "@/design/components/ControlBar"
-import { AppIcon, type AppIconName } from "@/design/icons/AppIcon"
-import { PageMetricGrid, PageShell } from "@/application/shell/PageShell"
+import { MetricBar, MetricBarItem } from "@/design/components/MetricBar"
+import { AppIcon } from "@/design/icons/AppIcon"
+import { PageShell } from "@/application/shell/PageShell"
 import { selectableRowSx } from "@/design/tokens/rowSelection"
 import { useToast } from "@/application/toast/ToastProvider"
 import type { PortfolioNews } from "@/lib/portfolio-events"
@@ -331,12 +332,12 @@ export function NewsWorkspace({ news, locale }: NewsWorkspaceProps) {
         </Typography>
       </Breadcrumbs>
 
-      <PageMetricGrid columns={{ xs: "1fr", md: "repeat(2, minmax(0, 1fr))", lg: "repeat(4, minmax(0, 1fr))" }}>
-        <MetricCard icon="mail" label="Unread" value={metrics.unread} tone="primary" />
-        <MetricCard icon="impact" label="High impact" value={metrics.highImpact} tone="danger" />
-        <MetricCard icon="building" label="Holdings mentioned" value={metrics.holdings} tone="success" />
-        <MetricCard icon="duplicate" label="Duplicate groups" value={metrics.duplicates} tone="purple" />
-      </PageMetricGrid>
+      <MetricBar columns={{ xs: "1fr", md: "repeat(2, minmax(0, 1fr))", lg: "repeat(4, minmax(0, 1fr))" }}>
+        <MetricBarItem icon={<AppIcon name="mail" />} label="Unread" primary sub="Current view" tone="accent" value={metrics.unread} />
+        <MetricBarItem icon={<AppIcon name="flame" />} label="High impact" primary sub="Current view" tone="danger" value={metrics.highImpact} />
+        <MetricBarItem icon={<AppIcon name="building" />} label="Holdings mentioned" primary sub="Unique holdings" tone="positive" value={metrics.holdings} />
+        <MetricBarItem icon={<AppIcon name="duplicate" />} label="Duplicate groups" primary sub="Potential overlap" tone="warning" value={metrics.duplicates} />
+      </MetricBar>
 
       <ControlBar
         badges={controlBadges}
@@ -417,24 +418,6 @@ export function NewsWorkspace({ news, locale }: NewsWorkspaceProps) {
         />
       </Box>
     </PageShell>
-  )
-}
-
-function MetricCard({ icon, label, value, tone }: { icon: "mail" | "impact" | "building" | "duplicate"; label: string; value: number; tone: "primary" | "danger" | "success" | "purple" }) {
-  const color = tone === "danger" ? "var(--app-negative)" : tone === "success" ? "var(--app-positive)" : tone === "purple" ? "#a78bfa" : "var(--app-accent)"
-  return (
-    <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "color-mix(in srgb, var(--app-surface-raised) 92%, transparent)", p: 1.5 }}>
-      <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-        <Box sx={{ alignItems: "center", bgcolor: `color-mix(in srgb, ${color} 18%, transparent)`, borderRadius: 1.5, color, display: "flex", height: 46, justifyContent: "center", width: 46 }}>
-          <MetricIcon icon={icon} />
-        </Box>
-        <Box sx={{ minWidth: 0 }}>
-          <Typography sx={{ color: "var(--app-text-muted)", fontSize: 12 }}>{label}</Typography>
-          <Typography sx={{ color: "var(--app-text)", fontSize: 24, fontWeight: 800, lineHeight: 1.1 }} className="tabular-nums">{value}</Typography>
-          <Typography aria-hidden="true" sx={{ color: "var(--app-text-faint)", fontSize: 11, mt: 0.25, visibility: "hidden" }}>placeholder</Typography>
-        </Box>
-      </Stack>
-    </Card>
   )
 }
 
@@ -925,25 +908,8 @@ function capitalize(value: string): string {
   return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`
 }
 
-function MetricIcon({ icon }: { icon: "mail" | "impact" | "building" | "duplicate" }) {
-  const iconName: AppIconName = icon === "impact" ? "flame" : icon === "building" ? "building" : icon === "duplicate" ? "duplicate" : "mail"
-  return <AppIcon className="h-6 w-6" name={iconName} strokeWidth={1.8} />
-}
-
 function MailIcon({ large = false }: { large?: boolean }) {
   return <AppIcon className={large ? "h-6 w-6" : "h-4 w-4"} name="mail" strokeWidth={1.8} />
-}
-
-function FlameIcon() {
-  return <AppIcon className="h-6 w-6" name="flame" strokeWidth={1.8} />
-}
-
-function BuildingIcon() {
-  return <AppIcon className="h-6 w-6" name="building" strokeWidth={1.8} />
-}
-
-function DuplicateIcon() {
-  return <AppIcon className="h-6 w-6" name="duplicate" strokeWidth={1.8} />
 }
 
 function SearchIcon() {

@@ -33,6 +33,7 @@ export const appIconSymbols = {
   provider: "settings_input_component",
   purge: "delete_sweep",
   rebuild: "sync",
+  rebuildIntraday: "update",
   reload: "refresh",
   reports: "article",
   restore: "restore",

@@ -1,6 +1,7 @@
-import type { CorporateAction, EarningsRow, NewsItem } from "@/lib/types"
+import type { CorporateAction, EarningsRow, NewsItem, Portfolio, PositionView } from "@/lib/types"
 import { getTranslations } from "@/lib/i18n"
 import { fmtCurrency, num } from "@/lib/format"
+import { BookCorporateActionCashFlow } from "@/features/events/components/BookCorporateActionCashFlow"
 
 interface EventsProps {
   earnings: EarningsRow[]
@@ -8,6 +9,9 @@ interface EventsProps {
   currency: string
   locale: string
   emptyReason?: string | null
+  portfolios?: Portfolio[]
+  positions?: PositionView[]
+  revalidatePath?: string
 }
 
 interface NewsProps {
@@ -33,7 +37,7 @@ function formatDate(iso: string, locale: string, withYear = true): string {
  * High-signal market events only. Historical earnings are progressively
  * disclosed so the default asset detail view stays compact.
  */
-export function EventsSection({ earnings, corporateActions, currency, locale, emptyReason }: EventsProps) {
+export function EventsSection({ earnings, corporateActions, currency, locale, emptyReason, portfolios = [], positions = [], revalidatePath }: EventsProps) {
   const t = getTranslations()
   const upcoming = earnings
     .filter((item) => item.is_upcoming)
@@ -62,7 +66,7 @@ export function EventsSection({ earnings, corporateActions, currency, locale, em
           {actions.length > 0 ? (
             <ul className="divide-y divide-[var(--app-border)]">
               {actions.slice(0, 4).map((action) => (
-                <CorporateActionRow key={action.stable_action_id} action={action} currency={currency} locale={locale} />
+                <CorporateActionRow key={action.stable_action_id} action={action} currency={currency} locale={locale} portfolios={portfolios} positions={positions} revalidatePath={revalidatePath} />
               ))}
             </ul>
           ) : (
@@ -75,7 +79,7 @@ export function EventsSection({ earnings, corporateActions, currency, locale, em
               </summary>
               <ul className="divide-y divide-[var(--app-border)] border-t border-[var(--app-border)]">
                 {actions.slice(4).map((action) => (
-                  <CorporateActionRow key={action.stable_action_id} action={action} currency={currency} locale={locale} />
+                  <CorporateActionRow key={action.stable_action_id} action={action} currency={currency} locale={locale} portfolios={portfolios} positions={positions} revalidatePath={revalidatePath} />
                 ))}
               </ul>
             </details>
@@ -202,7 +206,7 @@ function EarningsHistoryRow({ item, locale }: { item: EarningsRow; locale: strin
   )
 }
 
-function CorporateActionRow({ action, currency, locale }: { action: CorporateAction; currency: string; locale: string }) {
+function CorporateActionRow({ action, currency, locale, portfolios, positions, revalidatePath }: { action: CorporateAction; currency: string; locale: string; portfolios: Portfolio[]; positions: PositionView[]; revalidatePath?: string }) {
   const t = getTranslations()
   return (
     <li className="flex items-center justify-between gap-3 px-3 py-2.5">
@@ -210,7 +214,18 @@ function CorporateActionRow({ action, currency, locale }: { action: CorporateAct
         <p className="truncate text-[11px] font-medium text-[var(--app-text)]">{actionType(action, t)}</p>
         <p className="mt-0.5 text-[9px] text-[var(--app-text-faint)]">Ex-date - {formatDate(action.ex_date, locale)}</p>
       </div>
-      <span className="shrink-0 text-[11px] font-semibold tabular-nums text-[var(--app-text)]">{actionValue(action, currency, locale)}</span>
+      <div className="flex shrink-0 items-center gap-2">
+        <span className="text-[11px] font-semibold tabular-nums text-[var(--app-text)]">{actionValue(action, currency, locale)}</span>
+        <BookCorporateActionCashFlow
+          action={action}
+          fallbackCurrency={currency}
+          portfolios={portfolios}
+          positions={positions}
+          revalidatePath={revalidatePath}
+          triggerClassName="inline-flex h-7 items-center justify-center rounded-md border border-[color-mix(in_srgb,var(--app-accent)_34%,var(--app-border))] px-2 text-[10px] font-extrabold text-[var(--app-accent)] transition hover:border-[var(--app-accent)] hover:bg-[color-mix(in_srgb,var(--app-accent)_10%,transparent)]"
+          triggerLabel="Book"
+        />
+      </div>
     </li>
   )
 }

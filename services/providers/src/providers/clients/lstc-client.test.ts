@@ -133,6 +133,11 @@ describe('LstcClient.getIntraday', () => {
     const s = await makeClient().getIntraday(41939);
     assert.ok(s);
     assert.equal(s.points.length, 2);
+    // Client passes timestamps through untouched; the provider normalizes them.
+    assert.deepEqual(
+      s.points.map((p) => p.timeMs),
+      [1781593680000, 1781593740000],
+    );
     assert.equal(s.points.at(-1)!.price, 70.46);
     assert.equal(urls[0]!.searchParams.get('series'), 'intraday');
   });

@@ -102,6 +102,7 @@ export async function updateAdminProviderAction(input: {
   maxBatchSize?: number | null
   rateLimitPerMin?: number | null
   maxConcurrency?: number
+  maxPerCycle?: number | null
 }): Promise<string | null> {
   try {
     const resp = await apiFetch(`/admin/providers/${encodeURIComponent(input.provider)}`, {
@@ -114,6 +115,7 @@ export async function updateAdminProviderAction(input: {
         max_batch_size: input.maxBatchSize,
         rate_limit_per_min: input.rateLimitPerMin,
         max_concurrency: input.maxConcurrency,
+        max_per_cycle: input.maxPerCycle,
       }),
     })
     if (!resp.ok) return problemDetail(resp, "Failed to update provider settings.")

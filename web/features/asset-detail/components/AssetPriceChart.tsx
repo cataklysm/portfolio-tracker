@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { fmtPct, num } from "@/lib/format"
-import type { ConvertedPriceTarget, SparklinePoint } from "@/lib/types"
+import { fmtPct, fmtPrice, fmtPriceAmount, num } from "@/lib/format"
+import type { ConvertedFairValueEstimate, ConvertedPriceTarget, SparklinePoint } from "@/lib/types"
 
 const priceChartPeriods = [
   { key: "5m", label: "5m", durationMs: 5 * 60 * 1000 },
@@ -17,10 +17,12 @@ const priceChartPeriods = [
 type PriceChartPeriodKey = (typeof priceChartPeriods)[number]["key"]
 
 interface AssetPriceChartProperties {
+  assetType: string
   currency: string
   dailyData?: SparklinePoint[]
   dailyPositive: boolean
   data: SparklinePoint[]
+  fairValues?: ConvertedFairValueEstimate[]
   locale: string
   targetZones?: ConvertedPriceTarget[]
   tradeMarkers?: AssetTradeMarker[]
@@ -53,10 +55,12 @@ const chartHeight = 230
 const priceChartPeriodStorageKey = "asset-detail-price-chart-period"
 
 export function AssetPriceChart({
+  assetType,
   currency,
   dailyData = [],
   dailyPositive,
   data,
+  fairValues = [],
   locale,
   targetZones = [],
   tradeMarkers = [],
@@ -143,6 +147,7 @@ export function AssetPriceChart({
       <div className="min-h-0 flex-1 px-4 pb-4 pt-3">
         {visibleSeries.length >= 2 ? (
           <InteractivePriceChart
+            assetType={assetType}
             currency={currency}
             locale={locale}
             onSelect={setSelectedIndex}
@@ -150,6 +155,7 @@ export function AssetPriceChart({
             selectedIndex={clampedIndex}
             selectedPoint={selectedPoint}
             series={visibleSeries}
+            fairValues={fairValues}
             targetZones={targetZones}
             tradeMarkers={tradeMarkers}
           />
@@ -164,6 +170,7 @@ export function AssetPriceChart({
 }
 
 function InteractivePriceChart({
+  assetType,
   currency,
   locale,
   onSelect,
@@ -171,9 +178,11 @@ function InteractivePriceChart({
   selectedIndex,
   selectedPoint,
   series,
+  fairValues,
   targetZones,
   tradeMarkers,
 }: {
+  assetType: string
   currency: string
   locale: string
   onSelect: (index: number) => void
@@ -181,14 +190,16 @@ function InteractivePriceChart({
   selectedIndex: number
   selectedPoint: ChartPoint | null
   series: ChartPoint[]
+  fairValues: ConvertedFairValueEstimate[]
   targetZones: ConvertedPriceTarget[]
   tradeMarkers: AssetTradeMarker[]
 }) {
   const color = positive ? "var(--app-positive)" : "var(--app-negative)"
   const prices = series.map((point) => point.price)
-  const targetBands = buildTargetBands(targetZones, currency)
+  const targetBands = buildTargetBands(targetZones, currency, locale, assetType)
   const visibleMarkers = buildVisibleTradeMarkers(series, tradeMarkers)
-  const { min, max } = buildChartDomain(prices, targetBands, visibleMarkers)
+  const fairValuePoints = buildVisibleFairValuePoints(series, fairValues, currency, locale, assetType)
+  const { min, max } = buildChartDomain(prices, targetBands, visibleMarkers, fairValuePoints)
   const range = max - min || 1
   const coords = series.map((point, index) => {
     const x = (index / (series.length - 1)) * chartWidth
@@ -197,6 +208,8 @@ function InteractivePriceChart({
   })
   const selectedCoord = coords[selectedIndex] ?? coords[coords.length - 1]!
   const points = coords.map(({ x, y }) => `${x.toFixed(1)},${y.toFixed(1)}`)
+  const fairValueCoords = fairValuePoints.map((point) => ({ ...point, x: point.x, y: priceToY(point.value, min, range) }))
+  const fairValuePolyline = fairValueCoords.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ")
   const areaPath = `M ${points[0]} L ${points.slice(1).join(" L ")} L ${chartWidth},${chartHeight} L 0,${chartHeight} Z`
   const { bars, basis } = buildBrushBars(series)
   const periodStart = series[0] ?? null
@@ -214,10 +227,10 @@ function InteractivePriceChart({
     <div className="flex h-full min-h-[275px] flex-col">
       <div className="relative min-h-0 flex-1">
         <span className="absolute right-2 top-1 text-[11px] font-medium tabular-nums text-[var(--app-text-faint)]">
-          {formatPrice(locale, max, currency)}
+          {fmtPrice(locale, max, currency, assetType)}
         </span>
         <span className="absolute bottom-1 right-2 text-[11px] font-medium tabular-nums text-[var(--app-text-faint)]">
-          {formatPrice(locale, min, currency)}
+          {fmtPrice(locale, min, currency, assetType)}
         </span>
         {selectedPoint ? (
           <div
@@ -230,7 +243,7 @@ function InteractivePriceChart({
           >
             <p className="text-[12px] font-semibold tabular-nums text-[var(--app-text)]">{formatTooltipDate(locale, selectedPoint.time)}</p>
             <dl className="mt-2 space-y-1 text-[10px]">
-              <TooltipMetric label="Price" value={formatPrice(locale, selectedPoint.price, currency)} />
+              <TooltipMetric label="Price" value={fmtPrice(locale, selectedPoint.price, currency, assetType)} />
               <TooltipMetric
                 label="Period change"
                 tone={selectedChange === null ? undefined : selectedChange >= 0 ? "positive" : "negative"}
@@ -285,6 +298,38 @@ function InteractivePriceChart({
               </g>
             )
           })}
+          {fairValueCoords.length > 0 ? (
+            <g>
+              <polyline
+                fill="none"
+                points={fairValuePolyline}
+                stroke="var(--app-accent)"
+                strokeDasharray="7 5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeOpacity="0.82"
+                strokeWidth="1.7"
+                vectorEffect="non-scaling-stroke"
+              />
+              {fairValueCoords.map((point) => (
+                <g key={point.id}>
+                  <title>{point.label}</title>
+                  <circle
+                    cx={point.x}
+                    cy={point.y}
+                    fill="var(--app-surface-panel)"
+                    r="4.4"
+                    stroke="var(--app-accent)"
+                    strokeWidth="1.8"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </g>
+              ))}
+              <text fill="var(--app-accent)" fontSize="10" fontWeight="650" x={Math.min(chartWidth - 76, Math.max(10, fairValueCoords[fairValueCoords.length - 1]!.x + 8))} y={Math.max(14, fairValueCoords[fairValueCoords.length - 1]!.y - 8)}>
+                Fair value
+              </text>
+            </g>
+          ) : null}
           <polyline fill="none" points={points.join(" ")} stroke={color} strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" vectorEffect="non-scaling-stroke" />
           {visibleMarkers.map((marker) => {
             const markerColor = marker.side === "buy" ? "var(--app-positive)" : "var(--app-negative)"
@@ -292,7 +337,7 @@ function InteractivePriceChart({
             const markerX = coords[marker.index]?.x ?? 0
             return (
               <g key={marker.id}>
-                <title>{formatTradeMarkerTitle(marker, locale, currency)}</title>
+                <title>{formatTradeMarkerTitle(marker, locale, currency, assetType)}</title>
                 <circle
                   cx={markerX}
                   cy={markerY}
@@ -450,6 +495,8 @@ function buildBrushBars(series: ChartPoint[]): { bars: number[]; basis: "volume"
 function buildTargetBands(
   targetZones: ConvertedPriceTarget[],
   currency: string,
+  locale: string,
+  assetType: string,
 ): TargetBand[] {
   return targetZones
     .filter((target) => target.display_currency === currency && target.fx_status !== "unavailable")
@@ -462,7 +509,7 @@ function buildTargetBands(
       return {
         high: Math.max(lower, upper),
         id: target.id,
-        label: formatTargetBandLabel(target, lower, upper),
+        label: formatTargetBandLabel(target, lower, upper, locale, assetType),
         low: Math.min(lower, upper),
       }
     })
@@ -472,6 +519,14 @@ function buildTargetBands(
 
 interface VisibleTradeMarker extends AssetTradeMarker {
   index: number
+}
+
+interface VisibleFairValuePoint {
+  id: string
+  label: string
+  time: number
+  value: number
+  x: number
 }
 
 function buildVisibleTradeMarkers(series: ChartPoint[], tradeMarkers: AssetTradeMarker[]): VisibleTradeMarker[] {
@@ -504,10 +559,53 @@ function nearestSeriesIndex(series: ChartPoint[], markerTime: number): number {
   return nearestIndex
 }
 
-function buildChartDomain(prices: number[], targetBands: TargetBand[], tradeMarkers: VisibleTradeMarker[]): { max: number; min: number } {
+function buildVisibleFairValuePoints(
+  series: ChartPoint[],
+  fairValues: ConvertedFairValueEstimate[],
+  currency: string,
+  locale: string,
+  assetType: string,
+): VisibleFairValuePoint[] {
+  const firstTime = new Date(series[0]?.time ?? 0).getTime()
+  const lastTime = new Date(series[series.length - 1]?.time ?? 0).getTime()
+  if (!Number.isFinite(firstTime) || !Number.isFinite(lastTime) || lastTime <= firstTime) return []
+
+  const points = fairValues
+    .filter((fairValue) => fairValue.display_currency === currency && fairValue.fx_status !== "unavailable")
+    .map((fairValue) => {
+      const value = num(fairValue.display_value)
+      const time = Date.parse(`${fairValue.effective_date}T00:00:00.000Z`)
+      if (value === null || !Number.isFinite(time)) return null
+      return {
+        id: fairValue.id,
+        label: formatFairValueLabel(fairValue, value, locale, assetType),
+        time,
+        value,
+      }
+    })
+    .filter((point): point is Omit<VisibleFairValuePoint, "x"> => point !== null)
+    .sort((first, second) => first.time - second.time)
+
+  if (points.length === 0) return []
+
+  const beforeOrAtStart = points.filter((point) => point.time <= firstTime).at(-1)
+  const inRange = points.filter((point) => point.time > firstTime && point.time < lastTime)
+  const latest = points.filter((point) => point.time <= lastTime).at(-1)
+  const visible = [...(beforeOrAtStart ? [{ ...beforeOrAtStart, time: firstTime }] : []), ...inRange]
+  if (latest) visible.push({ ...latest, id: `${latest.id}-current`, time: lastTime })
+  const deduped = visible.filter((point, index, all) => index === 0 || point.time !== all[index - 1]!.time || point.value !== all[index - 1]!.value)
+
+  return deduped.map((point) => ({
+    ...point,
+    x: ((point.time - firstTime) / (lastTime - firstTime)) * chartWidth,
+  }))
+}
+
+function buildChartDomain(prices: number[], targetBands: TargetBand[], tradeMarkers: VisibleTradeMarker[], fairValues: VisibleFairValuePoint[]): { max: number; min: number } {
   const targetValues = targetBands.flatMap((target) => [target.low, target.high])
   const tradeValues = tradeMarkers.map((marker) => marker.price)
-  const values = [...prices, ...targetValues, ...tradeValues].filter((value) => Number.isFinite(value))
+  const fairValueValues = fairValues.map((point) => point.value)
+  const values = [...prices, ...targetValues, ...tradeValues, ...fairValueValues].filter((value) => Number.isFinite(value))
   const rawMin = Math.min(...values)
   const rawMax = Math.max(...values)
   const spread = rawMax - rawMin
@@ -518,21 +616,30 @@ function buildChartDomain(prices: number[], targetBands: TargetBand[], tradeMark
   }
 }
 
-function formatTargetBandLabel(target: ConvertedPriceTarget, low: number, high: number): string {
+function formatTargetBandLabel(target: ConvertedPriceTarget, low: number, high: number, locale: string, assetType: string): string {
   const displayed = low === high
-    ? `Target ${low.toFixed(2)} ${target.display_currency}`
-    : `Target zone ${low.toFixed(2)} - ${high.toFixed(2)} ${target.display_currency}`
+    ? `Target ${fmtPriceAmount(locale, low, target.display_currency, assetType)}`
+    : `Target zone ${fmtPriceAmount(locale, low, target.display_currency, assetType)} - ${fmtPriceAmount(locale, high, target.display_currency, assetType)}`
   if (target.fx_status !== "converted") return displayed
   const sourceLow = num(target.zone_low)
   const sourceHigh = num(target.zone_high)
   const source = sourceLow !== null && sourceHigh !== null
-    ? `${sourceLow.toFixed(2)} - ${sourceHigh.toFixed(2)} ${target.currency}`
+    ? `${fmtPriceAmount(locale, sourceLow, target.currency, assetType)} - ${fmtPriceAmount(locale, sourceHigh, target.currency, assetType)}`
     : sourceLow !== null
-      ? `${sourceLow.toFixed(2)} ${target.currency}`
+      ? fmtPriceAmount(locale, sourceLow, target.currency, assetType)
       : sourceHigh !== null
-        ? `${sourceHigh.toFixed(2)} ${target.currency}`
+        ? fmtPriceAmount(locale, sourceHigh, target.currency, assetType)
         : target.currency
   return `${displayed} (from ${source})`
+}
+
+function formatFairValueLabel(fairValue: ConvertedFairValueEstimate, value: number, locale: string, assetType: string): string {
+  const method = fairValue.method === "dcf" ? "DCF fair value" : "Analyst fair value"
+  const displayed = fmtPriceAmount(locale, value, fairValue.display_currency, assetType)
+  if (fairValue.fx_status !== "converted") return `${method} - ${displayed} - ${fairValue.effective_date}`
+  const source = num(fairValue.value)
+  const sourceLabel = source === null ? fairValue.currency : fmtPriceAmount(locale, source, fairValue.currency, assetType)
+  return `${method} - ${displayed} from ${sourceLabel} - ${fairValue.effective_date}`
 }
 
 function priceToY(price: number, min: number, range: number): number {
@@ -547,19 +654,10 @@ function formatTooltipDate(locale: string, value: string): string {
   return new Date(value).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" })
 }
 
-function formatTradeMarkerTitle(marker: AssetTradeMarker, locale: string, currency: string): string {
+function formatTradeMarkerTitle(marker: AssetTradeMarker, locale: string, currency: string, assetType: string): string {
   const side = marker.side === "buy" ? "Buy" : "Sell"
-  const quantity = marker.quantity === null ? "" : ` · ${new Intl.NumberFormat(locale, { maximumFractionDigits: 6 }).format(marker.quantity)}`
-  return `${side}${quantity} · ${formatPrice(locale, marker.price, currency)} · ${marker.portfolioName}`
-}
-
-function formatPrice(locale: string, value: number, currency: string): string {
-  return new Intl.NumberFormat(locale, {
-    currency,
-    maximumFractionDigits: 2,
-    minimumFractionDigits: 2,
-    style: "currency",
-  }).format(value)
+  const quantity = marker.quantity === null ? "" : ` - ${new Intl.NumberFormat(locale, { maximumFractionDigits: 6 }).format(marker.quantity)}`
+  return `${side}${quantity} - ${fmtPrice(locale, marker.price, currency, assetType)} - ${marker.portfolioName}`
 }
 
 function formatVolume(locale: string, value: number | null): string {

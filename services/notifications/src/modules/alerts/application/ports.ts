@@ -32,7 +32,14 @@ export interface StoredNotification {
   rule_id: string | null;
   data: unknown;
   read_at: string | null;
+  snoozed_until: string | null;
   created_at: string;
+}
+
+export interface DueSnoozedNotification {
+  id: string;
+  userId: string;
+  type: NotificationType;
 }
 
 export interface NotificationRepository {
@@ -42,6 +49,8 @@ export interface NotificationRepository {
   unreadCount(userId: string): Promise<number>;
   markRead(userId: string, id: string): Promise<boolean>;
   markAllRead(userId: string): Promise<number>;
+  snooze(userId: string, id: string, until: Date): Promise<boolean>;
+  releaseDueSnoozed(now: Date, limit: number): Promise<DueSnoozedNotification[]>;
   deleteReadBefore(cutoff: Date): Promise<number>;
 }
 
@@ -99,8 +108,6 @@ export interface AlertRule {
   enabled: boolean;
   /** When true, the rule disables itself after firing once. */
   notify_once: boolean;
-  /** "Remind me later" cooldown in minutes (5..1440); null = no cooldown. */
-  remind_after_minutes: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -113,7 +120,6 @@ export interface NewAlertRule {
   params: Record<string, unknown>;
   label: string | null;
   notifyOnce: boolean;
-  remindAfterMinutes: number | null;
 }
 
 export interface UpdateAlertRule {
@@ -121,7 +127,6 @@ export interface UpdateAlertRule {
   label?: string | null;
   enabled?: boolean;
   notifyOnce?: boolean;
-  remindAfterMinutes?: number | null;
 }
 
 export interface AlertRuleRepository {

@@ -12,7 +12,6 @@ interface RuleRow {
   label: string | null;
   enabled: boolean;
   notify_once: boolean;
-  remind_after_minutes: number | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -32,7 +31,6 @@ export class KyselyAlertRuleRepository implements AlertRuleRepository {
         params: JSON.stringify(input.params),
         label: input.label,
         notify_once: input.notifyOnce,
-        remind_after_minutes: input.remindAfterMinutes,
       })
       .returningAll()
       .executeTakeFirstOrThrow();
@@ -66,7 +64,6 @@ export class KyselyAlertRuleRepository implements AlertRuleRepository {
     if (patch.label !== undefined) values.label = patch.label;
     if (patch.enabled !== undefined) values.enabled = patch.enabled;
     if (patch.notifyOnce !== undefined) values.notify_once = patch.notifyOnce;
-    if (patch.remindAfterMinutes !== undefined) values.remind_after_minutes = patch.remindAfterMinutes;
 
     const row = await this.db
       .updateTable('notifications.alert_rules')
@@ -99,7 +96,6 @@ function toRule(row: RuleRow): AlertRule {
     label: row.label,
     enabled: row.enabled,
     notify_once: row.notify_once,
-    remind_after_minutes: row.remind_after_minutes,
     created_at: iso(row.created_at),
     updated_at: iso(row.updated_at),
   };

@@ -11,7 +11,7 @@ export function fmtCurrency(locale: string, value: number, currency: string): st
 }
 
 export function fmtPrice(locale: string, value: number, currency: string, assetType: string): string {
-  const maximumFractionDigits = assetType === "crypto" ? 8 : 3
+  const maximumFractionDigits = priceFractionDigits(value, assetType)
   try {
     return new Intl.NumberFormat(locale, {
       style: "currency",
@@ -19,6 +19,18 @@ export function fmtPrice(locale: string, value: number, currency: string, assetT
       minimumFractionDigits: 2,
       maximumFractionDigits,
     }).format(value)
+  } catch {
+    return `${trimFixed(value, maximumFractionDigits)} ${currency}`
+  }
+}
+
+export function fmtPriceAmount(locale: string, value: number, currency: string, assetType: string): string {
+  const maximumFractionDigits = priceFractionDigits(value, assetType)
+  try {
+    return `${new Intl.NumberFormat(locale, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits,
+    }).format(value)} ${currency}`
   } catch {
     return `${trimFixed(value, maximumFractionDigits)} ${currency}`
   }
@@ -33,6 +45,11 @@ export function fmtQty(locale: string, value: number, assetType: string): string
 
 function trimFixed(value: number, digits: number): string {
   return value.toFixed(digits).replace(/\.?0+$/, "")
+}
+
+function priceFractionDigits(value: number, assetType: string): number {
+  if (assetType === "crypto" && Math.abs(value) < 1) return 8
+  return 4
 }
 
 export function fmtPct(value: number): string {

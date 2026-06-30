@@ -3,9 +3,11 @@ import { selectPointsToStore } from '../domain/downsample.js';
 import type {
   DailyClose,
   PlanListing,
+  PriceRanges,
   ProviderQuote,
   QuoteProvider,
   QuoteRepository,
+  QuoteEventStore,
   RefreshPlanResolver,
 } from './ports.js';
 
@@ -15,6 +17,12 @@ export interface QuoteRefreshOptions {
   refreshIntervalMs?: number;
   /** Downsample the intraday series to one stored point per this span (quotes only). */
   saveResolutionMs?: number | null;
+  /**
+   * Cap on listings refreshed this call (per-provider per-cycle budget). The
+   * stalest are chosen first, so successive cycles rotate fairly through all
+   * listings without starving any — for rate-constrained providers.
+   */
+  maxPerCycle?: number | null;
 }
 
 export interface QuoteView {
@@ -34,6 +42,7 @@ export interface QuoteView {
 export interface QuoteServiceDeps {
   repo: QuoteRepository;
   provider: QuoteProvider;
+  events?: QuoteEventStore;
   /** Resolves which provider + provider symbol serves the `quotes` capability per listing. */
   planResolver: RefreshPlanResolver;
   staleAfterMs: number;
@@ -79,6 +88,14 @@ export class QuoteService {
   }
 
   /**
+   * Daily/weekly/monthly/yearly price extremes (high/low) for a listing, from
+   * stored quotes. `yearly` is the 52-week range. Serves stored data only.
+   */
+  getPriceRanges(listingId: string): Promise<PriceRanges> {
+    return this.deps.repo.getPriceRanges(listingId);
+  }
+
+  /**
    * Refreshes specific listings from their selected providers, fetching a daily
    * series per listing (one provider request each). Used for on-demand refresh
    * and series backfill. `from` starts the daily history at that date (e.g. a
@@ -89,13 +106,20 @@ export class QuoteService {
     if (listingIds.length === 0) return 0;
     const plan = await this.deps.planResolver.resolve('quotes', listingIds);
     let stored = 0;
+    const updatedByProvider = new Map<string, string[]>();
     for (const entry of plan) {
       if (!entry.provider || !entry.providerSymbol) continue;
       const quote = await this.deps.provider.fetchQuote(entry.provider, entry.providerSymbol, from);
       if (!quote) continue;
-      await this.store(entry.listingId, entry.currency, entry.provider, quote);
+      const wrote = await this.store(entry.listingId, entry.currency, entry.provider, quote);
       stored += 1;
+      if (wrote) {
+        const ids = updatedByProvider.get(entry.provider) ?? [];
+        ids.push(entry.listingId);
+        updatedByProvider.set(entry.provider, ids);
+      }
     }
+    await this.publishQuoteUpdates(updatedByProvider);
     return stored;
   }
 
@@ -134,23 +158,40 @@ export class QuoteService {
         if (interval <= 0 || at === null || now - at.getTime() >= interval) due.push(entry);
       }
     }
+
+    // Per-cycle budget: refresh the stalest first and cap the count, so a
+    // rate-constrained provider rotates fairly across cycles without starving the
+    // tail. Never-fetched (null) listings sort oldest.
+    const maxPerCycle = opts.maxPerCycle ?? null;
+    if (maxPerCycle && maxPerCycle > 0 && due.length > maxPerCycle) {
+      due = [...due]
+        .sort((a, b) => (lastSavedByListing.get(a.listingId) ?? -Infinity) - (lastSavedByListing.get(b.listingId) ?? -Infinity))
+        .slice(0, maxPerCycle);
+    }
     if (due.length === 0) return 0;
 
     const size = batchSize > 0 ? batchSize : 1;
     let stored = 0;
+    const updatedByProvider = new Map<string, string[]>();
     for (const chunk of chunked(due, size)) {
       const symbols = [...new Set(chunk.map((e) => e.providerSymbol as string))];
       const quotes = await this.deps.provider.fetchQuotes(provider, symbols);
       for (const entry of chunk) {
         const quote = quotes.get(entry.providerSymbol as string);
         if (!quote) continue;
-        await this.store(entry.listingId, entry.currency, provider, quote, {
+        const wrote = await this.store(entry.listingId, entry.currency, provider, quote, {
           saveResolutionMs: opts.saveResolutionMs ?? null,
           lastSavedMs: lastSavedByListing.get(entry.listingId) ?? null,
         });
         stored += 1;
+        if (wrote) {
+          const ids = updatedByProvider.get(provider) ?? [];
+          ids.push(entry.listingId);
+          updatedByProvider.set(provider, ids);
+        }
       }
     }
+    await this.publishQuoteUpdates(updatedByProvider);
     return stored;
   }
 
@@ -159,12 +200,100 @@ export class QuoteService {
    * each listing's currently-selected provider over `[from, today]`. Used when an
    * admin switches the quotes/chart provider, so the series never mixes prices
    * from two sources. `from` should be the instrument's first-acquisition date.
+   *
+   * The daily rebuild only restores one close per day (the provider's `chart`
+   * series). With `includeIntraday`, the current session's full minute series is
+   * additionally pulled and stored, so today's intraday resolution is restored in
+   * one shot instead of waiting for the live sweep to re-accumulate it.
    */
-  async purgeAndRebuild(listingIds: string[], from?: Date): Promise<{ purged: number; rebuilt: number }> {
-    if (listingIds.length === 0) return { purged: 0, rebuilt: 0 };
+  async purgeAndRebuild(
+    listingIds: string[],
+    from?: Date,
+    opts?: { includeIntraday?: boolean },
+  ): Promise<{ purged: number; rebuilt: number; intraday: number }> {
+    if (listingIds.length === 0) return { purged: 0, rebuilt: 0, intraday: 0 };
     const purged = await this.deps.repo.purgeListings(listingIds);
     const rebuilt = await this.refreshListings(listingIds, from);
-    return { purged, rebuilt };
+    const intraday = opts?.includeIntraday ? await this.rebuildIntraday(listingIds) : 0;
+    return { purged, rebuilt, intraday };
+  }
+
+  /**
+   * Re-fetches and stores the current intraday session at full resolution for the
+   * given listings, from each listing's selected `quotes` provider. Only providers
+   * with an intraday feed return a series (e.g. lstc); latest-only providers
+   * (Yahoo's batch endpoint) return none and are skipped. Unlike the scheduled
+   * sweep this does not downsample — a rebuild wants the whole session. The feed
+   * only covers the current session, so it cannot restore past days' intraday.
+   * Returns the count of listings stored.
+   */
+  async rebuildIntraday(listingIds: string[]): Promise<number> {
+    if (listingIds.length === 0) return 0;
+    let stored = 0;
+    const updated = await this.forEachIntradayQuote(listingIds, async (entry, provider, quote) => {
+      await this.store(entry.listingId, entry.currency, provider, quote);
+      stored += 1;
+    });
+    await this.publishQuoteUpdates(updated);
+    return stored;
+  }
+
+  /**
+   * Replaces just the current intraday session: for each listing, deletes stored
+   * quotes from the freshly fetched session's first (already-normalized) timestamp
+   * onward, then stores the fresh series. The boundary is derived from the data
+   * itself, so it is timezone-free and leaves all prior days' history intact. The
+   * targeted alternative to a full purgeAndRebuild when only today's intraday data
+   * is wrong. Returns purged-row and stored-listing counts.
+   */
+  async purgeAndRebuildIntraday(listingIds: string[]): Promise<{ purged: number; intraday: number }> {
+    if (listingIds.length === 0) return { purged: 0, intraday: 0 };
+    let purged = 0;
+    let stored = 0;
+    const updated = await this.forEachIntradayQuote(listingIds, async (entry, provider, quote) => {
+      const since = new Date(quote.series.reduce((min, p) => Math.min(min, p.timeMs), Infinity));
+      purged += await this.deps.repo.purgeListingsSince([entry.listingId], since);
+      await this.store(entry.listingId, entry.currency, provider, quote);
+      stored += 1;
+    });
+    await this.publishQuoteUpdates(updated);
+    return { purged, intraday: stored };
+  }
+
+  /**
+   * Resolves the `quotes` plan for the listings, fetches each provider's intraday
+   * quotes in one call, and invokes `handle` for every listing whose provider
+   * returned a non-empty intraday series. Returns the listings touched, grouped by
+   * provider, for event publication.
+   */
+  private async forEachIntradayQuote(
+    listingIds: string[],
+    handle: (entry: PlanListing, provider: string, quote: ProviderQuote) => Promise<void>,
+  ): Promise<Map<string, string[]>> {
+    const plan = await this.deps.planResolver.resolve('quotes', listingIds);
+    const byProvider = new Map<string, PlanListing[]>();
+    for (const entry of plan) {
+      if (!entry.provider || !entry.providerSymbol) continue;
+      const list = byProvider.get(entry.provider) ?? [];
+      list.push(entry);
+      byProvider.set(entry.provider, list);
+    }
+
+    const updatedByProvider = new Map<string, string[]>();
+    for (const [provider, entries] of byProvider) {
+      const symbols = [...new Set(entries.map((e) => e.providerSymbol as string))];
+      const quotes = await this.deps.provider.fetchQuotes(provider, symbols);
+      for (const entry of entries) {
+        const quote = quotes.get(entry.providerSymbol as string);
+        // Only listings whose provider actually returned an intraday series.
+        if (!quote || quote.series.length === 0) continue;
+        await handle(entry, provider, quote);
+        const ids = updatedByProvider.get(provider) ?? [];
+        ids.push(entry.listingId);
+        updatedByProvider.set(provider, ids);
+      }
+    }
+    return updatedByProvider;
   }
 
   /** Deletes the stored price history for the given listings without refetching. */
@@ -188,11 +317,12 @@ export class QuoteService {
     provider: string,
     quote: ProviderQuote,
     sampling?: { saveResolutionMs: number | null; lastSavedMs: number | null },
-  ): Promise<void> {
+  ): Promise<boolean> {
     const currency = quote.currency ?? listingCurrency;
     const providerTimestamp = quote.timestampMs ? new Date(quote.timestampMs) : null;
     const now = new Date();
     const hasSeries = quote.series.length > 0;
+    let wrote = false;
 
     // Store the historical series points (idempotent on listing_id+time+provider).
     const points =
@@ -209,6 +339,7 @@ export class QuoteService {
         currency,
         providerTimestamp,
       });
+      wrote = true;
     }
     // Store the latest tick at the provider timestamp (or now) — except on the
     // scheduled sweep when a downsampled series already provided the tail point.
@@ -224,6 +355,18 @@ export class QuoteService {
         currency,
         providerTimestamp,
       });
+      wrote = true;
+    }
+    return wrote;
+  }
+
+  private async publishQuoteUpdates(updatedByProvider: Map<string, string[]>): Promise<void> {
+    if (!this.deps.events) return;
+    const asOf = new Date().toISOString();
+    for (const [provider, listingIds] of updatedByProvider) {
+      const uniqueListingIds = [...new Set(listingIds)];
+      if (uniqueListingIds.length === 0) continue;
+      await this.deps.events.enqueueQuotesUpdated({ provider, listingIds: uniqueListingIds, asOf });
     }
   }
 }

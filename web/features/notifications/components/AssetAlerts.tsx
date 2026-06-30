@@ -8,7 +8,8 @@ import {
   toggleAssetAlertAction,
 } from "@/features/notifications/actions"
 import { REPEAT_OPTIONS, repeatLabel } from "@/features/notifications/repeat"
-import type { AlertRule, AlertRuleKind, NotificationItem } from "@/lib/types"
+import { fmtPriceAmount, num } from "@/lib/format"
+import type { AlertRule, AlertRuleKind, NotificationItem, PriceTarget } from "@/lib/types"
 
 const inputClass =
   "w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-raised)] px-2.5 py-1.5 text-xs text-[var(--app-text)] focus:outline-none focus:ring-2 focus:ring-[var(--app-accent)]"
@@ -20,9 +21,11 @@ interface Props {
   listingId: string
   symbol: string
   currency: string
+  assetType: string
   currentPrice: number | null
   locale: string
   rules: AlertRule[]
+  priceTargets: PriceTarget[]
   notifications: NotificationItem[]
   notificationPreviewLimit?: number
 }
@@ -55,7 +58,7 @@ export function AssetAlerts(props: Props) {
           <p className="py-2 text-[11px] leading-4 text-[var(--app-text-faint)]">No alerts configured for this asset.</p>
         ) : (
           <ul className="space-y-2">
-            {props.rules.map((rule) => <AlertRuleRow key={rule.id} rule={rule} detailContext={props.detailContext} currency={props.currency} />)}
+            {props.rules.map((rule) => <AlertRuleRow assetType={props.assetType} key={rule.id} rule={rule} detailContext={props.detailContext} currency={props.currency} locale={props.locale} />)}
           </ul>
         )}
       </div>
@@ -98,13 +101,14 @@ export function AssetAlerts(props: Props) {
   )
 }
 
-function CreateAlertForm({ detailContext, instrumentId, listingId, symbol, currency, currentPrice, onClose }: Props & { onClose: () => void }) {
+function CreateAlertForm({ assetType, detailContext, instrumentId, listingId, symbol, currency, currentPrice, locale, onClose, priceTargets }: Props & { onClose: () => void }) {
   const [kind, setKind] = useState<AlertRuleKind>("price_threshold")
   const [error, formAction, pending] = useActionState(
     createAssetAlertAction.bind(null, detailContext, instrumentId, listingId),
     null,
   )
   const showDirection = kind === "price_threshold" || kind === "cost_basis_move"
+  const targetOptions = priceTargets.filter((target) => target.source === "own")
 
   return (
     <form action={formAction} className="mb-3 space-y-2.5 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-raised)] p-3">
@@ -121,7 +125,7 @@ function CreateAlertForm({ detailContext, instrumentId, listingId, symbol, curre
           <option value="daily_move">Daily move</option>
           <option value="earnings_lead">Upcoming earnings</option>
           <option value="cost_basis_move">Move from cost basis</option>
-          <option value="target_zone">Price target zone</option>
+          <option disabled={targetOptions.length === 0} value="target_zone">Price target zone{targetOptions.length === 0 ? " (no zones)" : ""}</option>
         </select>
       </div>
 
@@ -142,7 +146,14 @@ function CreateAlertForm({ detailContext, instrumentId, listingId, symbol, curre
           {kind === "cost_basis_move" ? <Field name="threshold_pct" label="Move from cost (%)" min="0.1" defaultValue="10" /> : null}
         </div>
       ) : (
-        <p className="text-[10px] leading-4 text-[var(--app-text-faint)]">Notifies when the price enters one of your saved target zones.</p>
+        <div>
+          <label htmlFor="asset-alert-target" className={labelClass}>Target zone</label>
+          <select id="asset-alert-target" name="target_id" defaultValue={targetOptions[0]?.id ?? ""} required className={inputClass}>
+            {targetOptions.map((target) => (
+              <option key={target.id} value={target.id}>{formatTarget(target, locale, assetType)}</option>
+            ))}
+          </select>
+        </div>
       )}
 
       <div>
@@ -173,9 +184,9 @@ function Field({ name, label, ...props }: { name: string; label: string } & Reac
   )
 }
 
-function AlertRuleRow({ rule, detailContext, currency }: { rule: AlertRule; detailContext: string; currency: string }) {
+function AlertRuleRow({ assetType, rule, detailContext, currency, locale }: { assetType: string; rule: AlertRule; detailContext: string; currency: string; locale: string }) {
   const [pending, startTransition] = useTransition()
-  const description = describeRule(rule, currency)
+  const description = describeRule(rule, currency, locale, assetType)
 
   return (
     <li className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-raised)] p-2.5">
@@ -185,7 +196,7 @@ function AlertRuleRow({ rule, detailContext, currency }: { rule: AlertRule; deta
           {rule.label ? <p className="mt-0.5 truncate text-[9px] text-[var(--app-text-faint)]">{description}</p> : null}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <span className="rounded-md border border-[var(--app-border)] px-1.5 py-0.5 text-[9px] font-medium text-[var(--app-text-faint)]" title={rule.notify_once ? "Fires once, then disables" : rule.remind_after_minutes ? `Reminds again after ${rule.remind_after_minutes} min` : "Recurring alert"}>
+          <span className="rounded-md border border-[var(--app-border)] px-1.5 py-0.5 text-[9px] font-medium text-[var(--app-text-faint)]" title={rule.notify_once ? "Fires once, then disables" : "Recurring alert"}>
             {repeatLabel(rule)}
           </span>
           <button
@@ -215,11 +226,14 @@ function AlertRuleRow({ rule, detailContext, currency }: { rule: AlertRule; deta
   )
 }
 
-function describeRule(rule: AlertRule, currency: string): string {
+function describeRule(rule: AlertRule, currency: string, locale: string, assetType: string): string {
   const params = rule.params as Record<string, unknown>
   switch (rule.kind) {
-    case "price_threshold":
-      return `Price ${String(params.direction)} ${String(params.price)} ${currency}`
+    case "price_threshold": {
+      const price = readRuleNumber(params.price)
+      const value = price === null ? `${String(params.price)} ${currency}` : fmtPriceAmount(locale, price, currency, assetType)
+      return `Price ${String(params.direction)} ${value}`
+    }
     case "daily_move":
       return `Daily move at least ${String(params.threshold_pct)}%`
     case "earnings_lead":
@@ -227,8 +241,23 @@ function describeRule(rule: AlertRule, currency: string): string {
     case "cost_basis_move":
       return `${String(params.direction)} ${String(params.threshold_pct)}% from cost`
     case "target_zone":
-      return "Price enters a saved target zone"
+      return "Price enters selected target zone"
   }
+}
+
+function readRuleNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value
+  if (typeof value === "string") return num(value)
+  return null
+}
+
+function formatTarget(target: PriceTarget, locale: string, assetType: string): string {
+  const lowValue = num(target.zone_low)
+  const highValue = num(target.zone_high)
+  const low = lowValue !== null ? fmtPriceAmount(locale, lowValue, target.currency, assetType) : null
+  const high = highValue !== null ? fmtPriceAmount(locale, highValue, target.currency, assetType) : null
+  const zone = low && high ? `${low} - ${high}` : low ? `from ${low}` : high ? `up to ${high}` : "open zone"
+  return `${target.horizon.slice(0, 1).toUpperCase()}${target.horizon.slice(1)} - ${zone}`
 }
 
 function severityClass(severity: NotificationItem["severity"]): string {

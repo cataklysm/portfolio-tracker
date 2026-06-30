@@ -973,6 +973,12 @@ CREATE TABLE insights.price_targets (
 CREATE INDEX insights_price_targets_instrument_user_idx
     ON insights.price_targets (instrument_id, user_id, horizon);
 
+CREATE TABLE insights.suppressed_analyst_price_targets (
+    instrument_id           uuid PRIMARY KEY,
+    deleted_by              uuid,
+    deleted_at              timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE insights.outbox_events (
     id                      uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     event_type              text NOT NULL,

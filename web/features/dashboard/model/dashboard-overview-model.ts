@@ -94,7 +94,7 @@ export function buildDashboardOverviewModel(positions: PositionView[], portfolio
     .map((assetRow) => ({
       ...assetRow,
       allocation: totalValue > 0 ? (assetRow.value / totalValue) * 100 : 0,
-      dailyPct: assetRow.value > 0 && assetRow.dailyAmount !== null ? (assetRow.dailyAmount / assetRow.value) * 100 : null,
+      dailyPct: dailyChangePct(assetRow.value, assetRow.dailyAmount),
       portfolios: assetRow.portfolios.sort((firstPortfolio, secondPortfolio) => secondPortfolio.value - firstPortfolio.value),
       returnPct: assetRow.cost > 0 ? (assetRow.pnl / assetRow.cost) * 100 : null,
     }))
@@ -107,7 +107,7 @@ export function buildDashboardOverviewModel(positions: PositionView[], portfolio
   const totalPnl = unrealized + realized
   const cash = openAssetRows.filter((assetRow) => assetRow.type === "cash").reduce((sum, assetRow) => sum + assetRow.value, 0)
   const dailyAmount = openAssetRows.reduce<number | null>((sum, assetRow) => assetRow.dailyAmount === null ? sum : (sum ?? 0) + assetRow.dailyAmount, null)
-  const dailyPct = totalValue > 0 && dailyAmount !== null ? (dailyAmount / totalValue) * 100 : null
+  const dailyPct = dailyChangePct(totalValue, dailyAmount)
   const biggestMover = [...openAssetRows]
     .filter((assetRow) => assetRow.dailyAmount !== null)
     .sort((firstAssetRow, secondAssetRow) => Math.abs(secondAssetRow.dailyAmount ?? 0) - Math.abs(firstAssetRow.dailyAmount ?? 0))[0] ?? null
@@ -169,6 +169,13 @@ export function buildDashboardOverviewModel(positions: PositionView[], portfolio
     biggestMover,
     warningRows,
   }
+}
+
+function dailyChangePct(currentValue: number, dailyAmount: number | null): number | null {
+  if (dailyAmount === null) return null
+  const previousValue = currentValue - dailyAmount
+  if (previousValue <= 0) return null
+  return (dailyAmount / previousValue) * 100
 }
 
 function classifyDashboardDataStatus(position: PositionView): DashboardDataStatus {

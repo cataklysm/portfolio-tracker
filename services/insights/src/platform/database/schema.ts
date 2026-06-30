@@ -22,6 +22,8 @@ export interface FairValueEstimatesTable {
   assumptions: Json;
   effective_date: ColumnType<Date, string, string>;
   source: string | null;
+  /** NULL = current; set when a newer analyst value superseded this row. */
+  superseded_at: ColumnType<Date | null, Date | string | null, Date | string | null>;
   created_at: Generated<Date>;
 }
 
@@ -38,11 +40,20 @@ export interface PriceTargetsTable {
   currency: string;
   effective_date: ColumnType<Date, string | undefined, string>;
   note: string | null;
+  /** NULL = current; set when a newer analyst zone superseded this row. */
+  superseded_at: ColumnType<Date | null, Date | string | null, Date | string | null>;
   created_at: Generated<Date>;
   updated_at: Timestamp;
+}
+
+export interface SuppressedAnalystPriceTargetsTable {
+  instrument_id: string;
+  deleted_by: string | null;
+  deleted_at: Timestamp;
 }
 
 export interface InsightsDatabase {
   'insights.fair_value_estimates': FairValueEstimatesTable;
   'insights.price_targets': PriceTargetsTable;
+  'insights.suppressed_analyst_price_targets': SuppressedAnalystPriceTargetsTable;
 }

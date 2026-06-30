@@ -22,6 +22,8 @@ export interface ProviderSettingsTable {
   max_batch_size: number | null;
   rate_limit_per_min: number | null;
   max_concurrency: ColumnType<number, number | undefined, number>;
+  /** NULL = no per-sweep cap; else the max listings refreshed per cycle. */
+  max_per_cycle: number | null;
   created_at: Generated<Date>;
   updated_at: Timestamp;
 }

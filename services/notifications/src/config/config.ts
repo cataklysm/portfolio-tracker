@@ -30,7 +30,11 @@ export interface NotificationsConfig {
     readDays: number;
     cleanupIntervalMs: number;
   };
+  snooze: {
+    releaseIntervalMs: number;
+  };
   consumeInterestStream: boolean;
+  consumeMarketStream: boolean;
   /**
    * Web Push (VAPID) for desktop notifications. `enabled` is true only when both
    * keys are configured; otherwise the subscription endpoints still store data
@@ -74,7 +78,11 @@ export function loadConfig(): NotificationsConfig {
       readDays: intEnv('NOTIFICATIONS_READ_RETENTION_DAYS', 14),
       cleanupIntervalMs: intEnv('NOTIFICATIONS_RETENTION_CLEANUP_INTERVAL_MS', 24 * 60 * 60 * 1000),
     },
+    snooze: {
+      releaseIntervalMs: intEnv('NOTIFICATIONS_SNOOZE_RELEASE_INTERVAL_MS', 60 * 1000),
+    },
     consumeInterestStream: boolEnv('NOTIFICATIONS_CONSUME_INTEREST_STREAM', true),
+    consumeMarketStream: boolEnv('NOTIFICATIONS_CONSUME_MARKET_STREAM', true),
     push: {
       enabled: Boolean(vapidPublicKey && vapidPrivateKey),
       publicKey: vapidPublicKey,

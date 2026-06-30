@@ -16,6 +16,7 @@ import { ProvidersClient } from './platform/providers/providers-client.js';
 import {
   QuoteService,
   KyselyQuoteRepository,
+  KyselyQuoteEventStore,
   ProvidersQuoteProvider,
   InstrumentsRefreshPlanClient,
   registerQuoteRoutes,
@@ -56,6 +57,7 @@ export async function buildApp(config: MarketConfig): Promise<BuiltService> {
   const quoteService = new QuoteService({
     repo: new KyselyQuoteRepository(db),
     provider: new ProvidersQuoteProvider(providers),
+    events: new KyselyQuoteEventStore(db),
     planResolver,
     staleAfterMs: config.refresh.heldQuoteMaxAgeMs,
   });
@@ -100,7 +102,8 @@ export async function buildApp(config: MarketConfig): Promise<BuiltService> {
 
   await connectRedis(redis);
 
-  // Forward analyst-assessment events to the `market` Redis stream for insights.
+  // Forward market-domain events to the `market` Redis stream for consumers
+  // such as insights and notifications.
   const publisher = new OutboxPublisher({
     db,
     redis,

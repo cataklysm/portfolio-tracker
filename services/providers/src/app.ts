@@ -6,6 +6,7 @@ import type { ProvidersDatabase } from './platform/database/schema.js';
 import { buildRegistry } from './providers/registry.js';
 import { ProviderSettingsRepository } from './providers/settings-repository.js';
 import { CapabilityRefreshRepository } from './providers/capability-refresh-repository.js';
+import { ProviderPacing } from './providers/pacing.js';
 import { registerProviderRoutes } from './http/routes.js';
 
 export interface BuiltService {
@@ -34,6 +35,7 @@ export async function buildApp(config: ProvidersConfig): Promise<BuiltService> {
   const verifier = new UserTokenVerifier(config.auth);
 
   const registry = await buildRegistry(config, settingsRepo, logger);
+  const pacing = new ProviderPacing(settingsRepo, logger);
 
   const app = await createService({
     name: 'providers',
@@ -49,6 +51,7 @@ export async function buildApp(config: ProvidersConfig): Promise<BuiltService> {
     registry,
     settings: settingsRepo,
     capabilityRefresh: capabilityRefreshRepo,
+    pacing,
     authenticate: verifier.authenticate,
     requireScope: (scope) => verifier.requireScope(scope),
   });

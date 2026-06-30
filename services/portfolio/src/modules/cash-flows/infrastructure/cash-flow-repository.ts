@@ -8,6 +8,7 @@ import type {
   CashFlowRepository,
   CashFlowType,
   NewCashFlow,
+  NewIncomeTaxComponent,
   UpdateCashFlow,
 } from '../application/ports.js';
 
@@ -24,6 +25,13 @@ interface CashFlowRow {
   payment_date: Date | string;
   tax_relevant_value_date: Date | string;
   note: string | null;
+  source_event_id: string | null;
+  source_event_version: number | null;
+  source_event_type: string | null;
+  ex_date: Date | string | null;
+  amount_per_share: string | null;
+  quantity_at_ex_date: string | null;
+  expected_gross_amount: string | null;
   created_at: Date | string;
   updated_at: Date | string;
 }
@@ -41,6 +49,13 @@ const COLUMNS = [
   'payment_date',
   'tax_relevant_value_date',
   'note',
+  'source_event_id',
+  'source_event_version',
+  'source_event_type',
+  'ex_date',
+  'amount_per_share',
+  'quantity_at_ex_date',
+  'expected_gross_amount',
   'created_at',
   'updated_at',
 ] as const;
@@ -88,6 +103,13 @@ export class KyselyCashFlowRepository implements CashFlowRepository {
           payment_date: input.paymentDate,
           tax_relevant_value_date: input.taxRelevantValueDate,
           note: input.note,
+          source_event_id: input.sourceEventId,
+          source_event_version: input.sourceEventVersion,
+          source_event_type: input.sourceEventType,
+          ex_date: input.exDate,
+          amount_per_share: input.amountPerShare,
+          quantity_at_ex_date: input.quantityAtExDate,
+          expected_gross_amount: input.expectedGrossAmount,
         })
         .returning(COLUMNS)
         .executeTakeFirstOrThrow();
@@ -95,18 +117,110 @@ export class KyselyCashFlowRepository implements CashFlowRepository {
     });
   }
 
+  async createWithTaxEvents(
+    input: NewCashFlow,
+    taxComponents: NewIncomeTaxComponent[],
+    audit?: AuditFn<CashFlowRecord>,
+  ): Promise<CashFlowRecord> {
+    if (taxComponents.length === 0) return this.create(input, audit);
+    // One transaction for the cash flow + its linked withheld-tax events, with an
+    // audit row for each. Both are portfolio.* tables in this service, so the
+    // co-write is kept here rather than spanning two repositories' transactions.
+    return this.db.transaction().execute(async (trx) => {
+      const cfRow = await trx
+        .insertInto('portfolio.cash_flows')
+        .values({
+          user_id: input.userId,
+          portfolio_id: input.portfolioId,
+          position_id: input.positionId,
+          type: input.type,
+          gross_amount: input.grossAmount,
+          withholding_tax: input.withholdingTax,
+          fee: input.fee,
+          net_amount: input.netAmount,
+          currency: input.currency,
+          payment_date: input.paymentDate,
+          tax_relevant_value_date: input.taxRelevantValueDate,
+          note: input.note,
+          source_event_id: input.sourceEventId,
+          source_event_version: input.sourceEventVersion,
+          source_event_type: input.sourceEventType,
+          ex_date: input.exDate,
+          amount_per_share: input.amountPerShare,
+          quantity_at_ex_date: input.quantityAtExDate,
+          expected_gross_amount: input.expectedGrossAmount,
+        })
+        .returning(COLUMNS)
+        .executeTakeFirstOrThrow();
+      const cashFlow = toRecord(cfRow as CashFlowRow);
+
+      if (this.recorder && audit) {
+        const change = audit(cashFlow);
+        if (change) await this.recorder.recordIn(trx, change);
+      }
+
+      for (const component of taxComponents) {
+        const teRow = await trx
+          .insertInto('portfolio.tax_events')
+          .values({
+            user_id: input.userId,
+            component: component.component,
+            direction: 'withheld',
+            amount: component.amount,
+            currency: input.currency,
+            booking_date: component.bookingDate,
+            source: 'income_booking',
+            note: null,
+            transaction_id: null,
+            cash_flow_id: cashFlow.id,
+            position_id: input.positionId,
+            portfolio_id: input.portfolioId,
+          })
+          .returning(['id'])
+          .executeTakeFirstOrThrow();
+        if (this.recorder) {
+          await this.recorder.recordIn(trx, {
+            userId: input.userId,
+            entityType: 'tax_event',
+            entityId: teRow.id,
+            action: 'created',
+            after: {
+              id: teRow.id,
+              component: component.component,
+              direction: 'withheld',
+              amount: component.amount,
+              currency: input.currency,
+              booking_date: component.bookingDate,
+              source: 'income_booking',
+              cash_flow_id: cashFlow.id,
+              position_id: input.positionId,
+              portfolio_id: input.portfolioId,
+            },
+            portfolioId: input.portfolioId,
+            positionId: input.positionId,
+          });
+        }
+      }
+      return cashFlow;
+    });
+  }
+
   async listForPortfolio(
     userId: string,
     portfolioId: string,
-    filter: { type?: CashFlowType; positionId?: string },
+    filter: { types?: CashFlowType[]; positionId?: string; dateFrom?: string; dateTo?: string },
   ): Promise<CashFlowRecord[]> {
     let q = this.db
       .selectFrom('portfolio.cash_flows')
       .select(COLUMNS)
       .where('user_id', '=', userId)
       .where('portfolio_id', '=', portfolioId);
-    if (filter.type) q = q.where('type', '=', filter.type);
+    if (filter.types && filter.types.length > 0) q = q.where('type', 'in', filter.types);
     if (filter.positionId) q = q.where('position_id', '=', filter.positionId);
+    // Date filters apply to the value (tax-relevant) date, matching the existing
+    // (portfolio_id, tax_relevant_value_date) index used for activity/reporting.
+    if (filter.dateFrom) q = q.where('tax_relevant_value_date', '>=', filter.dateFrom);
+    if (filter.dateTo) q = q.where('tax_relevant_value_date', '<=', filter.dateTo);
     const rows = await q.orderBy('payment_date', 'desc').orderBy('created_at', 'desc').execute();
     return rows.map((r) => toRecord(r as CashFlowRow));
   }
@@ -157,13 +271,44 @@ export class KyselyCashFlowRepository implements CashFlowRepository {
   }
 
   async delete(userId: string, id: string, audit?: AuditFn<boolean>): Promise<boolean> {
-    return this.withAudit(audit, async (exec) => {
-      const result = await exec
+    return this.db.transaction().execute(async (trx) => {
+      // Capture the generated income-booking tax events before deleting the cash
+      // flow: the FK is ON DELETE SET NULL, which would otherwise orphan them, so
+      // they are deleted here in the same transaction (each audited).
+      const managed = await trx
+        .selectFrom('portfolio.tax_events')
+        .select(['id', 'component', 'direction', 'amount', 'currency', 'booking_date', 'source', 'cash_flow_id', 'position_id', 'portfolio_id'])
+        .where('user_id', '=', userId)
+        .where('cash_flow_id', '=', id)
+        .where('source', '=', 'income_booking')
+        .execute();
+
+      const result = await trx
         .deleteFrom('portfolio.cash_flows')
         .where('id', '=', id)
         .where('user_id', '=', userId)
         .executeTakeFirst();
-      return (result.numDeletedRows ?? 0n) > 0n;
+      if ((result.numDeletedRows ?? 0n) <= 0n) return false;
+
+      for (const te of managed) {
+        await trx.deleteFrom('portfolio.tax_events').where('id', '=', te.id).execute();
+        if (this.recorder) {
+          await this.recorder.recordIn(trx, {
+            userId,
+            entityType: 'tax_event',
+            entityId: te.id,
+            action: 'deleted',
+            before: te,
+            portfolioId: te.portfolio_id,
+            positionId: te.position_id,
+          });
+        }
+      }
+      if (this.recorder && audit) {
+        const change = audit(true);
+        if (change) await this.recorder.recordIn(trx, change);
+      }
+      return true;
     });
   }
 
@@ -187,6 +332,17 @@ export class KyselyCashFlowRepository implements CashFlowRepository {
       .executeTakeFirst();
     return row?.portfolio_id ?? null;
   }
+
+  async hasManagedTaxEvents(userId: string, cashFlowId: string): Promise<boolean> {
+    const row = await this.db
+      .selectFrom('portfolio.tax_events')
+      .select('id')
+      .where('user_id', '=', userId)
+      .where('cash_flow_id', '=', cashFlowId)
+      .where('source', '=', 'income_booking')
+      .executeTakeFirst();
+    return row !== undefined;
+  }
 }
 
 function toRecord(row: CashFlowRow): CashFlowRecord {
@@ -203,6 +359,13 @@ function toRecord(row: CashFlowRow): CashFlowRecord {
     payment_date: dateStr(row.payment_date),
     tax_relevant_value_date: dateStr(row.tax_relevant_value_date),
     note: row.note,
+    source_event_id: row.source_event_id,
+    source_event_version: row.source_event_version,
+    source_event_type: row.source_event_type,
+    ex_date: row.ex_date === null ? null : dateStr(row.ex_date),
+    amount_per_share: row.amount_per_share,
+    quantity_at_ex_date: row.quantity_at_ex_date,
+    expected_gross_amount: row.expected_gross_amount,
     created_at: iso(row.created_at),
     updated_at: iso(row.updated_at),
   };

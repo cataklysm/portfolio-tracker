@@ -24,7 +24,7 @@ const errorClass =
 export type EditableTaxEvent = Pick<
   TaxEvent,
   "id" | "position_id" | "component" | "direction" | "amount" | "currency" | "booking_date" | "note"
->
+> & Partial<Pick<TaxEvent, "source">>
 
 interface Props {
   event?: EditableTaxEvent
@@ -53,6 +53,7 @@ export function TaxEventModal(props: Props) {
   }, [pending, error])
 
   const event = props.event
+  const managedIncomeBooking = event?.source === "income_booking"
   const today = new Date().toISOString().slice(0, 10)
 
   return (
@@ -60,8 +61,9 @@ export function TaxEventModal(props: Props) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={props.triggerClassName ?? "inline-flex h-7 items-center rounded-md border border-[var(--app-border)] px-2 text-[10px] font-semibold text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text)]"}
-        title={props.triggerTitle ?? (event ? "Edit tax event" : "Record broker tax")}
+        disabled={managedIncomeBooking}
+        className={props.triggerClassName ?? "inline-flex h-7 items-center rounded-md border border-[var(--app-border)] px-2 text-[10px] font-semibold text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text)] disabled:cursor-not-allowed disabled:opacity-50"}
+        title={managedIncomeBooking ? "Managed by income booking" : props.triggerTitle ?? (event ? "Edit tax event" : "Record broker tax")}
       >
         {props.triggerContent ?? props.triggerLabel ?? (event ? "Edit" : "Record tax")}
       </button>

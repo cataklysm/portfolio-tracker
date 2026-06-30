@@ -61,6 +61,13 @@ import {
   registerTaxSettingsRoutes,
 } from './modules/tax-settings/index.js';
 import { TaxEstimateService, registerTaxEstimateRoutes } from './modules/tax-calc/index.js';
+import {
+  LiveQuoteHub,
+  LiveQuoteFanout,
+  KyselyHoldingsRepository,
+  MarketQuoteStream,
+  registerLiveQuoteRoutes,
+} from './modules/live-quotes/index.js';
 
 export interface BuiltService {
   app: FastifyInstance;
@@ -118,7 +125,9 @@ export async function buildApp(config: PortfolioConfig): Promise<BuiltService> {
     corporateActions: corporateActionRepo,
   });
   const corporateActionService = new CorporateActionService({ repo: corporateActionRepo, positions: positionService });
-  const cashFlowService = new CashFlowService(cashFlowRepo);
+  // PositionService doubles as the open-quantity reader for event-linked dividend
+  // bookings (quantity held at the ex-date).
+  const cashFlowService = new CashFlowService(cashFlowRepo, positionService);
   const taxEventService = new TaxEventService(taxEventRepo);
   const taxRuleService = new TaxRuleService(new KyselyTaxRuleRepository(db));
   const taxSettingsService = new TaxSettingsService(userTaxRepo, portfolioTaxRepo, taxRuleService);
@@ -157,6 +166,12 @@ export async function buildApp(config: PortfolioConfig): Promise<BuiltService> {
     requireScope: (scope: string) => verifier.requireScope(scope),
   };
 
+  // Live position updates: an in-memory hub of connected SSE clients, fed by a
+  // tail of the market quote stream (started below). The hub is created only when
+  // the feature is enabled; the route then 503s without it.
+  const dumpMode = process.env['OPENAPI_DUMP'] === '1';
+  const liveQuoteHub = config.liveQuotes.enabled ? new LiveQuoteHub() : undefined;
+
   registerPortfolioRoutes(app, { service: portfolioService, ...authDeps });
   registerPositionRoutes(app, { service: positionService, ...authDeps });
   registerWatchlistRoutes(app, { service: watchlistService, ...authDeps });
@@ -169,6 +184,7 @@ export async function buildApp(config: PortfolioConfig): Promise<BuiltService> {
   registerActivityRoutes(app, { service: activityService, ...authDeps });
   registerCorporateActionRoutes(app, { service: corporateActionService, ...authDeps });
   registerReportingRoutes(app, { service: reportingService, ...authDeps });
+  registerLiveQuoteRoutes(app, { hub: liveQuoteHub, ...authDeps });
 
   // Redis is a required dependency for the event bus: connect last so wiring
   // and route-registration errors surface before the fail-fast dependency check.
@@ -185,9 +201,20 @@ export async function buildApp(config: PortfolioConfig): Promise<BuiltService> {
   });
   publisher.start();
 
+  // Tail the market quote stream and fan out per-user SSE pings to connected
+  // clients whose open positions were affected. Skipped during the spec-only dump
+  // (it opens a duplicated Redis client directly).
+  let marketQuoteStream: MarketQuoteStream | undefined;
+  if (liveQuoteHub && !dumpMode) {
+    const fanout = new LiveQuoteFanout({ hub: liveQuoteHub, holdings: new KyselyHoldingsRepository(db) });
+    marketQuoteStream = new MarketQuoteStream({ redis, fanout, logger });
+    await marketQuoteStream.start();
+  }
+
   return {
     app,
     shutdown: async () => {
+      if (marketQuoteStream) await marketQuoteStream.stop();
       publisher.stop();
       await app.close();
       await redis.quit();

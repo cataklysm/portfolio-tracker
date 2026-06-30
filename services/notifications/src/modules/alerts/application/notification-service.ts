@@ -31,6 +31,16 @@ export class NotificationService {
     }
   }
 
+  async snooze(userId: string, id: string, minutes: number): Promise<void> {
+    if (!Number.isInteger(minutes) || minutes < 5 || minutes > 1440) {
+      throw AppError.badRequest('invalid_snooze_interval', 'minutes must be an integer between 5 and 1440');
+    }
+    const until = new Date(Date.now() + minutes * 60_000);
+    if (!(await this.repo.snooze(userId, id, until))) {
+      throw AppError.notFound('notification_not_found', 'Notification not found');
+    }
+  }
+
   markAllRead(userId: string): Promise<number> {
     return this.repo.markAllRead(userId);
   }

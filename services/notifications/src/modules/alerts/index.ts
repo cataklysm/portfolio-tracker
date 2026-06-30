@@ -1,4 +1,5 @@
 export { AlertEvaluator, type AlertEvaluatorDeps } from './application/alert-evaluator.js';
+export { MarketQuoteEventService } from './market-quote-events.js';
 export { NotificationService, type Inbox } from './application/notification-service.js';
 export { RuleService, type CreateRuleInput } from './application/rule-service.js';
 export { PushSender } from './application/push-sender.js';
@@ -17,4 +18,4 @@ export { KyselyPushSubscriptionRepository } from './infrastructure/push-subscrip
 export { KyselyNotificationEventStore } from './infrastructure/event-store.js';
 export { registerNotificationRoutes, type NotificationRouteDeps } from './http/notification-routes.js';
 export { EvaluationScheduler } from './scheduler.js';
-export { LiveNotificationHub, LiveNotificationStream, NotificationRetentionScheduler } from './live-notifications.js';
+export { LiveNotificationHub, LiveNotificationStream, NotificationRetentionScheduler, NotificationSnoozeScheduler } from './live-notifications.js';

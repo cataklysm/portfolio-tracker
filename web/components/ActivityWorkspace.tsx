@@ -79,7 +79,7 @@ function SummaryMetric({ label, value, detail, tone }: { label: string; value: s
 
 const TYPE_VALUES: Record<Props["tab"], string[]> = {
   feed: ["trade", "cash_flow", "tax_event"],
-  cash: ["dividend", "deposit", "withdrawal", "cash_in_lieu"],
+  cash: ["dividend", "interest", "deposit", "withdrawal", "cash_in_lieu"],
   changes: ["transaction", "cash_flow", "tax_event"],
 }
 
@@ -113,7 +113,46 @@ function CashFlowTable({ flows, portfolios, positions, locale, portfolioNames, p
     router.refresh()
   }
   if (!flows.length) return <Empty text="No cash flows match the selected filters." />
-  return <div className="overflow-x-auto"><table className="w-full min-w-[1120px] text-[11px]"><thead><tr className="border-b border-[var(--app-border)] text-[9px] uppercase tracking-[0.08em] text-[var(--app-text-faint)]">{["Date", "Type", "Portfolio", "Asset", "Gross", "Withholding", "Fee", "Net", "Note", ""].map((heading) => <th key={heading} className={`px-3 py-2 font-semibold ${["Gross", "Withholding", "Fee", "Net"].includes(heading) ? "text-right" : "text-left"}`}>{heading}</th>)}</tr></thead><tbody className="divide-y divide-[var(--app-border)]">{flows.map((flow) => <tr key={flow.id} className="hover:bg-[var(--app-surface-hover)]"><td className="px-3 py-2.5 tabular-nums text-[var(--app-text-muted)]">{flow.payment_date}</td><td className="px-3 py-2.5 capitalize text-[var(--app-text)]">{flow.type.replaceAll("_", " ")}</td><td className="px-3 py-2.5 text-[var(--app-text-muted)]">{portfolioNames.get(flow.portfolio_id)}</td><td className="px-3 py-2.5 text-[var(--app-text-muted)]">{flow.position_id ? positionNames.get(flow.position_id) : ""}</td><MoneyCell value={flow.gross_amount} currency={flow.currency} locale={locale} signed /><MoneyCell value={flow.withholding_tax} currency={flow.currency} locale={locale} /><MoneyCell value={flow.fee} currency={flow.currency} locale={locale} /><MoneyCell value={flow.net_amount} currency={flow.currency} locale={locale} signed /><td className="max-w-56 truncate px-3 py-2.5 text-[var(--app-text-muted)]">{flow.note}</td><td className="px-3 py-2.5"><div className="flex gap-1"><CashFlowModal portfolios={portfolios} positions={positions} flow={flow} /><TaxEventModal currency={flow.currency} portfolioId={flow.portfolio_id} positionId={flow.position_id} cashFlowId={flow.id} /><button disabled={busy === flow.id} onClick={() => remove(flow)} className="rounded-md px-2 py-1 text-[10px] text-[var(--app-negative)] disabled:opacity-50">Delete</button></div></td></tr>)}</tbody></table></div>
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[1120px] text-[11px]">
+        <thead>
+          <tr className="border-b border-[var(--app-border)] text-[9px] uppercase tracking-[0.08em] text-[var(--app-text-faint)]">
+            {["Date", "Type", "Portfolio", "Asset", "Gross", "Withholding", "Fee", "Net", "Note", ""].map((heading) => (
+              <th key={heading} className={`px-3 py-2 font-semibold ${["Gross", "Withholding", "Fee", "Net"].includes(heading) ? "text-right" : "text-left"}`}>
+                {heading}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-[var(--app-border)]">
+          {flows.map((flow) => (
+            <tr key={flow.id} className="hover:bg-[var(--app-surface-hover)]">
+              <td className="px-3 py-2.5 tabular-nums text-[var(--app-text-muted)]">{flow.payment_date}</td>
+              <td className="px-3 py-2.5 text-[var(--app-text)]">
+                <span className="font-semibold capitalize">{flow.type.replaceAll("_", " ")}</span>
+                {flow.source_event_id ? <span className="mt-0.5 block text-[9px] font-medium text-[var(--app-text-faint)]">Linked event</span> : null}
+              </td>
+              <td className="px-3 py-2.5 text-[var(--app-text-muted)]">{portfolioNames.get(flow.portfolio_id)}</td>
+              <td className="px-3 py-2.5 text-[var(--app-text-muted)]">{flow.position_id ? positionNames.get(flow.position_id) : "Portfolio level"}</td>
+              <MoneyCell value={flow.gross_amount} currency={flow.currency} locale={locale} signed />
+              <MoneyCell value={flow.withholding_tax} currency={flow.currency} locale={locale} />
+              <MoneyCell value={flow.fee} currency={flow.currency} locale={locale} />
+              <MoneyCell value={flow.net_amount} currency={flow.currency} locale={locale} signed />
+              <td className="max-w-56 truncate px-3 py-2.5 text-[var(--app-text-muted)]">{flow.note}</td>
+              <td className="px-3 py-2.5">
+                <div className="flex justify-end gap-1">
+                  <CashFlowModal portfolios={portfolios} positions={positions} flow={flow} />
+                  <TaxEventModal currency={flow.currency} portfolioId={flow.portfolio_id} positionId={flow.position_id} cashFlowId={flow.id} />
+                  <button disabled={busy === flow.id} onClick={() => remove(flow)} className="rounded-md px-2 py-1 text-[10px] text-[var(--app-negative)] disabled:opacity-50">Delete</button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
 }
 
 function ChangeList({ changes, locale, portfolioNames, positionNames }: { changes: BookingChange[]; locale: string; portfolioNames: Map<string, string>; positionNames: Map<string, string> }) {

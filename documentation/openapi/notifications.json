@@ -60,6 +60,7 @@
                           "rule_id",
                           "data",
                           "read_at",
+                          "snoozed_until",
                           "created_at"
                         ],
                         "properties": {
@@ -176,6 +177,16 @@
                               }
                             ]
                           },
+                          "snoozed_until": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "created_at": {
                             "type": "string"
                           }
@@ -192,6 +203,63 @@
     },
     "/notifications/{id}/read": {
       "post": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notifications/{id}/snooze": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "minutes"
+                ],
+                "properties": {
+                  "minutes": {
+                    "minimum": 5,
+                    "maximum": 1440,
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
         "parameters": [
           {
             "schema": {
@@ -292,7 +360,6 @@
                       "label",
                       "enabled",
                       "notify_once",
-                      "remind_after_minutes",
                       "created_at",
                       "updated_at"
                     ],
@@ -369,16 +436,6 @@
                       },
                       "notify_once": {
                         "type": "boolean"
-                      },
-                      "remind_after_minutes": {
-                        "anyOf": [
-                          {
-                            "type": "integer"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ]
                       },
                       "created_at": {
                         "type": "string"
@@ -459,18 +516,6 @@
                   },
                   "notify_once": {
                     "type": "boolean"
-                  },
-                  "remind_after_minutes": {
-                    "anyOf": [
-                      {
-                        "minimum": 5,
-                        "maximum": 1440,
-                        "type": "integer"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
                   }
                 }
               }
@@ -494,7 +539,6 @@
                     "label",
                     "enabled",
                     "notify_once",
-                    "remind_after_minutes",
                     "created_at",
                     "updated_at"
                   ],
@@ -571,16 +615,6 @@
                     },
                     "notify_once": {
                       "type": "boolean"
-                    },
-                    "remind_after_minutes": {
-                      "anyOf": [
-                        {
-                          "type": "integer"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     },
                     "created_at": {
                       "type": "string"
@@ -625,18 +659,6 @@
                   },
                   "notify_once": {
                     "type": "boolean"
-                  },
-                  "remind_after_minutes": {
-                    "anyOf": [
-                      {
-                        "minimum": 5,
-                        "maximum": 1440,
-                        "type": "integer"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
                   }
                 }
               }
@@ -670,7 +692,6 @@
                     "label",
                     "enabled",
                     "notify_once",
-                    "remind_after_minutes",
                     "created_at",
                     "updated_at"
                   ],
@@ -747,16 +768,6 @@
                     },
                     "notify_once": {
                       "type": "boolean"
-                    },
-                    "remind_after_minutes": {
-                      "anyOf": [
-                        {
-                          "type": "integer"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     },
                     "created_at": {
                       "type": "string"

@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
 import { AppBadge } from "@/design/components/AppBadge"
 import { ControlBar } from "@/design/components/ControlBar"
@@ -22,6 +23,7 @@ import type {
 } from "@/lib/types"
 import { AddPositionModal } from "@/features/positions/components/AddPositionModal"
 import { PerformanceChart } from "@/features/dashboard/components/PerformanceChart"
+import { DashboardLiveRefresh } from "@/features/dashboard/components/DashboardLiveRefresh"
 import { buildDashboardOverviewModel, type DashboardAssetRow as AssetRow, type DashboardDataTone as DataTone, type DashboardOverviewModel as Model } from "@/features/dashboard/model/dashboard-overview-model"
 import { useDashboardPrivacy } from "./DashboardPrivacy"
 
@@ -35,8 +37,9 @@ const ASSET_LABELS: Record<string, string> = {
 }
 
 const COLLAPSED_TYPES_STORAGE_KEY = "dashboard-overview-collapsed-asset-types"
+const SEARCH_STORAGE_KEY = "dashboard-overview-search"
+const SORT_STORAGE_KEY = "dashboard-overview-asset-sort"
 const PERIODS: PerformancePeriod[] = ["1W", "1M", "YTD", "1Y", "ALL"]
-const OVERVIEW_GRID_CLASS = "grid gap-px bg-[var(--app-border)] sm:grid-cols-2 xl:grid-cols-6"
 
 interface DashboardEvents {
   earnings: DashboardEarnings[]
@@ -85,13 +88,26 @@ export function DashboardOverview({
   rail,
 }: DashboardOverviewProperties) {
   const model = useMemo(() => buildDashboardOverviewModel(positions, portfolios), [positions, portfolios])
+  const liveListingIds = useMemo(() => positions.map((position) => position.listing_id), [positions])
+  const [search, setSearch] = useState("")
+
+  useEffect(() => {
+    setSearch(localStorage.getItem(SEARCH_STORAGE_KEY) ?? "")
+  }, [])
+
+  useEffect(() => {
+    localStorage.setItem(SEARCH_STORAGE_KEY, search)
+  }, [search])
 
   return (
     <div className="min-w-0 space-y-3">
+      <DashboardLiveRefresh listingIds={liveListingIds} />
       <DashboardControlStrip
         exchanges={exchanges}
+        onSearchChange={setSearch}
         period={period}
         portfolios={portfolios}
+        search={search}
         selectedPortfolioId={selectedPortfolioId}
       />
       <AggregatePerformance
@@ -103,7 +119,7 @@ export function DashboardOverview({
         period={period}
         selectedPortfolioId={selectedPortfolioId}
       />
-      <MarketSnapshot currency={reportingCurrency} locale={locale} model={model} period={period} />
+      <MarketSnapshot currency={reportingCurrency} locale={locale} model={model} period={period} selectedPortfolioId={selectedPortfolioId} />
       <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-3">
           {selectedPortfolioId ? (
@@ -120,7 +136,7 @@ export function DashboardOverview({
           ) : (
             <PortfolioBreakdown currency={reportingCurrency} locale={locale} model={model} />
           )}
-          <AssetsAcrossPortfolios currency={reportingCurrency} locale={locale} model={model} period={period} selectedPortfolioId={selectedPortfolioId} />
+          <AssetsAcrossPortfolios currency={reportingCurrency} locale={locale} model={model} period={period} search={search} selectedPortfolioId={selectedPortfolioId} />
         </div>
         {rail ? <aside className="space-y-3">{rail}</aside> : null}
       </div>
@@ -166,16 +182,20 @@ export function PortfolioIntelligence({
 
 function DashboardControlStrip({
   exchanges,
+  onSearchChange,
   period,
   portfolios,
+  search,
   selectedPortfolioId,
 }: {
   exchanges: ExchangeView[]
+  onSearchChange: (value: string) => void
   period: PerformancePeriod
   portfolios: Portfolio[]
+  search: string
   selectedPortfolioId?: string
 }) {
-  const [search, setSearch] = useState("")
+  const router = useRouter()
   const scopeTabs = useMemo(() => [
     { label: "All portfolios", value: "all" },
     ...portfolios.slice(0, 4).map((portfolio) => ({
@@ -202,12 +222,12 @@ function DashboardControlStrip({
         />
       )}
       defaultTabValue={activeScope}
-      onReload={() => window.location.reload()}
-      onSearchChange={setSearch}
+      onReload={() => router.refresh()}
+      onSearchChange={onSearchChange}
       onTabChange={changeScope}
       periodAddon={<DashboardPeriodTabs period={period} selectedPortfolioId={selectedPortfolioId} />}
       reloadLabel="Reload portfolio overview"
-      searchPlaceholder="Search assets, portfolios, providers"
+      searchPlaceholder="Search assets or portfolios"
       searchValue={search}
       tabs={scopeTabs}
       tabValue={activeScope}
@@ -260,8 +280,7 @@ function AggregatePerformance({
   const positive = totalPnl >= 0
 
   return (
-    <MetricBar>
-      <div className={OVERVIEW_GRID_CLASS}>
+    <MetricBar columns={{ xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", xl: "repeat(6, minmax(0, 1fr))" }}>
         <MetricBlock
           icon="value"
           label="Total value"
@@ -292,7 +311,6 @@ function AggregatePerformance({
           sub={model.neutralRows.length > 0 ? `${model.neutralRows.length} exchange-aware neutral` : "No action needed"}
           value={model.warningRows.length > 0 || model.invalidCount > 0 ? "Review" : "Healthy"}
         />
-      </div>
     </MetricBar>
   )
 }
@@ -301,6 +319,7 @@ type OverviewIconKind = "breadth" | "cash" | "exposure" | "gain" | "impact" | "i
 type OverviewTone = "positive" | "negative" | "warning"
 
 function MetricBlock({
+  href,
   icon,
   label,
   primary,
@@ -308,6 +327,7 @@ function MetricBlock({
   tone,
   value,
 }: {
+  href?: string
   icon: OverviewIconKind
   label: string
   primary?: boolean
@@ -315,7 +335,7 @@ function MetricBlock({
   tone?: OverviewTone
   value: string
 }) {
-  return (
+  const item = (
     <MetricBarItem
       icon={<AppIcon name={overviewIconName(icon)} />}
       label={label}
@@ -325,20 +345,26 @@ function MetricBlock({
       value={value}
     />
   )
+  if (!href) return item
+  return (
+    <Link className="group block min-w-0 outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)] focus-visible:ring-offset-0 [&>div]:h-full [&>div]:transition [&>div]:group-hover:bg-[var(--app-surface-hover)]" href={href}>
+      {item}
+    </Link>
+  )
 }
 
-function MarketSnapshot({ currency, locale, model, period }: { currency: string; locale: string; model: Model; period: PerformancePeriod }) {
+function MarketSnapshot({ currency, locale, model, period, selectedPortfolioId }: { currency: string; locale: string; model: Model; period: PerformancePeriod; selectedPortfolioId?: string }) {
   const { hidden, currency: privateCurrency } = useDashboardPrivacy()
   const sentiment = marketSentiment(model)
   const largestType = model.byType[0]
   const largestImpact = model.biggestMover
   const largestImpactAmount = largestImpact?.dailyAmount ?? null
-  const largestImpactPct = largestImpactAmount !== null && model.totalValue > 0 ? (largestImpactAmount / model.totalValue) * 100 : null
+  const largestImpactPct = largestImpactAmount !== null ? dailyContributionPct(model.totalValue, model.dailyAmount, largestImpactAmount) : null
   return (
-    <MetricBar>
-      <div className={OVERVIEW_GRID_CLASS}>
+    <MetricBar columns={{ xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", xl: "repeat(6, minmax(0, 1fr))" }}>
         <SnapshotItem icon="breadth" label="Breadth" value={`${model.gainers} up / ${model.losers} down`} sub={`${model.unchanged} unchanged`} />
         <SnapshotItem
+          href={model.biggestGainer ? assetDetailHref(model.biggestGainer.listingId, selectedPortfolioId, period) : undefined}
           icon="gain"
           label="Top gainer"
           tone="positive"
@@ -346,6 +372,7 @@ function MarketSnapshot({ currency, locale, model, period }: { currency: string;
           sub={model.biggestGainer?.dailyPct == null ? "No gainers" : fmtPct(model.biggestGainer.dailyPct)}
         />
         <SnapshotItem
+          href={model.biggestLoser ? assetDetailHref(model.biggestLoser.listingId, selectedPortfolioId, period) : undefined}
           icon="loss"
           label="Top loser"
           tone="negative"
@@ -361,13 +388,19 @@ function MarketSnapshot({ currency, locale, model, period }: { currency: string;
         />
         <SnapshotItem icon="sentiment" label="Sentiment" tone={sentiment.tone === "danger" ? "negative" : sentiment.tone === "success" ? "positive" : undefined} value={sentiment.label} sub={`${period} held assets`} />
         <SnapshotItem icon="exposure" label="Main exposure" value={largestType ? ASSET_LABELS[largestType[0]] ?? largestType[0] : "-"} sub={largestType ? privateCurrency(locale, largestType[1], currency) : "No exposure"} />
-      </div>
     </MetricBar>
   )
 }
 
-function SnapshotItem({ icon, label, sub, tone, value }: { icon: OverviewIconKind; label: string; sub: string; tone?: OverviewTone; value: string }) {
-  return <MetricBlock icon={icon} label={label} sub={sub} tone={tone} value={value} />
+function dailyContributionPct(currentTotalValue: number, totalDailyAmount: number | null, contributionAmount: number): number | null {
+  if (totalDailyAmount === null) return null
+  const previousTotalValue = currentTotalValue - totalDailyAmount
+  if (previousTotalValue <= 0) return null
+  return (contributionAmount / previousTotalValue) * 100
+}
+
+function SnapshotItem({ href, icon, label, sub, tone, value }: { href?: string; icon: OverviewIconKind; label: string; sub: string; tone?: OverviewTone; value: string }) {
+  return <MetricBlock href={href} icon={icon} label={label} sub={sub} tone={tone} value={value} />
 }
 
 function overviewMetricTone(tone?: OverviewTone): MetricBarTone {
@@ -421,10 +454,25 @@ function PortfolioBreakdown({ currency, locale, model }: { currency: string; loc
   )
 }
 
-function AssetsAcrossPortfolios({ currency, locale, model, period, selectedPortfolioId }: { currency: string; locale: string; model: Model; period: PerformancePeriod; selectedPortfolioId?: string }) {
+function AssetsAcrossPortfolios({
+  currency,
+  locale,
+  model,
+  period,
+  search,
+  selectedPortfolioId,
+}: {
+  currency: string
+  locale: string
+  model: Model
+  period: PerformancePeriod
+  search: string
+  selectedPortfolioId?: string
+}) {
   const [sortKey, setSortKey] = useState<AssetSortKey>("value")
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
   const [collapsedTypes, setCollapsedTypes] = useState<Set<string>>(() => new Set())
+  const normalizedSearch = search.trim().toLowerCase()
 
   useEffect(() => {
     try {
@@ -435,10 +483,31 @@ function AssetsAcrossPortfolios({ currency, locale, model, period, selectedPortf
     }
   }, [])
 
-  const grouped = useMemo(() => Object.entries(model.openAssetRows.reduce<Record<string, AssetRow[]>>((acc, row) => {
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SORT_STORAGE_KEY) ?? "null") as unknown
+      if (isDashboardSortState(saved)) {
+        setSortKey(saved.key)
+        setSortDirection(saved.direction)
+      }
+    } catch {
+      localStorage.removeItem(SORT_STORAGE_KEY)
+    }
+  }, [])
+
+  useEffect(() => {
+    localStorage.setItem(SORT_STORAGE_KEY, JSON.stringify({ direction: sortDirection, key: sortKey }))
+  }, [sortDirection, sortKey])
+
+  const filteredRows = useMemo(() => {
+    if (!normalizedSearch) return model.openAssetRows
+    return model.openAssetRows.filter((row) => assetRowMatchesSearch(row, normalizedSearch))
+  }, [model.openAssetRows, normalizedSearch])
+
+  const grouped = useMemo(() => Object.entries(filteredRows.reduce<Record<string, AssetRow[]>>((acc, row) => {
     ;(acc[row.type] ??= []).push(row)
     return acc
-  }, {})).map(([type, rows]) => [type, [...rows].sort((a, b) => compareAssetRows(a, b, sortKey, sortDirection))] as const), [model.openAssetRows, sortDirection, sortKey])
+  }, {})).map(([type, rows]) => [type, [...rows].sort((a, b) => compareAssetRows(a, b, sortKey, sortDirection))] as const), [filteredRows, sortDirection, sortKey])
 
   function changeSort(nextKey: AssetSortKey) {
     if (nextKey === sortKey) {
@@ -462,7 +531,7 @@ function AssetsAcrossPortfolios({ currency, locale, model, period, selectedPortf
   return (
     <section className="app-panel overflow-hidden rounded-lg">
       <CardHeader title="Assets across portfolios" subtitle="Aggregated holdings only; watchlist entries are not portfolios and are not included.">
-        <AppBadge kind="count" label={String(model.openAssetRows.length)} tone="accent" />
+        <AppBadge kind="count" label={normalizedSearch ? `${filteredRows.length} of ${model.openAssetRows.length}` : String(model.openAssetRows.length)} tone="accent" />
       </CardHeader>
       <div className="overflow-x-auto">
         <div className="min-w-[1060px]">
@@ -475,26 +544,34 @@ function AssetsAcrossPortfolios({ currency, locale, model, period, selectedPortf
             <SortButton activeKey={sortKey} align="right" direction={sortDirection} label="Return" onSort={changeSort} sortKey="returnPct" />
             <SortButton activeKey={sortKey} align="right" direction={sortDirection} label="Data" onSort={changeSort} sortKey="dataStatus" />
           </div>
-          {grouped.map(([type, rows]) => (
-            <div key={type}>
-              <button
-                aria-expanded={!collapsedTypes.has(type)}
-                className="grid w-full grid-cols-[minmax(250px,1.7fr)_180px_120px_130px_110px_120px_150px] items-center gap-3 border-b border-[var(--app-border)] bg-[var(--app-surface-header)] px-4 py-2 text-left transition hover:bg-[var(--app-surface-hover)]"
-                onClick={() => toggleType(type)}
-                type="button"
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  <span className="w-3 text-[11px] text-[var(--app-text-faint)]">{collapsedTypes.has(type) ? "+" : "-"}</span>
-                  <span className="truncate text-[14px] font-[750] leading-tight text-[var(--app-text)]">{ASSET_LABELS[type] ?? type}</span>
-                  <AppBadge kind="count" label={String(rows.length)} tone="accent" />
-                </span>
-                <span />
-                <span className="text-right text-[12px] font-semibold tabular-nums text-[var(--app-text-muted)]">{formatGroupValue(locale, currency, rows)}</span>
-                <span className="text-right text-[10.5px] font-medium tabular-nums text-[var(--app-text-faint)]">{formatGroupAllocation(rows)}</span>
-              </button>
-              {!collapsedTypes.has(type) ? rows.map((row) => <AssetTableRow currency={currency} key={row.key} locale={locale} period={period} row={row} selectedPortfolioId={selectedPortfolioId} />) : null}
+          {grouped.map(([type, rows]) => {
+            const isCollapsed = !normalizedSearch && collapsedTypes.has(type)
+            return (
+              <div key={type}>
+                <button
+                  aria-expanded={!isCollapsed}
+                  className="grid w-full grid-cols-[minmax(250px,1.7fr)_180px_120px_130px_110px_120px_150px] items-center gap-3 border-b border-[var(--app-border)] bg-[var(--app-surface-header)] px-4 py-2 text-left transition hover:bg-[var(--app-surface-hover)]"
+                  onClick={() => toggleType(type)}
+                  type="button"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="w-3 text-[11px] text-[var(--app-text-faint)]">{isCollapsed ? "+" : "-"}</span>
+                    <span className="truncate text-[14px] font-[750] leading-tight text-[var(--app-text)]">{ASSET_LABELS[type] ?? type}</span>
+                    <AppBadge kind="count" label={String(rows.length)} tone="accent" />
+                  </span>
+                  <span />
+                  <span className="text-right text-[12px] font-semibold tabular-nums text-[var(--app-text-muted)]">{formatGroupValue(locale, currency, rows)}</span>
+                  <span className="text-right text-[10.5px] font-medium tabular-nums text-[var(--app-text-faint)]">{formatGroupAllocation(rows)}</span>
+                </button>
+                {!isCollapsed ? rows.map((row) => <AssetTableRow currency={currency} key={row.key} locale={locale} period={period} row={row} selectedPortfolioId={selectedPortfolioId} />) : null}
+              </div>
+            )
+          })}
+          {grouped.length === 0 ? (
+            <div className="border-b border-[var(--app-border)] px-4 py-10 text-center text-[12px] font-medium text-[var(--app-text-muted)]">
+              No holdings match this search.
             </div>
-          ))}
+          ) : null}
         </div>
       </div>
     </section>
@@ -767,7 +844,7 @@ function NotificationRow({
 }) {
   const href = positionId ? positionDetailHref(positionId, returnHref) : "/notifications"
   const tone = item.severity === "critical" ? "danger" : item.severity === "warning" ? "warning" : "accent"
-  const notificationTitle = assetSymbol && item.title.toLowerCase().includes(assetSymbol.toLowerCase()) ? item.title : assetSymbol ? `${assetSymbol} - ${item.title}` : item.title
+  const notificationTitle = formatNotificationSummary(item.title, assetSymbol, assetName)
   return (
     <li className="border-b border-[var(--app-border)] last:border-b-0">
       <Link className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2.5 transition hover:bg-[var(--app-surface-hover)]" href={href}>
@@ -781,6 +858,21 @@ function NotificationRow({
       </Link>
     </li>
   )
+}
+
+function formatNotificationSummary(title: string, assetSymbol: string | undefined, assetName: string): string {
+  const trimmed = title.trim()
+  const withoutSymbol = assetSymbol ? removeLeadingAssetLabel(trimmed, assetSymbol) : trimmed
+  const withoutName = removeLeadingAssetLabel(withoutSymbol, assetName)
+  return withoutName.length > 0 ? withoutName : trimmed
+}
+
+function removeLeadingAssetLabel(value: string, label: string): string {
+  const normalized = label.trim()
+  if (!normalized) return value
+  if (value.toLowerCase() === normalized.toLowerCase()) return ""
+  if (!value.toLowerCase().startsWith(`${normalized.toLowerCase()} `)) return value
+  return value.slice(normalized.length).trim()
 }
 
 function findNotificationAsset(
@@ -832,6 +924,37 @@ function marketSentiment(model: Model): { label: string; tone: "success" | "warn
   if (net >= Math.ceil(model.openAssetRows.length * 0.25)) return { label: "Constructive", tone: "success" }
   if (net <= -Math.ceil(model.openAssetRows.length * 0.25)) return { label: "Defensive", tone: "danger" }
   return { label: "Mixed", tone: "accent" }
+}
+
+function assetRowMatchesSearch(row: AssetRow, query: string): boolean {
+  return [
+    row.name,
+    row.symbol,
+    row.currency,
+    row.type,
+    row.dataStatus.label,
+    row.dataStatus.detail,
+    ...row.portfolios.map((portfolio) => portfolio.name),
+  ]
+    .join(" ")
+    .toLowerCase()
+    .includes(query)
+}
+
+function isDashboardSortState(value: unknown): value is { direction: SortDirection; key: AssetSortKey } {
+  if (!value || typeof value !== "object") return false
+  const state = value as { direction?: unknown; key?: unknown }
+  return isAssetSortKey(state.key) && (state.direction === "asc" || state.direction === "desc")
+}
+
+function isAssetSortKey(value: unknown): value is AssetSortKey {
+  return value === "name"
+    || value === "portfolioCount"
+    || value === "value"
+    || value === "allocation"
+    || value === "dailyPct"
+    || value === "returnPct"
+    || value === "dataStatus"
 }
 
 function compareAssetRows(a: AssetRow, b: AssetRow, key: AssetSortKey, direction: SortDirection) {

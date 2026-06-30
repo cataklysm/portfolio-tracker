@@ -6,6 +6,16 @@ import type { AlertRuleKind } from "@/lib/types"
 
 type Result = { error: string } | null
 
+export interface AlertRulePayload {
+  kind: AlertRuleKind
+  instrument_id: string
+  listing_id?: string | null
+  params: Record<string, unknown>
+  label?: string | null
+  notify_once?: boolean
+  enabled?: boolean
+}
+
 async function send(path: string, method: string, body?: unknown): Promise<Result> {
   let resp: Response
   try {
@@ -42,7 +52,8 @@ export async function createRuleAction(_prev: Result, formData: FormData): Promi
       params = { direction: formData.get("direction"), threshold_pct: num("threshold_pct") }
       break
     case "target_zone":
-      params = {}
+      if (!formData.get("target_id")) return { error: "Pick a target zone." }
+      params = { target_id: formData.get("target_id") }
       break
     default:
       return { error: "Unknown rule kind." }
@@ -57,7 +68,6 @@ export async function createRuleAction(_prev: Result, formData: FormData): Promi
     instrument_id: instrumentId,
     params,
     notify_once: repeat.notifyOnce,
-    remind_after_minutes: repeat.remindAfterMinutes,
   }
   const listingId = formData.get("listing_id") as string
   if (listingId) body.listing_id = listingId
@@ -67,10 +77,25 @@ export async function createRuleAction(_prev: Result, formData: FormData): Promi
   return send("/notifications/rules", "POST", body)
 }
 
+export async function createRulePayloadAction(body: AlertRulePayload): Promise<Result> {
+  return send("/notifications/rules", "POST", normalizeRulePayload(body))
+}
+
+export async function updateRulePayloadAction(id: string, body: Partial<AlertRulePayload>): Promise<Result> {
+  return send(`/notifications/rules/${id}`, "PATCH", normalizeRulePayload(body))
+}
+
 export async function toggleRuleAction(id: string, enabled: boolean): Promise<Result> {
   return send(`/notifications/rules/${id}`, "PATCH", { enabled })
 }
 
 export async function deleteRuleAction(id: string): Promise<Result> {
   return send(`/notifications/rules/${id}`, "DELETE")
+}
+
+function normalizeRulePayload(body: Partial<AlertRulePayload>): Partial<AlertRulePayload> {
+  const normalized: Partial<AlertRulePayload> = { ...body }
+  if (typeof normalized.label === "string") normalized.label = normalized.label.trim() || null
+  if (normalized.listing_id === "") normalized.listing_id = null
+  return normalized
 }

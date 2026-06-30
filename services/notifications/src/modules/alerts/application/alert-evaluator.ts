@@ -45,6 +45,7 @@ export interface AlertEvaluatorDeps {
 
 interface RuleContext {
   symbol: string;
+  name: string;
   quote: LatestQuote | undefined;
   price: number | null;
   reportDate: string | undefined;
@@ -82,6 +83,17 @@ export class AlertEvaluator {
 
   async runCycle(): Promise<void> {
     const interests = await this.deps.interests.listActiveInterests();
+    await this.evaluateInterests(interests);
+  }
+
+  async runForListings(listingIds: string[]): Promise<void> {
+    const uniqueListingIds = [...new Set(listingIds.filter((id) => id.length > 0))];
+    if (uniqueListingIds.length === 0) return;
+    const interests = await this.deps.interests.listActiveInterestsByListings(uniqueListingIds);
+    await this.evaluateInterests(interests);
+  }
+
+  private async evaluateInterests(interests: ActiveInterest[]): Promise<void> {
     if (interests.length === 0) return;
 
     const listingIds = [...new Set(interests.map((i) => i.listingId))];
@@ -136,6 +148,7 @@ export class AlertEvaluator {
         const quote = quotes.get(listingId);
         const ctx: RuleContext = {
           symbol: r.symbol,
+          name: r.name,
           quote,
           price: quote?.latest ?? null,
           reportDate: upcoming.get(r.instrumentId),
@@ -144,9 +157,8 @@ export class AlertEvaluator {
           currency: r.currency,
           today: todayIso,
         };
-        const remindAfterMs = rule.remind_after_minutes !== null ? rule.remind_after_minutes * 60_000 : null;
         const fired = await this.maybeFire(userId, listingId, r.instrumentId, rule.id, RULE_TO_TYPE[rule.kind], `rule:${rule.id}`,
-          evaluateRule(rule, ctx), RULE_CLEARS_ON_EMPTY[rule.kind], remindAfterMs);
+          evaluateRule(rule, ctx), RULE_CLEARS_ON_EMPTY[rule.kind]);
         // A one-shot rule disables itself after firing; recurring rules keep
         // running and rely on the per-signature dedup to avoid repeat spam.
         if (fired && rule.notify_once) {
@@ -171,7 +183,6 @@ export class AlertEvaluator {
     alertType: string,
     candidate: AlertCandidate | null,
     clearOnEmpty: boolean,
-    remindAfterMs: number | null,
   ): Promise<boolean> {
     const previous = await this.deps.alertState.getState(userId, listingId, alertType);
     if (candidate === null) {
@@ -179,10 +190,9 @@ export class AlertEvaluator {
       return false;
     }
     if (previous !== null && previous.signature === candidate.signature) {
-      // Same condition still holds. Without a cooldown we never re-notify; with a
-      // "remind me later" cooldown we re-notify once the interval has elapsed.
-      if (remindAfterMs === null) return false;
-      if (Date.now() - previous.firedAt.getTime() < remindAfterMs) return false;
+      // Same condition still holds. Do not re-notify until the condition clears
+      // and enters again; user-level "remind me later" is a notification snooze.
+      return false;
     }
 
     const id = await this.deps.notifications.insert({
@@ -206,22 +216,24 @@ function evaluateRule(rule: AlertRule, ctx: RuleContext): AlertCandidate | null 
   switch (rule.kind) {
     case 'price_threshold': {
       const p = rule.params as { direction: 'above' | 'below'; price: number };
-      return evaluatePriceThreshold(ctx.symbol, ctx.price, p.direction, p.price, ctx.currency);
+      return evaluatePriceThreshold(ctx.name, ctx.price, p.direction, p.price, ctx.currency);
     }
     case 'daily_move': {
       const p = rule.params as { threshold_pct: number };
-      return ctx.quote ? evaluateDailyMove(ctx.symbol, ctx.quote, p.threshold_pct, ctx.today) : null;
+      return ctx.quote ? evaluateDailyMove(ctx.name, ctx.quote, p.threshold_pct, ctx.today) : null;
     }
     case 'earnings_lead': {
       const p = rule.params as { days: number };
-      return evaluateEarnings(ctx.symbol, ctx.reportDate, p.days, ctx.today);
+      return evaluateEarnings(ctx.name, ctx.reportDate, p.days, ctx.today);
     }
     case 'cost_basis_move': {
       const p = rule.params as { direction: 'above' | 'below'; threshold_pct: number };
-      return evaluateCostBasisMove(ctx.symbol, ctx.price, ctx.avgCost, p.direction, p.threshold_pct);
+      return evaluateCostBasisMove(ctx.name, ctx.price, ctx.avgCost, p.direction, p.threshold_pct);
     }
-    case 'target_zone':
-      return evaluateTargetZone(ctx.symbol, ctx.price, ctx.targets, ctx.currency);
+    case 'target_zone': {
+      const p = rule.params as { target_id?: string };
+      return evaluateTargetZone(ctx.name, ctx.price, ctx.targets, ctx.currency, p.target_id);
+    }
     default:
       return null;
   }

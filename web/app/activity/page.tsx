@@ -21,7 +21,7 @@ async function json<T>(path: string): Promise<T | null> {
 export default async function ActivityPage({ searchParams }: Props) {
   const params = await searchParams
   const tab = params.tab === "changes" ? "changes" : params.tab === "cash" ? "cash" : "feed"
-  const cashTypes = ["dividend", "deposit", "withdrawal", "cash_in_lieu"]
+  const cashTypes = ["dividend", "interest", "deposit", "withdrawal", "cash_in_lieu"]
   const feedTypes = ["trade", "cash_flow", "tax_event"]
   const selectedType = tab === "feed"
     ? (feedTypes.includes(params.type ?? "") ? params.type : undefined)

@@ -67,6 +67,7 @@ const FairValueRecordSchema = Type.Object({
   assumptions: Type.Unknown(),
   effective_date: Type.String(),
   source: Ns,
+  superseded_at: Ns,
   created_at: Type.String(),
 });
 
@@ -95,6 +96,7 @@ const PriceTargetRecordSchema = Type.Object({
   currency: Type.String(),
   effective_date: Type.String(),
   note: Ns,
+  superseded_at: Ns,
   created_at: Type.String(),
   updated_at: Type.String(),
 });
@@ -123,6 +125,12 @@ export function registerAssessmentRoutes(app: FastifyInstance, deps: AssessmentR
     deps.service.listFairValues(uid(request.user?.sub), request.query.instrument_id),
   );
 
+  // Full analyst fair-value history (current + superseded), oldest first — the
+  // data behind a UI trend line of how the analyst mean evolved.
+  r.get('/fair-values/history', { preHandler: read, schema: { querystring: InstrumentQuery, response: { 200: Type.Array(FairValueRecordSchema) } } }, async (request) =>
+    deps.service.listAnalystFairValueHistory(request.query.instrument_id),
+  );
+
   r.post('/fair-values', { preHandler: write, schema: { body: CreateFairValueBody, response: { 201: FairValueWithBreakdownSchema } } }, async (request, reply) => {
     const { record, breakdown } = await deps.service.createDcfFairValue(uid(request.user?.sub), {
       instrumentId: request.body.instrument_id,
@@ -144,6 +152,11 @@ export function registerAssessmentRoutes(app: FastifyInstance, deps: AssessmentR
 
   r.get('/price-targets', { preHandler: read, schema: { querystring: PriceTargetsQuery, response: { 200: Type.Array(PriceTargetRecordSchema) } } }, async (request) =>
     deps.service.listPriceTargets(uid(request.user?.sub), request.query.instrument_id, request.query.listing_id),
+  );
+
+  // Full analyst target-zone history (current + superseded), oldest first.
+  r.get('/price-targets/history', { preHandler: read, schema: { querystring: InstrumentQuery, response: { 200: Type.Array(PriceTargetRecordSchema) } } }, async (request) =>
+    deps.service.listAnalystTargetHistory(request.query.instrument_id),
   );
 
   r.post('/price-targets', { preHandler: write, schema: { body: CreatePriceTargetBody, response: { 201: PriceTargetRecordSchema } } }, async (request, reply) => {
@@ -172,7 +185,7 @@ export function registerAssessmentRoutes(app: FastifyInstance, deps: AssessmentR
   );
 
   r.delete('/price-targets/:id', { preHandler: write, schema: { response: { 200: OkResponse } } }, async (request) => {
-    await deps.service.deletePriceTarget(uid(request.user?.sub), (request.params as { id: string }).id);
+    await deps.service.deletePriceTarget(uid(request.user?.sub), (request.params as { id: string }).id, request.user?.scopes.includes('system:admin') === true);
     return { ok: true as const };
   });
 

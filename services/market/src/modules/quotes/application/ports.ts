@@ -30,6 +30,34 @@ export interface DailyClose {
   volume: string | null;
 }
 
+/** Highest/lowest stored price over a window; all null when the window has no data. */
+export interface PriceRange {
+  high: string | null;
+  low: string | null;
+  /** When the high was observed (most recent occurrence on ties); null when empty. */
+  highAt: Date | null;
+  /** When the low was observed (most recent occurrence on ties); null when empty. */
+  lowAt: Date | null;
+}
+
+/**
+ * Daily/weekly/monthly/yearly price extremes for a listing, derived from stored
+ * quotes. `daily` is the current UTC calendar day (today's range); the others are
+ * trailing windows ending now (7 days / 1 month / 1 year — `yearly` is the
+ * 52-week range). The granularity of each extreme follows the stored data: an
+ * intraday range for providers with a minute feed, daily closes otherwise.
+ */
+export interface PriceRanges {
+  /** Currency of the listing's latest stored tick; null when no quote is stored. */
+  currency: string | null;
+  /** When the ranges were computed (server now). */
+  asOf: Date;
+  daily: PriceRange;
+  weekly: PriceRange;
+  monthly: PriceRange;
+  yearly: PriceRange;
+}
+
 export interface QuoteRepository {
   getLatestPairs(listingIds: string[]): Promise<Map<string, StoredQuotePair>>;
   getSeries(listingId: string, limit: number): Promise<{ time: Date; price: string; volume: string | null }[]>;
@@ -39,9 +67,24 @@ export interface QuoteRepository {
    * forward-fill any date in the range. Ascending by date.
    */
   getDailyCloseSeries(listingId: string, from: string, to: string): Promise<DailyClose[]>;
+  /** Highest/lowest stored price for the daily/weekly/monthly/yearly windows. */
+  getPriceRanges(listingId: string): Promise<PriceRanges>;
   upsertQuote(quote: NormalizedQuote): Promise<void>;
   /** Deletes all stored quotes for the given listings (for provider-switch rebuilds). */
   purgeListings(listingIds: string[]): Promise<number>;
+  /** Deletes stored quotes at or after `since` for the given listings (intraday session rebuild). */
+  purgeListingsSince(listingIds: string[], since: Date): Promise<number>;
+}
+
+export interface QuoteUpdatedEvent {
+  provider: string;
+  listingIds: string[];
+  asOf: string;
+}
+
+/** Writes quote update events to the transactional outbox. */
+export interface QuoteEventStore {
+  enqueueQuotesUpdated(input: QuoteUpdatedEvent): Promise<void>;
 }
 
 /** Provider symbol + currency a listing maps to (resolved from instruments). */

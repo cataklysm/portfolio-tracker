@@ -1623,6 +1623,12 @@
                   "enum": [
                     "cash_in_lieu"
                   ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "interest"
+                  ]
                 }
               ]
             },
@@ -1632,11 +1638,38 @@
           },
           {
             "schema": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "types",
+            "required": false
+          },
+          {
+            "schema": {
               "format": "uuid",
               "type": "string"
             },
             "in": "query",
             "name": "position_id",
+            "required": false
+          },
+          {
+            "schema": {
+              "format": "date",
+              "type": "string"
+            },
+            "in": "query",
+            "name": "date_from",
+            "required": false
+          },
+          {
+            "schema": {
+              "format": "date",
+              "type": "string"
+            },
+            "in": "query",
+            "name": "date_to",
             "required": false
           },
           {
@@ -1670,6 +1703,13 @@
                       "payment_date",
                       "tax_relevant_value_date",
                       "note",
+                      "source_event_id",
+                      "source_event_version",
+                      "source_event_type",
+                      "ex_date",
+                      "amount_per_share",
+                      "quantity_at_ex_date",
+                      "expected_gross_amount",
                       "created_at",
                       "updated_at"
                     ],
@@ -1715,6 +1755,12 @@
                             "enum": [
                               "cash_in_lieu"
                             ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "interest"
+                            ]
                           }
                         ]
                       },
@@ -1740,6 +1786,76 @@
                         "type": "string"
                       },
                       "note": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "source_event_id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "source_event_version": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "source_event_type": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "ex_date": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "amount_per_share": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "quantity_at_ex_date": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "expected_gross_amount": {
                         "anyOf": [
                           {
                             "type": "string"
@@ -1807,6 +1923,12 @@
                         "enum": [
                           "cash_in_lieu"
                         ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "interest"
+                        ]
                       }
                     ]
                   },
@@ -1842,6 +1964,89 @@
                   "note": {
                     "maxLength": 280,
                     "type": "string"
+                  },
+                  "source_event_id": {
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "type": "string"
+                  },
+                  "source_event_version": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "source_event_type": {
+                    "maxLength": 100,
+                    "type": "string"
+                  },
+                  "ex_date": {
+                    "format": "date",
+                    "type": "string"
+                  },
+                  "amount_per_share": {
+                    "pattern": "^-?\\d+(\\.\\d+)?$",
+                    "type": "string"
+                  },
+                  "tax_components": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "component",
+                        "amount",
+                        "currency",
+                        "booking_date"
+                      ],
+                      "properties": {
+                        "component": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "capital_income"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "solidarity"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "church"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "foreign_withholding"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "generic"
+                              ]
+                            }
+                          ]
+                        },
+                        "amount": {
+                          "pattern": "^-?\\d+(\\.\\d+)?$",
+                          "type": "string"
+                        },
+                        "currency": {
+                          "minLength": 3,
+                          "maxLength": 3,
+                          "type": "string"
+                        },
+                        "booking_date": {
+                          "format": "date",
+                          "type": "string"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -1878,6 +2083,13 @@
                     "payment_date",
                     "tax_relevant_value_date",
                     "note",
+                    "source_event_id",
+                    "source_event_version",
+                    "source_event_type",
+                    "ex_date",
+                    "amount_per_share",
+                    "quantity_at_ex_date",
+                    "expected_gross_amount",
                     "created_at",
                     "updated_at"
                   ],
@@ -1923,6 +2135,12 @@
                           "enum": [
                             "cash_in_lieu"
                           ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "interest"
+                          ]
                         }
                       ]
                     },
@@ -1948,6 +2166,76 @@
                       "type": "string"
                     },
                     "note": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_event_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_event_version": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_event_type": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "ex_date": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "amount_per_share": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "quantity_at_ex_date": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "expected_gross_amount": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -2064,6 +2352,13 @@
                     "payment_date",
                     "tax_relevant_value_date",
                     "note",
+                    "source_event_id",
+                    "source_event_version",
+                    "source_event_type",
+                    "ex_date",
+                    "amount_per_share",
+                    "quantity_at_ex_date",
+                    "expected_gross_amount",
                     "created_at",
                     "updated_at"
                   ],
@@ -2109,6 +2404,12 @@
                           "enum": [
                             "cash_in_lieu"
                           ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "interest"
+                          ]
                         }
                       ]
                     },
@@ -2134,6 +2435,76 @@
                       "type": "string"
                     },
                     "note": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_event_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_event_version": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_event_type": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "ex_date": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "amount_per_share": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "quantity_at_ex_date": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "expected_gross_amount": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -4899,6 +5270,12 @@
                     "realized_pnl",
                     "unrealized_pnl",
                     "dividends",
+                    "dividends_net",
+                    "cash_in_lieu_net",
+                    "interest_net",
+                    "income_net",
+                    "income_gross",
+                    "income_tax",
                     "fees",
                     "total_pnl",
                     "simple_return_pct",
@@ -4964,6 +5341,24 @@
                       "type": "string"
                     },
                     "dividends": {
+                      "type": "string"
+                    },
+                    "dividends_net": {
+                      "type": "string"
+                    },
+                    "cash_in_lieu_net": {
+                      "type": "string"
+                    },
+                    "interest_net": {
+                      "type": "string"
+                    },
+                    "income_net": {
+                      "type": "string"
+                    },
+                    "income_gross": {
+                      "type": "string"
+                    },
+                    "income_tax": {
                       "type": "string"
                     },
                     "fees": {
@@ -5614,6 +6009,12 @@
                         "realized_pnl",
                         "unrealized_pnl",
                         "dividends",
+                        "dividends_net",
+                        "cash_in_lieu_net",
+                        "interest_net",
+                        "income_net",
+                        "income_gross",
+                        "income_tax",
                         "fees",
                         "total_pnl",
                         "simple_return_pct",
@@ -5679,6 +6080,24 @@
                           "type": "string"
                         },
                         "dividends": {
+                          "type": "string"
+                        },
+                        "dividends_net": {
+                          "type": "string"
+                        },
+                        "cash_in_lieu_net": {
+                          "type": "string"
+                        },
+                        "interest_net": {
+                          "type": "string"
+                        },
+                        "income_net": {
+                          "type": "string"
+                        },
+                        "income_gross": {
+                          "type": "string"
+                        },
+                        "income_tax": {
                           "type": "string"
                         },
                         "fees": {
@@ -6318,6 +6737,7 @@
                           "realized_pnl",
                           "unrealized_pnl",
                           "dividends",
+                          "interest",
                           "total_pnl",
                           "complete"
                         ],
@@ -6341,6 +6761,9 @@
                             "type": "string"
                           },
                           "dividends": {
+                            "type": "string"
+                          },
+                          "interest": {
                             "type": "string"
                           },
                           "total_pnl": {
@@ -7304,7 +7727,44 @@
                         "type": "string"
                       },
                       "source": {
-                        "type": "string"
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "manual"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "import"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "broker_api"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "provider"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "corporate_action"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "income_booking"
+                            ]
+                          }
+                        ]
                       },
                       "note": {
                         "anyOf": [
@@ -7565,7 +8025,44 @@
                       "type": "string"
                     },
                     "source": {
-                      "type": "string"
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "manual"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "import"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "broker_api"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "provider"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "corporate_action"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "income_booking"
+                          ]
+                        }
+                      ]
                     },
                     "note": {
                       "anyOf": [
@@ -7821,7 +8318,44 @@
                       "type": "string"
                     },
                     "source": {
-                      "type": "string"
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "manual"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "import"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "broker_api"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "provider"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "corporate_action"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "income_booking"
+                          ]
+                        }
+                      ]
                     },
                     "note": {
                       "anyOf": [
@@ -11481,6 +12015,276 @@
         ]
       }
     },
+    "/quotes/{listingId}/ranges": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "listingId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "listing_id",
+                    "currency",
+                    "as_of",
+                    "ranges"
+                  ],
+                  "properties": {
+                    "listing_id": {
+                      "type": "string"
+                    },
+                    "currency": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "as_of": {
+                      "type": "string"
+                    },
+                    "ranges": {
+                      "type": "object",
+                      "required": [
+                        "daily",
+                        "weekly",
+                        "monthly",
+                        "yearly"
+                      ],
+                      "properties": {
+                        "daily": {
+                          "type": "object",
+                          "required": [
+                            "high",
+                            "low",
+                            "high_at",
+                            "low_at"
+                          ],
+                          "properties": {
+                            "high": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "low": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "high_at": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "low_at": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "weekly": {
+                          "type": "object",
+                          "required": [
+                            "high",
+                            "low",
+                            "high_at",
+                            "low_at"
+                          ],
+                          "properties": {
+                            "high": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "low": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "high_at": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "low_at": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "monthly": {
+                          "type": "object",
+                          "required": [
+                            "high",
+                            "low",
+                            "high_at",
+                            "low_at"
+                          ],
+                          "properties": {
+                            "high": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "low": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "high_at": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "low_at": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "yearly": {
+                          "type": "object",
+                          "required": [
+                            "high",
+                            "low",
+                            "high_at",
+                            "low_at"
+                          ],
+                          "properties": {
+                            "high": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "low": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "high_at": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "low_at": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/quotes/rebuild": {
       "post": {
         "requestBody": {
@@ -11506,6 +12310,9 @@
                     "format": "date",
                     "type": "string"
                   },
+                  "include_intraday": {
+                    "type": "boolean"
+                  },
                   "confirm": {
                     "type": "boolean"
                   }
@@ -11523,13 +12330,17 @@
                   "type": "object",
                   "required": [
                     "purged",
-                    "rebuilt"
+                    "rebuilt",
+                    "intraday"
                   ],
                   "properties": {
                     "purged": {
                       "type": "integer"
                     },
                     "rebuilt": {
+                      "type": "integer"
+                    },
+                    "intraday": {
                       "type": "integer"
                     }
                   }
@@ -11586,6 +12397,66 @@
                   ],
                   "properties": {
                     "purged": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/quotes/rebuild-intraday": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "listing_ids",
+                  "confirm"
+                ],
+                "properties": {
+                  "listing_ids": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "format": "uuid",
+                      "type": "string"
+                    }
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "purged",
+                    "intraday"
+                  ],
+                  "properties": {
+                    "purged": {
+                      "type": "integer"
+                    },
+                    "intraday": {
                       "type": "integer"
                     }
                   }
@@ -11911,6 +12782,7 @@
                       "assumptions",
                       "effective_date",
                       "source",
+                      "superseded_at",
                       "created_at"
                     ],
                     "properties": {
@@ -11957,6 +12829,16 @@
                         "type": "string"
                       },
                       "source": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "superseded_at": {
                         "anyOf": [
                           {
                             "type": "string"
@@ -12074,6 +12956,7 @@
                         "assumptions",
                         "effective_date",
                         "source",
+                        "superseded_at",
                         "created_at"
                       ],
                       "properties": {
@@ -12129,6 +13012,16 @@
                             }
                           ]
                         },
+                        "superseded_at": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "created_at": {
                           "type": "string"
                         }
@@ -12170,6 +13063,121 @@
                       }
                     }
                   ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/fair-values/history": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "in": "query",
+            "name": "instrument_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "instrument_id",
+                      "user_id",
+                      "method",
+                      "value",
+                      "currency",
+                      "assumptions",
+                      "effective_date",
+                      "source",
+                      "superseded_at",
+                      "created_at"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "instrument_id": {
+                        "type": "string"
+                      },
+                      "user_id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "method": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "dcf"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "analyst"
+                            ]
+                          }
+                        ]
+                      },
+                      "value": {
+                        "type": "string"
+                      },
+                      "currency": {
+                        "type": "string"
+                      },
+                      "assumptions": {},
+                      "effective_date": {
+                        "type": "string"
+                      },
+                      "source": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "superseded_at": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "created_at": {
+                        "type": "string"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -12267,6 +13275,7 @@
                       "currency",
                       "effective_date",
                       "note",
+                      "superseded_at",
                       "created_at",
                       "updated_at"
                     ],
@@ -12368,6 +13377,16 @@
                         "type": "string"
                       },
                       "note": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "superseded_at": {
                         "anyOf": [
                           {
                             "type": "string"
@@ -12484,6 +13503,7 @@
                     "currency",
                     "effective_date",
                     "note",
+                    "superseded_at",
                     "created_at",
                     "updated_at"
                   ],
@@ -12594,11 +13614,196 @@
                         }
                       ]
                     },
+                    "superseded_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "created_at": {
                       "type": "string"
                     },
                     "updated_at": {
                       "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/price-targets/history": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "in": "query",
+            "name": "instrument_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "instrument_id",
+                      "listing_id",
+                      "user_id",
+                      "horizon",
+                      "source",
+                      "zone_low",
+                      "zone_high",
+                      "currency",
+                      "effective_date",
+                      "note",
+                      "superseded_at",
+                      "created_at",
+                      "updated_at"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "instrument_id": {
+                        "type": "string"
+                      },
+                      "listing_id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "user_id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "horizon": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "short"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "medium"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "long"
+                            ]
+                          }
+                        ]
+                      },
+                      "source": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "own"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "analyst"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "technical"
+                            ]
+                          }
+                        ]
+                      },
+                      "zone_low": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "zone_high": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "currency": {
+                        "type": "string"
+                      },
+                      "effective_date": {
+                        "type": "string"
+                      },
+                      "note": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "superseded_at": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "created_at": {
+                        "type": "string"
+                      },
+                      "updated_at": {
+                        "type": "string"
+                      }
                     }
                   }
                 }
@@ -12702,6 +13907,7 @@
                     "currency",
                     "effective_date",
                     "note",
+                    "superseded_at",
                     "created_at",
                     "updated_at"
                   ],
@@ -12803,6 +14009,16 @@
                       "type": "string"
                     },
                     "note": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "superseded_at": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -13760,6 +14976,7 @@
                           "rule_id",
                           "data",
                           "read_at",
+                          "snoozed_until",
                           "created_at"
                         ],
                         "properties": {
@@ -13876,6 +15093,16 @@
                               }
                             ]
                           },
+                          "snoozed_until": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "created_at": {
                             "type": "string"
                           }
@@ -13897,6 +15124,68 @@
     },
     "/notifications/{id}/read": {
       "post": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/notifications/{id}/snooze": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "minutes"
+                ],
+                "properties": {
+                  "minutes": {
+                    "minimum": 5,
+                    "maximum": 1440,
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
         "parameters": [
           {
             "schema": {
@@ -14007,7 +15296,6 @@
                       "label",
                       "enabled",
                       "notify_once",
-                      "remind_after_minutes",
                       "created_at",
                       "updated_at"
                     ],
@@ -14084,16 +15372,6 @@
                       },
                       "notify_once": {
                         "type": "boolean"
-                      },
-                      "remind_after_minutes": {
-                        "anyOf": [
-                          {
-                            "type": "integer"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ]
                       },
                       "created_at": {
                         "type": "string"
@@ -14179,18 +15457,6 @@
                   },
                   "notify_once": {
                     "type": "boolean"
-                  },
-                  "remind_after_minutes": {
-                    "anyOf": [
-                      {
-                        "minimum": 5,
-                        "maximum": 1440,
-                        "type": "integer"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
                   }
                 }
               }
@@ -14214,7 +15480,6 @@
                     "label",
                     "enabled",
                     "notify_once",
-                    "remind_after_minutes",
                     "created_at",
                     "updated_at"
                   ],
@@ -14291,16 +15556,6 @@
                     },
                     "notify_once": {
                       "type": "boolean"
-                    },
-                    "remind_after_minutes": {
-                      "anyOf": [
-                        {
-                          "type": "integer"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     },
                     "created_at": {
                       "type": "string"
@@ -14350,18 +15605,6 @@
                   },
                   "notify_once": {
                     "type": "boolean"
-                  },
-                  "remind_after_minutes": {
-                    "anyOf": [
-                      {
-                        "minimum": 5,
-                        "maximum": 1440,
-                        "type": "integer"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
                   }
                 }
               }
@@ -14395,7 +15638,6 @@
                     "label",
                     "enabled",
                     "notify_once",
-                    "remind_after_minutes",
                     "created_at",
                     "updated_at"
                   ],
@@ -14472,16 +15714,6 @@
                     },
                     "notify_once": {
                       "type": "boolean"
-                    },
-                    "remind_after_minutes": {
-                      "anyOf": [
-                        {
-                          "type": "integer"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     },
                     "created_at": {
                       "type": "string"
@@ -14722,7 +15954,8 @@
                           "capabilityQuality",
                           "maxBatchSize",
                           "rateLimitPerMin",
-                          "maxConcurrency"
+                          "maxConcurrency",
+                          "maxPerCycle"
                         ],
                         "properties": {
                           "provider": {
@@ -14828,6 +16061,16 @@
                           },
                           "maxConcurrency": {
                             "type": "integer"
+                          },
+                          "maxPerCycle": {
+                            "anyOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       }
@@ -15301,6 +16544,17 @@
                   "max_concurrency": {
                     "minimum": 1,
                     "type": "integer"
+                  },
+                  "max_per_cycle": {
+                    "anyOf": [
+                      {
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 }
               }
@@ -15332,7 +16586,8 @@
                     "capabilityQuality",
                     "maxBatchSize",
                     "rateLimitPerMin",
-                    "maxConcurrency"
+                    "maxConcurrency",
+                    "maxPerCycle"
                   ],
                   "properties": {
                     "provider": {
@@ -15438,6 +16693,16 @@
                     },
                     "maxConcurrency": {
                       "type": "integer"
+                    },
+                    "maxPerCycle": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   }
                 }

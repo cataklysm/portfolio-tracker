@@ -1,5 +1,16 @@
 import Decimal from 'decimal.js';
-import type { TaxComponent, TaxDirection } from '../../tax-events/application/ports.js';
+import type { TaxComponent, TaxDirection, TaxSource } from '../../tax-events/application/ports.js';
+
+/**
+ * Whether a tax event is tax on realized price gains, as opposed to income tax on
+ * dividends/interest/cash-in-lieu. Income tax — auto-created with `income_booking`
+ * or otherwise linked to an income cash flow — is excluded from the realized-P&L
+ * after-tax report: it reduces income (already netted in the cash flow), not
+ * capital gains, so it must not subtract from realized P&L.
+ */
+export function isRealizedGainTaxEvent(event: { source: TaxSource; cash_flow_id: string | null }): boolean {
+  return event.source !== 'income_booking' && event.cash_flow_id === null;
+}
 
 /** A tax event already converted to the reporting currency for aggregation. */
 export interface ConvertedTaxEvent {

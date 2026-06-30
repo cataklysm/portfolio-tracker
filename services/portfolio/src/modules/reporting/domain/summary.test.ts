@@ -12,7 +12,7 @@ const views = [
 ];
 
 describe('computeSummary', () => {
-  const s = computeSummary(views, { amount: new Decimal('50.00'), complete: true }, 'EUR', '2026-06-14T00:00:00Z', 'total_return');
+  const s = computeSummary(views, { dividends: new Decimal('50.00'), cashInLieu: new Decimal('0'), interest: new Decimal('0'), gross: new Decimal('60.00'), tax: new Decimal('10.00'), complete: true }, 'EUR', '2026-06-14T00:00:00Z', 'total_return');
 
   test('aggregates absolute amounts across positions', () => {
     assert.equal(s.current_value, '1500.00');
@@ -21,7 +21,13 @@ describe('computeSummary', () => {
     assert.equal(s.realized_pnl, '150.00'); // includes the closed position
     assert.equal(s.fees, '10.00');
     assert.equal(s.dividends, '50.00');
-    assert.equal(s.total_pnl, '500.00'); // realized + unrealized + dividends
+    assert.equal(s.dividends_net, '50.00');
+    assert.equal(s.cash_in_lieu_net, '0.00');
+    assert.equal(s.interest_net, '0.00');
+    assert.equal(s.income_net, '50.00');
+    assert.equal(s.income_gross, '60.00');
+    assert.equal(s.income_tax, '10.00'); // income_net = gross − tax − fees (60 − 10 − 0)
+    assert.equal(s.total_pnl, '500.00'); // realized + unrealized + income
   });
 
   test('percentages are denominator-correct, not averaged', () => {
@@ -40,10 +46,28 @@ describe('computeSummary', () => {
     assert.equal(s.preferred_headline_metric, 'total_return');
   });
 
-  test('an incomplete dividend conversion makes the snapshot partial', () => {
+  test('an incomplete income conversion makes the snapshot partial', () => {
     const priced = views.filter((v) => v.id !== 'p4');
-    const s2 = computeSummary(priced, { amount: new Decimal('0'), complete: false }, 'EUR', 'now', null);
+    const s2 = computeSummary(priced, { dividends: new Decimal('0'), cashInLieu: new Decimal('0'), interest: new Decimal('0'), gross: new Decimal('0'), tax: new Decimal('0'), complete: false }, 'EUR', 'now', null);
     assert.equal(s2.completeness, 'partial');
     assert.equal(s2.preferred_headline_metric, null);
+  });
+
+  test('interest income is separate from dividends but adds to income and total', () => {
+    const s3 = computeSummary(views, { dividends: new Decimal('50.00'), cashInLieu: new Decimal('0'), interest: new Decimal('20.00'), gross: new Decimal('85.00'), tax: new Decimal('15.00'), complete: true }, 'EUR', 'now', null);
+    assert.equal(s3.dividends, '50.00'); // back-compat field excludes interest
+    assert.equal(s3.interest_net, '20.00');
+    assert.equal(s3.income_net, '70.00'); // dividends + interest
+    assert.equal(s3.total_pnl, '520.00'); // 150 + 300 + 50 + 20
+  });
+
+  test('dividends back-compat = dividend + cash-in-lieu, with both also split out', () => {
+    const s4 = computeSummary(views, { dividends: new Decimal('40.00'), cashInLieu: new Decimal('12.00'), interest: new Decimal('8.00'), gross: new Decimal('70.00'), tax: new Decimal('10.00'), complete: true }, 'EUR', 'now', null);
+    assert.equal(s4.dividends_net, '40.00');
+    assert.equal(s4.cash_in_lieu_net, '12.00');
+    assert.equal(s4.dividends, '52.00'); // back-compat = dividend + cash-in-lieu
+    assert.equal(s4.interest_net, '8.00');
+    assert.equal(s4.income_net, '60.00'); // 40 + 12 + 8
+    assert.equal(s4.total_pnl, '510.00'); // 150 + 300 + 60
   });
 });

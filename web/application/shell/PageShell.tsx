@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react"
+import type { ReactNode } from "react"
 
 export type PageShellKind = "admin" | "reporting" | "workspace"
 
@@ -7,8 +7,6 @@ const pageShellMaxWidth = {
   reporting: 1640,
   workspace: 1760,
 } satisfies Record<PageShellKind, number>
-
-type ResponsiveColumns = Partial<Record<"xs" | "sm" | "md" | "lg" | "xl", string>>
 
 export function PageShell({
   children,
@@ -24,20 +22,6 @@ export function PageShell({
       <div className="flex w-full flex-col gap-4" style={{ maxWidth: maxWidth ?? pageShellMaxWidth[kind] }}>
         {children}
       </div>
-    </div>
-  )
-}
-
-export function PageMetricGrid({
-  children,
-  columns,
-}: {
-  children: ReactNode
-  columns: ResponsiveColumns
-}) {
-  return (
-    <div className="page-metric-grid" style={gridColumnsStyle(columns)}>
-      {children}
     </div>
   )
 }
@@ -66,14 +50,4 @@ export function PageToolbar({
       </div>
     </section>
   )
-}
-
-function gridColumnsStyle(columns: ResponsiveColumns): CSSProperties {
-  return {
-    "--page-metric-grid-xs": columns.xs,
-    "--page-metric-grid-sm": columns.sm,
-    "--page-metric-grid-md": columns.md,
-    "--page-metric-grid-lg": columns.lg,
-    "--page-metric-grid-xl": columns.xl,
-  } as CSSProperties
 }

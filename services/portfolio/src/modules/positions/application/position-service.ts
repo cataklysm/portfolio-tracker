@@ -242,6 +242,25 @@ export class PositionService {
   }
 
   /**
+   * Open quantity of an owned position as of a date (YYYY-MM-DD), split-adjusted —
+   * the held quantity at a dividend event's ex-date, for income-booking metadata.
+   * Reuses the realization replay (open quantity is accounting-method-independent).
+   * Throws if the position is not owned or its ledger is invalid as of that date.
+   */
+  async getOpenQuantityAsOf(userId: string, positionId: string, asOf: string): Promise<string> {
+    await this.requireOwnedPosition(positionId, userId);
+    const [transactions, splitsByPosition] = await Promise.all([
+      this.deps.repo.listTransactions(positionId),
+      this.activeSplits([positionId]),
+    ]);
+    const realization = computeRealization(transactions, 'average_cost', splitsByPosition.get(positionId) ?? [], asOf);
+    if (realization.invalid) {
+      throw AppError.badRequest('position_invalid_as_of', 'The position ledger is invalid as of the ex-date');
+    }
+    return realization.openQuantity.toFixed(8);
+  }
+
+  /**
    * Raw position ledgers for a user (optionally one portfolio), with each
    * listing's native currency and the user's accounting method — the inputs the
    * historical performance series replays. No quotes/FX are read here; the

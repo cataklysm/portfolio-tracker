@@ -150,4 +150,16 @@ describe('TaxEventService', () => {
     await svc.delete(USER, e.id);
     await rejectsWith('tax_event_not_found', () => svc.update(USER, e.id, { amount: '1' }));
   });
+
+  test('income_booking tax events are immutable via the API', async () => {
+    const repo = new FakeRepo();
+    const svc = new TaxEventService(repo);
+    const managed = await repo.create({
+      userId: USER, component: 'capital_income', direction: 'withheld', amount: '5', currency: 'EUR',
+      bookingDate: '2026-06-30', source: 'income_booking', note: null,
+      transactionId: null, cashFlowId: CASH_FLOW, positionId: null, portfolioId: PORTFOLIO,
+    });
+    await rejectsWith('tax_event_managed', () => svc.update(USER, managed.id, { amount: '6' }));
+    await rejectsWith('tax_event_managed', () => svc.delete(USER, managed.id));
+  });
 });

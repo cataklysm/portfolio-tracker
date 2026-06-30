@@ -61,9 +61,11 @@ export function evaluateTargetZone(
   price: number | null,
   targets: OwnTarget[],
   currency: string,
+  targetId?: string,
 ): AlertCandidate | null {
   if (price === null || targets.length === 0) return null;
-  const hits = targets.filter((t) => inZone(price, t.zoneLow, t.zoneHigh));
+  const candidates = targetId ? targets.filter((t) => t.id === targetId) : targets;
+  const hits = candidates.filter((t) => inZone(price, t.zoneLow, t.zoneHigh));
   if (hits.length === 0) return null;
   const ids = hits.map((t) => t.id).sort();
   return {
@@ -73,7 +75,7 @@ export function evaluateTargetZone(
     severity: 'info',
     title: `${symbol} reached your target zone`,
     body: hits.map((t) => describeZone(t, currency)).join('; '),
-    data: { target_ids: ids, price },
+    data: { target_id: targetId ?? ids[0], target_ids: ids, price },
   };
 }
 

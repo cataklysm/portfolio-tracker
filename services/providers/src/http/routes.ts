@@ -5,6 +5,7 @@ import { AppError } from '@portfolio/platform';
 import type { ProviderRegistry } from '../providers/registry.js';
 import type { ProviderSettingsRepository } from '../providers/settings-repository.js';
 import type { CapabilityRefreshRepository } from '../providers/capability-refresh-repository.js';
+import type { ProviderPacing } from '../providers/pacing.js';
 import type { Capability, QuoteDto } from '../providers/types.js';
 
 const Ns = Type.Union([Type.String(), Type.Null()]);
@@ -23,6 +24,7 @@ const ProviderSettingsSchema = Type.Object({
   maxBatchSize: Ni,
   rateLimitPerMin: Ni,
   maxConcurrency: Type.Integer(),
+  maxPerCycle: Ni,
 });
 
 const ProvidersListResponse = Type.Object({ providers: Type.Array(ProviderSettingsSchema) });
@@ -81,12 +83,15 @@ const UpdateProviderBody = Type.Object({
   max_batch_size: Type.Optional(Type.Union([Type.Integer({ minimum: 1 }), Type.Null()])),
   rate_limit_per_min: Type.Optional(Type.Union([Type.Integer({ minimum: 1 }), Type.Null()])),
   max_concurrency: Type.Optional(Type.Integer({ minimum: 1 })),
+  max_per_cycle: Type.Optional(Type.Union([Type.Integer({ minimum: 1 }), Type.Null()])),
 });
 
 export interface ProviderRouteDeps {
   registry: ProviderRegistry;
   settings: ProviderSettingsRepository;
   capabilityRefresh: CapabilityRefreshRepository;
+  /** Per-provider egress pacing (concurrency + rate limit) applied to outbound calls. */
+  pacing: ProviderPacing;
   authenticate: preHandlerHookHandler;
   requireScope: (scope: string) => preHandlerHookHandler;
 }
@@ -137,7 +142,7 @@ const QuotesBody = Type.Object({
  */
 export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRouteDeps): void {
   const r = app.withTypeProvider<TypeBoxTypeProvider>();
-  const { registry, settings, capabilityRefresh } = deps;
+  const { registry, settings, capabilityRefresh, pacing } = deps;
   const admin = [deps.authenticate, deps.requireScope('system:admin')];
 
   // What the platform can currently source, and from which provider.
@@ -203,7 +208,7 @@ export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRoute
     if (!provider.capabilities.has('symbol_search') || typeof provider.searchSymbols !== 'function') {
       throw AppError.badRequest('provider_capability_unsupported', `Provider "${name}" does not support symbol search`);
     }
-    const results = await provider.searchSymbols(request.query.q, request.query.limit ?? 10);
+    const results = await pacing.run(provider.name, () => provider.searchSymbols!(request.query.q, request.query.limit ?? 10));
     return { provider: name, results };
   });
 
@@ -216,6 +221,7 @@ export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRoute
       maxBatchSize: request.body.max_batch_size,
       rateLimitPerMin: request.body.rate_limit_per_min,
       maxConcurrency: request.body.max_concurrency,
+      maxPerCycle: request.body.max_per_cycle,
     });
     if (!updated) throw AppError.notFound('provider_not_found', `No provider named "${provider}"`);
     return updated;
@@ -226,7 +232,7 @@ export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRoute
     schema: { body: QuotesBody, response: { 200: Type.Object({ provider: Type.String(), quotes: Type.Array(QuoteDtoSchema) }) } },
   }, async (request) => {
     const provider = resolveProvider(registry, 'quotes', request.body.provider);
-    const map = await provider.fetchQuotes!(request.body.symbols);
+    const map = await pacing.run(provider.name, () => provider.fetchQuotes!(request.body.symbols));
     const quotes: QuoteDto[] = [...map.values()];
     return { provider: provider.name, quotes };
   });
@@ -237,7 +243,7 @@ export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRoute
   }, async (request) => {
     const provider = resolveProvider(registry, 'chart', request.query.provider);
     const from = parseFromDate(request.query.from);
-    const chart = await provider.fetchChart!(request.query.symbol, from);
+    const chart = await pacing.run(provider.name, () => provider.fetchChart!(request.query.symbol, from));
     return { provider: provider.name, chart };
   });
 
@@ -245,7 +251,7 @@ export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRoute
     schema: { querystring: SearchQuery, response: { 200: Type.Object({ provider: Type.String(), results: Type.Array(SearchResultSchema) }) } },
   }, async (request) => {
     const provider = registry.require('symbol_search');
-    const results = await provider.searchSymbols!(request.query.q, request.query.limit ?? 10);
+    const results = await pacing.run(provider.name, () => provider.searchSymbols!(request.query.q, request.query.limit ?? 10));
     return { provider: provider.name, results };
   });
 
@@ -253,7 +259,7 @@ export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRoute
     schema: { querystring: SymbolQuery, response: { 200: Type.Object({ provider: Type.String(), assessment: Type.Unknown() }) } },
   }, async (request) => {
     const provider = resolveProvider(registry, 'analyst', request.query.provider);
-    const assessment = await provider.fetchAnalyst!(request.query.symbol);
+    const assessment = await pacing.run(provider.name, () => provider.fetchAnalyst!(request.query.symbol));
     return { provider: provider.name, assessment };
   });
 
@@ -261,7 +267,7 @@ export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRoute
     schema: { querystring: SymbolQuery, response: { 200: Type.Object({ provider: Type.String(), fundamentals: Type.Unknown() }) } },
   }, async (request) => {
     const provider = resolveProvider(registry, 'fundamentals', request.query.provider);
-    const fundamentals = await provider.fetchFundamentals!(request.query.symbol);
+    const fundamentals = await pacing.run(provider.name, () => provider.fetchFundamentals!(request.query.symbol));
     return { provider: provider.name, fundamentals };
   });
 
@@ -269,7 +275,7 @@ export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRoute
     schema: { response: { 200: Type.Object({ provider: Type.String(), rates: Type.Unknown() }) } },
   }, async () => {
     const provider = registry.require('fx');
-    const rates = await provider.fetchFxRates!();
+    const rates = await pacing.run(provider.name, () => provider.fetchFxRates!());
     return { provider: provider.name, rates };
   });
 
@@ -277,7 +283,7 @@ export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRoute
     schema: { querystring: SymbolQuery, response: { 200: Type.Object({ provider: Type.String(), earnings: Type.Unknown() }) } },
   }, async (request) => {
     const provider = resolveProvider(registry, 'earnings', request.query.provider);
-    const earnings = await provider.fetchEarnings!(request.query.symbol);
+    const earnings = await pacing.run(provider.name, () => provider.fetchEarnings!(request.query.symbol));
     return { provider: provider.name, earnings };
   });
 
@@ -285,7 +291,7 @@ export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRoute
     schema: { querystring: SymbolQuery, response: { 200: Type.Object({ provider: Type.String(), actions: Type.Unknown() }) } },
   }, async (request) => {
     const provider = resolveProvider(registry, 'corporate_actions', request.query.provider);
-    const actions = await provider.fetchCorporateActions!(request.query.symbol);
+    const actions = await pacing.run(provider.name, () => provider.fetchCorporateActions!(request.query.symbol));
     return { provider: provider.name, actions };
   });
 
@@ -293,7 +299,7 @@ export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRoute
     schema: { querystring: SymbolQuery, response: { 200: Type.Object({ provider: Type.String(), news: Type.Unknown() }) } },
   }, async (request) => {
     const provider = resolveProvider(registry, 'news', request.query.provider);
-    const news = await provider.fetchNews!(request.query.symbol);
+    const news = await pacing.run(provider.name, () => provider.fetchNews!(request.query.symbol));
     return { provider: provider.name, news };
   });
 }

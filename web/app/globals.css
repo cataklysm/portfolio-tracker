@@ -150,38 +150,21 @@ a {
   background: var(--app-surface-header);
 }
 
-.page-metric-grid {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: var(--page-metric-grid-xs, 1fr);
+[data-metric-bar] {
+  background:
+    linear-gradient(
+      to bottom,
+      var(--app-surface-panel) 0,
+      var(--app-surface-panel) 10px,
+      var(--app-border) 10px,
+      var(--app-border) calc(100% - 10px),
+      var(--app-surface-panel) calc(100% - 10px),
+      var(--app-surface-panel) 100%
+    );
 }
 
-.page-metric-grid > [data-metric-bar] {
+[data-metric-bar] > * {
   min-height: 88px;
-}
-
-@media (min-width: 640px) {
-  .page-metric-grid {
-    grid-template-columns: var(--page-metric-grid-sm, var(--page-metric-grid-xs, 1fr));
-  }
-}
-
-@media (min-width: 768px) {
-  .page-metric-grid {
-    grid-template-columns: var(--page-metric-grid-md, var(--page-metric-grid-sm, var(--page-metric-grid-xs, 1fr)));
-  }
-}
-
-@media (min-width: 1024px) {
-  .page-metric-grid {
-    grid-template-columns: var(--page-metric-grid-lg, var(--page-metric-grid-md, var(--page-metric-grid-sm, var(--page-metric-grid-xs, 1fr))));
-  }
-}
-
-@media (min-width: 1280px) {
-  .page-metric-grid {
-    grid-template-columns: var(--page-metric-grid-xl, var(--page-metric-grid-lg, var(--page-metric-grid-md, var(--page-metric-grid-sm, var(--page-metric-grid-xs, 1fr)))));
-  }
 }
 
 .app-workspace {

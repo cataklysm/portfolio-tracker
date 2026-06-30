@@ -195,6 +195,7 @@ const ListingSessionViewSchema = Type.Object({
 const ProviderListingSchema = Type.Object({
   listing_id: Type.String(),
   instrument_id: Type.String(),
+  name: Type.String(),
   symbol: Type.String(),
   currency: Type.String(),
   provider_identifier: Ns,

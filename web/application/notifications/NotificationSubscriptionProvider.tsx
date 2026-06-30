@@ -52,6 +52,7 @@ export function NotificationSubscriptionProvider({ children, enabled, onUnreadDe
         let newest = cursor
         for (const notification of [...inbox.notifications].reverse()) {
           if (notification.read_at || notification.created_at <= cursor) continue
+          if (isSnoozed(notification)) continue
           showNotification(notification)
           if (notification.created_at > newest) newest = notification.created_at
         }
@@ -62,6 +63,7 @@ export function NotificationSubscriptionProvider({ children, enabled, onUnreadDe
     }
 
     function showNotification(notification: NotificationItem): boolean {
+      if (isSnoozed(notification)) return false
       if (seenIds.current.has(notification.id)) return false
       seenIds.current.add(notification.id)
       notify({
@@ -72,6 +74,15 @@ export function NotificationSubscriptionProvider({ children, enabled, onUnreadDe
         source: "Notification",
         href: "/notifications",
         actionLabel: "Open",
+        allowSnooze: true,
+        onSnooze: async (_message, minutes) => {
+          const response = await fetch(`/api/notifications/${encodeURIComponent(notification.id)}/snooze`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ minutes }),
+          })
+          if (response.ok) seenIds.current.delete(notification.id)
+        },
         onClose: async () => {
           if (readIds.current.has(notification.id)) return
           readIds.current.add(notification.id)
@@ -86,6 +97,10 @@ export function NotificationSubscriptionProvider({ children, enabled, onUnreadDe
   }, [enabled, notify, onUnreadDelta])
 
   return <>{children}</>
+}
+
+function isSnoozed(notification: NotificationItem): boolean {
+  return notification.snoozed_until !== null && Date.parse(notification.snoozed_until) > Date.now()
 }
 
 const CURSOR_KEY = "portfolio-notification-live-cursor"

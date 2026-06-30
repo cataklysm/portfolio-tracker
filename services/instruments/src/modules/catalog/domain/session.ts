@@ -1,3 +1,5 @@
+import { zonedParts, wallClockToUtc } from '@portfolio/platform';
+
 export type MarketStatus = 'open' | 'closed' | 'holiday' | 'weekend' | 'unknown';
 
 /** Exchange trading calendar inputs (local times + full-closure holiday dates). */
@@ -59,7 +61,7 @@ const UNKNOWN: MarketSession = {
  */
 export function computeMarketSession(now: Date, calendar: ExchangeCalendar | null): MarketSession {
   if (!calendar || !calendar.timezone) return UNKNOWN;
-  const parts = localParts(now, calendar.timezone);
+  const parts = zonedParts(now, calendar.timezone);
   if (!parts) return UNKNOWN;
 
   const { date, minutes } = parts;
@@ -101,29 +103,6 @@ export function computeMarketSession(now: Date, calendar: ExchangeCalendar | nul
     last_session_close: lastSessionClose ? lastSessionClose.toISOString() : null,
     next_session_open: nextSessionOpen ? nextSessionOpen.toISOString() : null,
   };
-}
-
-/** Local calendar date + minutes-of-day for an instant in a timezone, or null. */
-function localParts(now: Date, timezone: string): { date: string; minutes: number } | null {
-  try {
-    const dtf = new Intl.DateTimeFormat('en-CA', {
-      timeZone: timezone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hourCycle: 'h23',
-    });
-    const parts = dtf.formatToParts(now);
-    const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
-    const date = `${get('year')}-${get('month')}-${get('day')}`;
-    const minutes = Number(get('hour')) * 60 + Number(get('minute'));
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(minutes)) return null;
-    return { date, minutes };
-  } catch {
-    return null;
-  }
 }
 
 function toMinutes(local: string | null): number | null {
@@ -173,24 +152,3 @@ function nextTradingDate(date: string, holidays: Set<string>): string {
   return cursor; // degenerate calendar fallback
 }
 
-/**
- * The UTC instant for a wall-clock time (`minutes` past midnight) on a local
- * calendar date in `timezone`. Two passes settle the timezone offset correctly
- * across DST boundaries. Returns null on an invalid date/timezone.
- */
-function wallClockToUtc(date: string, minutes: number, timezone: string): Date | null {
-  const wallAsUtc = Date.parse(`${date}T00:00:00Z`);
-  if (Number.isNaN(wallAsUtc)) return null;
-  const target = wallAsUtc + minutes * 60_000;
-  let utc = target - tzOffsetMs(new Date(target), timezone);
-  utc = target - tzOffsetMs(new Date(utc), timezone);
-  return Number.isNaN(utc) ? null : new Date(utc);
-}
-
-/** Timezone offset in ms (tz ahead of UTC is positive) at a given instant. */
-function tzOffsetMs(instant: Date, timezone: string): number {
-  const parts = localParts(instant, timezone);
-  if (!parts) return 0;
-  const asUtc = Date.parse(`${parts.date}T00:00:00Z`) + parts.minutes * 60_000;
-  return asUtc - instant.getTime();
-}

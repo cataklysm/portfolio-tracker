@@ -8,7 +8,9 @@ import {
   type SeriesPosition,
 } from './performance-series.js';
 
-const INCOME_TYPES = new Set<SeriesCashFlow['type']>(['dividend', 'cash_in_lieu']);
+// All income flows count toward return (internal), distinct from deposits/
+// withdrawals (external contributions). Interest is income like dividends.
+const INCOME_TYPES = new Set<SeriesCashFlow['type']>(['dividend', 'cash_in_lieu', 'interest']);
 const MS_PER_DAY = 86_400_000;
 
 /** A signed cash flow for the money-weighted return (outflows negative). */

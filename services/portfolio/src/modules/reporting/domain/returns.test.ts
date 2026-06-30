@@ -93,6 +93,7 @@ function point(date: string, value: string): PerformancePoint {
     realized_pnl: '0.00',
     unrealized_pnl: '0.00',
     dividends: '0.00',
+    interest: '0.00',
     total_pnl: '0.00',
     complete: true,
   };

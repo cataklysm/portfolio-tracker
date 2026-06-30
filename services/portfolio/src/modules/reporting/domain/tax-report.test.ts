@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import Decimal from 'decimal.js';
-import { computeTaxReport, type ConvertedTaxEvent } from './tax-report.js';
+import { computeTaxReport, isRealizedGainTaxEvent, type ConvertedTaxEvent } from './tax-report.js';
 
 const ev = (
   component: ConvertedTaxEvent['component'],
@@ -9,6 +9,17 @@ const ev = (
   amount: number | null,
   linked = true,
 ): ConvertedTaxEvent => ({ component, direction, amount: amount === null ? null : new Decimal(amount), linked });
+
+describe('isRealizedGainTaxEvent', () => {
+  test('income tax (income_booking or cash-flow-linked) is excluded; gain tax included', () => {
+    // Realized-gain tax: manual/import, linked to a transaction/position (no cash flow).
+    assert.equal(isRealizedGainTaxEvent({ source: 'manual', cash_flow_id: null }), true);
+    assert.equal(isRealizedGainTaxEvent({ source: 'import', cash_flow_id: null }), true);
+    // Income tax: auto-created income_booking, or any cash-flow-linked event.
+    assert.equal(isRealizedGainTaxEvent({ source: 'income_booking', cash_flow_id: 'cf-1' }), false);
+    assert.equal(isRealizedGainTaxEvent({ source: 'manual', cash_flow_id: 'cf-1' }), false);
+  });
+});
 
 describe('computeTaxReport', () => {
   test('no tax events → unavailable, after-tax equals gross', () => {

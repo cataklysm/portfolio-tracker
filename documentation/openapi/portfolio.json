@@ -2462,6 +2462,12 @@
                   "enum": [
                     "cash_in_lieu"
                   ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "interest"
+                  ]
                 }
               ]
             },
@@ -2471,11 +2477,38 @@
           },
           {
             "schema": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "in": "query",
+            "name": "types",
+            "required": false
+          },
+          {
+            "schema": {
               "format": "uuid",
               "type": "string"
             },
             "in": "query",
             "name": "position_id",
+            "required": false
+          },
+          {
+            "schema": {
+              "format": "date",
+              "type": "string"
+            },
+            "in": "query",
+            "name": "date_from",
+            "required": false
+          },
+          {
+            "schema": {
+              "format": "date",
+              "type": "string"
+            },
+            "in": "query",
+            "name": "date_to",
             "required": false
           },
           {
@@ -2509,6 +2542,13 @@
                       "payment_date",
                       "tax_relevant_value_date",
                       "note",
+                      "source_event_id",
+                      "source_event_version",
+                      "source_event_type",
+                      "ex_date",
+                      "amount_per_share",
+                      "quantity_at_ex_date",
+                      "expected_gross_amount",
                       "created_at",
                       "updated_at"
                     ],
@@ -2554,6 +2594,12 @@
                             "enum": [
                               "cash_in_lieu"
                             ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "interest"
+                            ]
                           }
                         ]
                       },
@@ -2579,6 +2625,76 @@
                         "type": "string"
                       },
                       "note": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "source_event_id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "source_event_version": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "source_event_type": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "ex_date": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "amount_per_share": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "quantity_at_ex_date": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "expected_gross_amount": {
                         "anyOf": [
                           {
                             "type": "string"
@@ -2641,6 +2757,12 @@
                         "enum": [
                           "cash_in_lieu"
                         ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "interest"
+                        ]
                       }
                     ]
                   },
@@ -2676,6 +2798,89 @@
                   "note": {
                     "maxLength": 280,
                     "type": "string"
+                  },
+                  "source_event_id": {
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "type": "string"
+                  },
+                  "source_event_version": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "source_event_type": {
+                    "maxLength": 100,
+                    "type": "string"
+                  },
+                  "ex_date": {
+                    "format": "date",
+                    "type": "string"
+                  },
+                  "amount_per_share": {
+                    "pattern": "^-?\\d+(\\.\\d+)?$",
+                    "type": "string"
+                  },
+                  "tax_components": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "component",
+                        "amount",
+                        "currency",
+                        "booking_date"
+                      ],
+                      "properties": {
+                        "component": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "capital_income"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "solidarity"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "church"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "foreign_withholding"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "generic"
+                              ]
+                            }
+                          ]
+                        },
+                        "amount": {
+                          "pattern": "^-?\\d+(\\.\\d+)?$",
+                          "type": "string"
+                        },
+                        "currency": {
+                          "minLength": 3,
+                          "maxLength": 3,
+                          "type": "string"
+                        },
+                        "booking_date": {
+                          "format": "date",
+                          "type": "string"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -2712,6 +2917,13 @@
                     "payment_date",
                     "tax_relevant_value_date",
                     "note",
+                    "source_event_id",
+                    "source_event_version",
+                    "source_event_type",
+                    "ex_date",
+                    "amount_per_share",
+                    "quantity_at_ex_date",
+                    "expected_gross_amount",
                     "created_at",
                     "updated_at"
                   ],
@@ -2757,6 +2969,12 @@
                           "enum": [
                             "cash_in_lieu"
                           ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "interest"
+                          ]
                         }
                       ]
                     },
@@ -2782,6 +3000,76 @@
                       "type": "string"
                     },
                     "note": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_event_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_event_version": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_event_type": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "ex_date": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "amount_per_share": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "quantity_at_ex_date": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "expected_gross_amount": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -2893,6 +3181,13 @@
                     "payment_date",
                     "tax_relevant_value_date",
                     "note",
+                    "source_event_id",
+                    "source_event_version",
+                    "source_event_type",
+                    "ex_date",
+                    "amount_per_share",
+                    "quantity_at_ex_date",
+                    "expected_gross_amount",
                     "created_at",
                     "updated_at"
                   ],
@@ -2938,6 +3233,12 @@
                           "enum": [
                             "cash_in_lieu"
                           ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "interest"
+                          ]
                         }
                       ]
                     },
@@ -2963,6 +3264,76 @@
                       "type": "string"
                     },
                     "note": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_event_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_event_version": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_event_type": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "ex_date": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "amount_per_share": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "quantity_at_ex_date": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "expected_gross_amount": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -3158,7 +3529,44 @@
                         "type": "string"
                       },
                       "source": {
-                        "type": "string"
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "manual"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "import"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "broker_api"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "provider"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "corporate_action"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "income_booking"
+                            ]
+                          }
+                        ]
                       },
                       "note": {
                         "anyOf": [
@@ -3414,7 +3822,44 @@
                       "type": "string"
                     },
                     "source": {
-                      "type": "string"
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "manual"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "import"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "broker_api"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "provider"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "corporate_action"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "income_booking"
+                          ]
+                        }
+                      ]
                     },
                     "note": {
                       "anyOf": [
@@ -3665,7 +4110,44 @@
                       "type": "string"
                     },
                     "source": {
-                      "type": "string"
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "manual"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "import"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "broker_api"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "provider"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "corporate_action"
+                          ]
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "income_booking"
+                          ]
+                        }
+                      ]
                     },
                     "note": {
                       "anyOf": [
@@ -5240,6 +5722,12 @@
                     "realized_pnl",
                     "unrealized_pnl",
                     "dividends",
+                    "dividends_net",
+                    "cash_in_lieu_net",
+                    "interest_net",
+                    "income_net",
+                    "income_gross",
+                    "income_tax",
                     "fees",
                     "total_pnl",
                     "simple_return_pct",
@@ -5305,6 +5793,24 @@
                       "type": "string"
                     },
                     "dividends": {
+                      "type": "string"
+                    },
+                    "dividends_net": {
+                      "type": "string"
+                    },
+                    "cash_in_lieu_net": {
+                      "type": "string"
+                    },
+                    "interest_net": {
+                      "type": "string"
+                    },
+                    "income_net": {
+                      "type": "string"
+                    },
+                    "income_gross": {
+                      "type": "string"
+                    },
+                    "income_tax": {
                       "type": "string"
                     },
                     "fees": {
@@ -5935,6 +6441,12 @@
                         "realized_pnl",
                         "unrealized_pnl",
                         "dividends",
+                        "dividends_net",
+                        "cash_in_lieu_net",
+                        "interest_net",
+                        "income_net",
+                        "income_gross",
+                        "income_tax",
                         "fees",
                         "total_pnl",
                         "simple_return_pct",
@@ -6000,6 +6512,24 @@
                           "type": "string"
                         },
                         "dividends": {
+                          "type": "string"
+                        },
+                        "dividends_net": {
+                          "type": "string"
+                        },
+                        "cash_in_lieu_net": {
+                          "type": "string"
+                        },
+                        "interest_net": {
+                          "type": "string"
+                        },
+                        "income_net": {
+                          "type": "string"
+                        },
+                        "income_gross": {
+                          "type": "string"
+                        },
+                        "income_tax": {
                           "type": "string"
                         },
                         "fees": {
@@ -6634,6 +7164,7 @@
                           "realized_pnl",
                           "unrealized_pnl",
                           "dividends",
+                          "interest",
                           "total_pnl",
                           "complete"
                         ],
@@ -6657,6 +7188,9 @@
                             "type": "string"
                           },
                           "dividends": {
+                            "type": "string"
+                          },
+                          "interest": {
                             "type": "string"
                           },
                           "total_pnl": {

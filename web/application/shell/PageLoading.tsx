@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react"
-import { PageMetricGrid, PageShell, PageToolbar, type PageShellKind } from "@/application/shell/PageShell"
+import { MetricBar, type MetricBarColumns } from "@/design/components/MetricBar"
+import { PageShell, PageToolbar, type PageShellKind } from "@/application/shell/PageShell"
 
 export function PageLoadingShell({
   breadcrumb,
@@ -60,13 +61,13 @@ export function MetricGridSkeleton({
   columns,
   count,
 }: {
-  columns: Record<string, string>
+  columns: MetricBarColumns
   count: number
 }) {
   return (
-    <PageMetricGrid columns={columns}>
+    <MetricBar columns={columns}>
       {Array.from({ length: count }, (_, index) => (
-        <section className="app-panel min-h-[88px] rounded-lg p-3" key={index}>
+        <div className="min-h-[88px] bg-[var(--app-surface-panel)] p-3" key={index}>
           <div className="flex items-center gap-3">
             <SkeletonBlock className="h-[46px] w-[46px] rounded-md" />
             <div className="min-w-0 flex-1 space-y-2">
@@ -75,9 +76,9 @@ export function MetricGridSkeleton({
               <SkeletonBlock className="h-3 w-[60%]" />
             </div>
           </div>
-        </section>
+        </div>
       ))}
-    </PageMetricGrid>
+    </MetricBar>
   )
 }
 

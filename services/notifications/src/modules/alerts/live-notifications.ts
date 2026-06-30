@@ -2,7 +2,7 @@ import type { Logger } from '@portfolio/platform';
 import type { EventEnvelope, RedisClientType } from '@portfolio/platform';
 import type { NotificationService } from './application/notification-service.js';
 import type { PushSender } from './application/push-sender.js';
-import type { StoredNotification } from './application/ports.js';
+import type { NotificationEventStore, NotificationRepository, StoredNotification } from './application/ports.js';
 
 type NotificationSink = (notification: StoredNotification) => void;
 
@@ -147,6 +147,52 @@ export class NotificationRetentionScheduler {
       if (deleted > 0) this.logger.info({ deleted, retention_days: this.retentionDays }, 'Deleted old read notifications');
     } catch (err) {
       this.logger.error({ err, error_code: 'notification_retention_failed' }, 'Notification retention cleanup failed');
+    } finally {
+      this.running = false;
+    }
+  }
+}
+
+export class NotificationSnoozeScheduler {
+  private timer: NodeJS.Timeout | undefined;
+  private running = false;
+
+  constructor(
+    private readonly deps: {
+      notifications: NotificationRepository;
+      events: NotificationEventStore;
+      intervalMs: number;
+      logger: Logger;
+      limit?: number;
+    },
+  ) {}
+
+  start(): void {
+    if (this.timer) return;
+    void this.tick();
+    this.timer = setInterval(() => void this.tick(), this.deps.intervalMs);
+    if (typeof this.timer.unref === 'function') this.timer.unref();
+  }
+
+  stop(): void {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = undefined;
+  }
+
+  private async tick(): Promise<void> {
+    if (this.running) return;
+    this.running = true;
+    try {
+      const due = await this.deps.notifications.releaseDueSnoozed(new Date(), this.deps.limit ?? 100);
+      for (const notification of due) {
+        await this.deps.events.enqueueCreated({
+          notificationId: notification.id,
+          userId: notification.userId,
+          type: notification.type,
+        });
+      }
+    } catch (err) {
+      this.deps.logger.error({ err, error_code: 'notification_snooze_release_failed' }, 'Notification snooze release failed');
     } finally {
       this.running = false;
     }

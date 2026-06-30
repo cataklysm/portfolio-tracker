@@ -1,16 +1,19 @@
 import type { ReactNode } from "react"
 
 export type MetricBarTone = "accent" | "danger" | "neutral" | "positive" | "warning"
+export type MetricBarColumns = Partial<Record<"xs" | "sm" | "md" | "lg" | "xl", string>>
 
 export function MetricBar({
   children,
   className = "",
+  columns = { xs: "1fr" },
 }: {
   children: ReactNode
   className?: string
+  columns?: MetricBarColumns
 }) {
   return (
-    <section className={`app-panel overflow-hidden rounded-lg ${className}`} data-metric-bar>
+    <section className={`app-panel grid gap-px overflow-hidden rounded-lg ${metricBarColumnClasses(columns)} ${className}`} data-metric-bar>
       {children}
     </section>
   )
@@ -85,3 +88,72 @@ function metricToneIconClass(tone: MetricBarTone) {
   }
   return "border-[color-mix(in_srgb,var(--app-accent)_22%,var(--app-border))] bg-[color-mix(in_srgb,var(--app-accent)_10%,var(--app-surface-panel))] text-[var(--app-accent)]"
 }
+
+function metricBarColumnClasses(columns: MetricBarColumns): string {
+  return [
+    gridClass("xs", columns.xs ?? "1fr"),
+    gridClass("sm", columns.sm),
+    gridClass("md", columns.md),
+    gridClass("lg", columns.lg),
+    gridClass("xl", columns.xl),
+  ].filter(Boolean).join(" ")
+}
+
+function gridClass(breakpoint: keyof MetricBarColumns, value: string | undefined): string {
+  const count = gridColumnCount(value)
+  if (!count) return ""
+  const classes = metricGridClasses[breakpoint]
+  return classes[count] ?? ""
+}
+
+function gridColumnCount(value: string | undefined): keyof typeof metricGridClasses.xs | null {
+  if (!value) return null
+  if (value === "1fr") return 1
+  const match = value.match(/repeat\((\d+)/)
+  if (!match?.[1]) return null
+  const count = Number(match[1])
+  return count === 1 || count === 2 || count === 3 || count === 4 || count === 5 || count === 6 ? count : null
+}
+
+const metricGridClasses = {
+  xs: {
+    1: "grid-cols-1",
+    2: "grid-cols-2",
+    3: "grid-cols-3",
+    4: "grid-cols-4",
+    5: "grid-cols-5",
+    6: "grid-cols-6",
+  },
+  sm: {
+    1: "sm:grid-cols-1",
+    2: "sm:grid-cols-2",
+    3: "sm:grid-cols-3",
+    4: "sm:grid-cols-4",
+    5: "sm:grid-cols-5",
+    6: "sm:grid-cols-6",
+  },
+  md: {
+    1: "md:grid-cols-1",
+    2: "md:grid-cols-2",
+    3: "md:grid-cols-3",
+    4: "md:grid-cols-4",
+    5: "md:grid-cols-5",
+    6: "md:grid-cols-6",
+  },
+  lg: {
+    1: "lg:grid-cols-1",
+    2: "lg:grid-cols-2",
+    3: "lg:grid-cols-3",
+    4: "lg:grid-cols-4",
+    5: "lg:grid-cols-5",
+    6: "lg:grid-cols-6",
+  },
+  xl: {
+    1: "xl:grid-cols-1",
+    2: "xl:grid-cols-2",
+    3: "xl:grid-cols-3",
+    4: "xl:grid-cols-4",
+    5: "xl:grid-cols-5",
+    6: "xl:grid-cols-6",
+  },
+} as const

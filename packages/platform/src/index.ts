@@ -31,6 +31,12 @@ export {
 } from './stream-consumer.js';
 export { WatchSet, type WatchSetEntry, type WatchSetOptions } from './watch-set.js';
 export {
+  zonedParts,
+  tzOffsetMs,
+  wallClockEpochToUtc,
+  wallClockToUtc,
+} from './timezone.js';
+export {
   validateTaxSettings,
   type TaxSettingsFieldType,
   type TaxSettingsSelectOption,

@@ -40,6 +40,11 @@ export class AssessmentService {
     return this.repo.listFairValues(instrumentId, userId);
   }
 
+  /** Full analyst fair-value history for an instrument (oldest first) — trend line. */
+  listAnalystFairValueHistory(instrumentId: string): Promise<FairValueRecord[]> {
+    return this.repo.listAnalystFairValueHistory(instrumentId);
+  }
+
   /** Computes a DCF intrinsic value from the assumptions and stores it (user-owned). */
   async createDcfFairValue(
     userId: string,
@@ -85,6 +90,11 @@ export class AssessmentService {
     return this.repo.listOwnTargetsForInstruments(userId, instrumentIds);
   }
 
+  /** Full analyst target-zone history for an instrument (oldest first) — trend line. */
+  listAnalystTargetHistory(instrumentId: string): Promise<PriceTargetRecord[]> {
+    return this.repo.listAnalystTargetHistory(instrumentId);
+  }
+
   async createPriceTarget(userId: string, input: CreatePriceTargetInput): Promise<PriceTargetRecord> {
     const low = input.zoneLow ?? null;
     const high = input.zoneHigh ?? null;
@@ -127,8 +137,8 @@ export class AssessmentService {
     return updated;
   }
 
-  async deletePriceTarget(userId: string, id: string): Promise<void> {
-    if (!(await this.repo.deletePriceTarget(id, userId))) {
+  async deletePriceTarget(userId: string, id: string, canDeleteGlobalAnalyst = false): Promise<void> {
+    if (!(await this.repo.deletePriceTarget(id, userId, canDeleteGlobalAnalyst))) {
       throw AppError.notFound('price_target_not_found', 'Price target not found');
     }
   }
@@ -145,7 +155,7 @@ export class AssessmentService {
     const currency = (payload.currency ?? 'USD').toUpperCase();
 
     if (payload.target_low != null || payload.target_high != null) {
-      await this.repo.replaceGlobalAnalystTarget({
+      await this.repo.ingestGlobalAnalystTarget({
         instrumentId: payload.instrument_id,
         zoneLow: payload.target_low != null ? String(payload.target_low) : null,
         zoneHigh: payload.target_high != null ? String(payload.target_high) : null,
@@ -154,7 +164,7 @@ export class AssessmentService {
       });
     }
     if (payload.target_mean != null) {
-      await this.repo.replaceGlobalAnalystFairValue({
+      await this.repo.ingestGlobalAnalystFairValue({
         instrumentId: payload.instrument_id,
         value: String(payload.target_mean),
         currency,

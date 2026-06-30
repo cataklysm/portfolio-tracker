@@ -24,10 +24,12 @@ import { AppIcon, type AppIconName } from "@/design/icons/AppIcon"
 import { appTypography } from "@/design/tokens/appTypography"
 import { ControlBar } from "@/design/components/ControlBar"
 import { MetricBar, MetricBarItem } from "@/design/components/MetricBar"
-import { PageMetricGrid, PageShell } from "@/application/shell/PageShell"
+import { PageShell } from "@/application/shell/PageShell"
 import { useToast } from "@/application/toast/ToastProvider"
+import { BookCorporateActionCashFlow } from "@/features/events/components/BookCorporateActionCashFlow"
 import { fmtCurrency, num } from "@/lib/format"
 import type { PortfolioCorporateAction, PortfolioEarnings } from "@/lib/portfolio-events"
+import type { Portfolio, PositionView } from "@/lib/types"
 
 const EVENT_VIEW_STORAGE_KEY = "portfolio.events.view"
 const WORKBENCH_HEIGHT = 900
@@ -48,6 +50,8 @@ interface EventsWorkspaceProps {
   earnings: PortfolioEarnings[]
   corporateActions: PortfolioCorporateAction[]
   locale: string
+  portfolios: Portfolio[]
+  positions: PositionView[]
 }
 
 interface WorkbenchEvent {
@@ -65,6 +69,7 @@ interface WorkbenchEvent {
   detailLabel: string
   epsEstimate: string
   epsActual: string
+  corporateAction?: PortfolioCorporateAction
 }
 
 interface WeekGroup {
@@ -97,7 +102,7 @@ const eventKindSignals = {
   split: { label: "Split", color: "var(--app-warning)", schedulerColor: "amber" },
 } satisfies Record<EventKind, { label: string; color: string; schedulerColor: SchedulerEventColor }>
 
-export function EventsWorkspace({ earnings, corporateActions, locale }: EventsWorkspaceProps) {
+export function EventsWorkspace({ earnings, corporateActions, locale, portfolios, positions }: EventsWorkspaceProps) {
   const router = useRouter()
   const { success } = useToast()
   const [isRefreshing, startRefreshTransition] = useTransition()
@@ -205,11 +210,11 @@ export function EventsWorkspace({ earnings, corporateActions, locale }: EventsWo
         </Typography>
       </Breadcrumbs>
 
-      <PageMetricGrid columns={{ xs: "1fr", md: "repeat(3, minmax(0, 1fr))" }}>
-        <MetricCard icon="calendar" label="Upcoming earnings" value={tabCounts.earnings} sub={nextEarnings ? `${nextEarnings.symbol} on ${formatDate(nextEarnings.dateKey, locale)}` : "No confirmed dates"} tone="primary" />
-        <MetricCard icon="report" label="Recent earnings" value={earnings.filter((item) => !item.is_upcoming).length} sub="Latest reported earnings" tone="success" />
-        <MetricCard icon="action" label="Corporate actions" value={tabCounts.dividends + tabCounts.splits} sub="Dividends, splits, and related events" tone="warning" />
-      </PageMetricGrid>
+      <MetricBar columns={{ xs: "1fr", md: "repeat(3, minmax(0, 1fr))" }}>
+        <MetricBarItem icon={<AppIcon name="calendar" />} label="Upcoming earnings" primary sub={nextEarnings ? `${nextEarnings.symbol} on ${formatDate(nextEarnings.dateKey, locale)}` : "No confirmed dates"} tone="accent" value={tabCounts.earnings} />
+        <MetricBarItem icon={<AppIcon name="reports" />} label="Recent earnings" primary sub="Latest reported earnings" tone="positive" value={earnings.filter((item) => !item.is_upcoming).length} />
+        <MetricBarItem icon={<AppIcon name="corporateAction" />} label="Corporate actions" primary sub="Dividends, splits, and related events" tone="warning" value={tabCounts.dividends + tabCounts.splits} />
+      </MetricBar>
 
       <ControlBar
         defaultTabValue="all"
@@ -252,6 +257,8 @@ export function EventsWorkspace({ earnings, corporateActions, locale }: EventsWo
             events={filteredEvents}
             legendCounts={legendCounts}
             locale={locale}
+            portfolios={portfolios}
+            positions={positions}
             selection={selection}
             selectedEvent={selectedEvent}
             today={today}
@@ -818,6 +825,8 @@ function EventsContextRail({
   locale,
   onChangeUpcomingPage,
   onSelectEvent,
+  portfolios,
+  positions,
   selectedEvent,
   selection,
   today,
@@ -832,6 +841,8 @@ function EventsContextRail({
   locale: string
   onChangeUpcomingPage: (page: number) => void
   onSelectEvent: (eventId: string) => void
+  portfolios: Portfolio[]
+  positions: PositionView[]
   selectedEvent: WorkbenchEvent | null
   selection: ContextSelection
   today: Date
@@ -848,7 +859,7 @@ function EventsContextRail({
         <Box sx={{ flex: 1, minHeight: 0, overflow: "auto", p: selection.type === "event" ? 1.5 : 0 }}>
           <ContextContent selection={selection} selectedEvent={selectedEvent} events={events} locale={locale} />
         </Box>
-        {selection.type === "event" && selectedEvent ? <SelectedEventFooter event={selectedEvent} /> : null}
+        {selection.type === "event" && selectedEvent ? <SelectedEventFooter event={selectedEvent} portfolios={portfolios} positions={positions} /> : null}
       </Card>
 
       <Card variant="outlined" sx={{ borderColor: "var(--app-border)", bgcolor: "var(--app-surface-panel)", display: "flex", flex: "0.9 1 0", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
@@ -953,10 +964,20 @@ function SelectedEventDetails({ event, locale }: { event: WorkbenchEvent; locale
   )
 }
 
-function SelectedEventFooter({ event }: { event: WorkbenchEvent }) {
+function SelectedEventFooter({ event, portfolios, positions }: { event: WorkbenchEvent; portfolios: Portfolio[]; positions: PositionView[] }) {
   return (
     <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ bgcolor: tableChromeBg, borderTop: "1px solid var(--app-border)", px: 1.5, py: 1.25 }}>
       <Button component={Link} href={`/positions/${event.positionId}`} variant="outlined" size="small" sx={selectedEventActionSx}>Open asset</Button>
+      {event.corporateAction ? (
+        <BookCorporateActionCashFlow
+          action={event.corporateAction}
+          fallbackCurrency={event.corporateAction.context.currency}
+          portfolios={portfolios}
+          positionId={event.positionId}
+          positions={positions}
+          triggerClassName="inline-flex min-h-9 flex-1 items-center justify-center rounded-md border border-[color-mix(in_srgb,var(--app-accent)_34%,var(--app-border))] px-3 text-[13px] font-extrabold text-[var(--app-accent)] transition hover:border-[var(--app-accent)] hover:bg-[color-mix(in_srgb,var(--app-accent)_10%,transparent)]"
+        />
+      ) : null}
       <Button variant="outlined" size="small" sx={selectedEventActionSx}>Add reminder</Button>
       <Button variant="outlined" size="small" sx={selectedEventActionSx}>Mark reviewed</Button>
     </Stack>
@@ -1045,22 +1066,6 @@ function LegendItem({ kind, label, value }: { kind: EventKind; label: string; va
   )
 }
 
-function MetricCard({ icon, label, value, sub, tone }: { icon: "calendar" | "report" | "action"; label: string; value: number; sub: string; tone: "primary" | "success" | "warning" }) {
-  const metricTone = tone === "success" ? "positive" : tone === "warning" ? "warning" : "accent"
-  return (
-    <MetricBar>
-      <MetricBarItem
-        icon={<MetricIcon icon={icon} />}
-        label={label}
-        primary
-        sub={sub}
-        tone={metricTone}
-        value={value}
-      />
-    </MetricBar>
-  )
-}
-
 function EventDetailItem({ label, tone, value }: { label: string; tone?: string; value: string }) {
   return (
     <Box sx={{ bgcolor: tone ? `color-mix(in srgb, ${tone} 8%, var(--app-surface-inset))` : "var(--app-surface-inset)", border: tone ? `1px solid color-mix(in srgb, ${tone} 24%, var(--app-divider))` : "1px solid var(--app-divider)", borderRadius: 1, minWidth: 0, p: 1.1 }}>
@@ -1126,6 +1131,7 @@ function normalizeEvents(earnings: PortfolioEarnings[], corporateActions: Portfo
       detailLabel: split ? "split" : "dividend",
       epsEstimate: "-",
       epsActual: "-",
+      corporateAction: item,
     }]
   })
 
@@ -1444,24 +1450,6 @@ function EventKindIcon({ className, contained = true, kind, size = 24 }: { class
       <AppIcon className="h-3.5 w-3.5" name={iconName} strokeWidth={1.8} />
     </Box>
   )
-}
-
-function MetricIcon({ icon }: { icon: "calendar" | "report" | "action" }) {
-  if (icon === "report") return <ReportIcon />
-  if (icon === "action") return <ActionIcon />
-  return <CalendarIcon large />
-}
-
-function CalendarIcon({ large = false }: { large?: boolean }) {
-  return <AppIcon className={large ? "h-6 w-6" : "h-3.5 w-3.5"} name="calendar" strokeWidth={1.8} />
-}
-
-function ReportIcon() {
-  return <AppIcon className="h-6 w-6" name="reports" strokeWidth={1.8} />
-}
-
-function ActionIcon() {
-  return <AppIcon className="h-6 w-6" name="corporateAction" strokeWidth={1.8} />
 }
 
 function DollarIcon() {

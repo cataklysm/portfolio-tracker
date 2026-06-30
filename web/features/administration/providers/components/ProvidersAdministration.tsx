@@ -132,6 +132,14 @@ export function ProvidersAdministration({
   }
 
   useEffect(() => {
+    for (const [provider, expanded] of Object.entries(expandedProviders)) {
+      if (!expanded) continue
+      if (!providers.some((candidateProvider) => candidateProvider.provider === provider)) continue
+      void loadProviderCadence(provider)
+    }
+  }, [expandedProviders, providers])
+
+  useEffect(() => {
     const requestedProvider = searchParams.get("provider")
     const requestedTab = searchParams.get("tab")
     if (requestedProvider) {
@@ -279,7 +287,7 @@ export function ProvidersAdministration({
         </Stack>
 
         <TableContainer>
-          <Table size="small" sx={{ minWidth: 920 }}>
+          <Table size="small" sx={{ minWidth: 920, tableLayout: "fixed" }}>
             <TableHead sx={tableHeadSx}>
               <TableRow>
                 <TableCell>Provider</TableCell>
@@ -379,6 +387,7 @@ function ProviderSettingsRow({
   const [maxConcurrency, setMaxConcurrency] = useState(provider.maxConcurrency)
   const [maxBatchSize, setMaxBatchSize] = useState<number | "">(provider.maxBatchSize ?? "")
   const [rateLimitPerMin, setRateLimitPerMin] = useState<number | "">(provider.rateLimitPerMin ?? "")
+  const [maxPerCycle, setMaxPerCycle] = useState<number | "">(provider.maxPerCycle ?? "")
   const [cadenceState, setCadenceState] = useState<Record<string, CadenceFormState>>(() => buildCadenceFormState(cadence))
   const [baseline, setBaseline] = useState<ProviderFormSnapshot>(() => buildProviderFormSnapshot(provider, cadence))
   const [disableUsage, setDisableUsage] = useState<ProviderUsageView[] | null>(null)
@@ -393,8 +402,9 @@ function ProviderSettingsRow({
     maxConcurrency,
     maxBatchSize,
     rateLimitPerMin,
+    maxPerCycle,
     cadenceState,
-  }), [cadenceState, capabilityQuality, dataQuality, maxBatchSize, maxConcurrency, rateLimitPerMin])
+  }), [cadenceState, capabilityQuality, dataQuality, maxBatchSize, maxConcurrency, rateLimitPerMin, maxPerCycle])
   const isDirty = !providerFormSnapshotsEqual(currentSnapshot, baseline)
 
   useEffect(() => {
@@ -405,6 +415,7 @@ function ProviderSettingsRow({
     setMaxConcurrency(provider.maxConcurrency)
     setMaxBatchSize(provider.maxBatchSize ?? "")
     setRateLimitPerMin(provider.rateLimitPerMin ?? "")
+    setMaxPerCycle(provider.maxPerCycle ?? "")
     setCadenceState(nextBaseline.cadenceState)
     setBaseline(nextBaseline)
   }, [provider, cadence])
@@ -430,6 +441,7 @@ function ProviderSettingsRow({
       maxBatchSize: emptyNumberToNull(maxBatchSize),
       rateLimitPerMin: emptyNumberToNull(rateLimitPerMin),
       maxConcurrency: Math.max(1, maxConcurrency),
+      maxPerCycle: emptyNumberToNull(maxPerCycle),
     })
     if (providerError) return providerError
 
@@ -545,6 +557,7 @@ function ProviderSettingsRow({
                   <NumberField label="Concurrency" value={maxConcurrency} onValue={(value) => setMaxConcurrency(value === "" ? 1 : value)} disabled={!enabled} />
                   <NumberField label="Batch size" value={maxBatchSize} onValue={setMaxBatchSize} placeholder="single" disabled={!enabled} />
                   <NumberField label="Rate/min" value={rateLimitPerMin} onValue={setRateLimitPerMin} placeholder="unset" disabled={!enabled} />
+                  <NumberField label="Per cycle" value={maxPerCycle} onValue={setMaxPerCycle} placeholder="all" disabled={!enabled} />
                 </Box>
               </fieldset>
             </AdminInspectorBody>
@@ -923,6 +936,7 @@ interface ProviderFormSnapshot {
   maxConcurrency: number
   maxBatchSize: number | ""
   rateLimitPerMin: number | ""
+  maxPerCycle: number | ""
   cadenceState: Record<string, CadenceFormState>
 }
 
@@ -933,6 +947,7 @@ function buildProviderFormSnapshot(provider: ProviderSettingsView, cadence: Capa
     maxConcurrency: provider.maxConcurrency,
     maxBatchSize: provider.maxBatchSize ?? "",
     rateLimitPerMin: provider.rateLimitPerMin ?? "",
+    maxPerCycle: provider.maxPerCycle ?? "",
     cadenceState: buildCadenceFormState(cadence),
   }
 }
@@ -943,7 +958,8 @@ function providerFormSnapshotsEqual(firstSnapshot: ProviderFormSnapshot, secondS
     !recordEqual(firstSnapshot.capabilityQuality, secondSnapshot.capabilityQuality) ||
     firstSnapshot.maxConcurrency !== secondSnapshot.maxConcurrency ||
     firstSnapshot.maxBatchSize !== secondSnapshot.maxBatchSize ||
-    firstSnapshot.rateLimitPerMin !== secondSnapshot.rateLimitPerMin
+    firstSnapshot.rateLimitPerMin !== secondSnapshot.rateLimitPerMin ||
+    firstSnapshot.maxPerCycle !== secondSnapshot.maxPerCycle
   ) {
     return false
   }

@@ -31,8 +31,10 @@ import {
   KyselyPushSubscriptionRepository,
   LiveNotificationHub,
   LiveNotificationStream,
+  MarketQuoteEventService,
   NotificationService,
   NotificationRetentionScheduler,
+  NotificationSnoozeScheduler,
   PushSender,
   RuleService,
   registerNotificationRoutes,
@@ -82,11 +84,12 @@ export async function buildApp(config: NotificationsConfig): Promise<BuiltServic
       })
     : undefined;
 
+  const notificationEvents = new KyselyNotificationEventStore(db);
   const evaluator = new AlertEvaluator({
     interests,
     notifications: notificationRepo,
     alertState,
-    events: new KyselyNotificationEventStore(db),
+    events: notificationEvents,
     rules: ruleRepo,
     resolver: new ListingResolverClient(config.instrumentsBaseUrl, logger),
     fx: new MarketFxClient(config.marketBaseUrl, logger),
@@ -96,6 +99,7 @@ export async function buildApp(config: NotificationsConfig): Promise<BuiltServic
     positions: new PortfolioPositionsClient(config.portfolioBaseUrl, logger),
     logger,
   });
+  const marketQuoteEvents = new MarketQuoteEventService(evaluator, logger);
 
   const app = await createService({
     name: 'notifications',
@@ -139,6 +143,12 @@ export async function buildApp(config: NotificationsConfig): Promise<BuiltServic
     config.retention.cleanupIntervalMs,
     logger,
   );
+  const snoozeScheduler = new NotificationSnoozeScheduler({
+    notifications: notificationRepo,
+    events: notificationEvents,
+    intervalMs: config.snooze.releaseIntervalMs,
+    logger,
+  });
   const liveStream = new LiveNotificationStream({
     redis,
     hub: liveHub,
@@ -146,14 +156,16 @@ export async function buildApp(config: NotificationsConfig): Promise<BuiltServic
     pushSender,
     logger,
   });
-  let consumer: StreamConsumer | undefined;
+  let interestConsumer: StreamConsumer | undefined;
+  let marketConsumer: StreamConsumer | undefined;
 
   if (!dumpMode) {
     publisher.start();
     await liveStream.start();
     retentionScheduler.start();
+    snoozeScheduler.start();
     if (config.consumeInterestStream) {
-      consumer = new StreamConsumer({
+      interestConsumer = new StreamConsumer({
         redis,
         stream: 'portfolio',
         group: 'notifications',
@@ -161,7 +173,18 @@ export async function buildApp(config: NotificationsConfig): Promise<BuiltServic
         handler: (envelope) => interestService.applyInterestEvent(envelope),
         logger,
       });
-      await consumer.start();
+      await interestConsumer.start();
+    }
+    if (config.consumeMarketStream) {
+      marketConsumer = new StreamConsumer({
+        redis,
+        stream: 'market',
+        group: 'notifications-quotes',
+        consumer: `notifications-quotes-${process.pid}`,
+        handler: (envelope) => marketQuoteEvents.applyMarketEvent(envelope),
+        logger,
+      });
+      await marketConsumer.start();
     }
     if (config.evaluation.enabled) scheduler.start();
   }
@@ -171,9 +194,11 @@ export async function buildApp(config: NotificationsConfig): Promise<BuiltServic
     shutdown: async () => {
       scheduler.stop();
       retentionScheduler.stop();
+      snoozeScheduler.stop();
       publisher.stop();
       await liveStream.stop();
-      if (consumer) await consumer.stop();
+      if (interestConsumer) await interestConsumer.stop();
+      if (marketConsumer) await marketConsumer.stop();
       await app.close();
       await redis.quit();
       await pool.end();

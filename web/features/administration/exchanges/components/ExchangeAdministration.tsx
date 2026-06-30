@@ -191,7 +191,7 @@ export function ExchangeAdministration({ exchanges: initialExchanges }: { exchan
         </Stack>
 
         <TableContainer>
-          <Table size="small" sx={{ minWidth: 920 }}>
+          <Table size="small" sx={{ minWidth: 920, tableLayout: "fixed" }}>
             <TableHead sx={tableHeadSx}>
               <TableRow>
                 <TableCell>Exchange</TableCell>

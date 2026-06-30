@@ -9,7 +9,7 @@ export type TaxComponent =
 
 export type TaxDirection = 'withheld' | 'refunded';
 
-export type TaxSource = 'manual' | 'import' | 'broker_api' | 'provider' | 'corporate_action';
+export type TaxSource = 'manual' | 'import' | 'broker_api' | 'provider' | 'corporate_action' | 'income_booking';
 
 /** Optional attribution links; any combination (including none) is valid. */
 export interface TaxEventLinks {

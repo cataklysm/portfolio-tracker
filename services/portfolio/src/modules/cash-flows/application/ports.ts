@@ -3,11 +3,38 @@ import type { TaxComponent } from '../../tax-events/application/ports.js';
 
 export type CashFlowType = 'dividend' | 'deposit' | 'withdrawal' | 'cash_in_lieu' | 'interest';
 
-/** A withheld-tax component captured with an income cash flow (cash-flow currency). */
+/**
+ * A withheld-tax component captured with an income cash flow, normalized to carry
+ * both the original source-currency amount and the broker-settled settlement amount.
+ * For same-currency bookings the two are equal. The linked `tax_events` row stores
+ * the settlement amount/currency; the source detail is preserved in
+ * `cash_flow_tax_components`.
+ */
 export interface NewIncomeTaxComponent {
   component: TaxComponent;
-  amount: string;
+  sourceAmount: string;
+  sourceCurrency: string;
+  settlementAmount: string;
+  settlementCurrency: string;
   bookingDate: string;
+}
+
+/**
+ * Withheld-tax component as supplied on a create request. Two accepted shapes,
+ * discriminated at runtime by which fields are present:
+ *   - same-currency (legacy): `{ component, amount, currency, bookingDate }`
+ *   - cross-currency: `{ component, sourceAmount, sourceCurrency, settlementAmount,
+ *     settlementCurrency, bookingDate }`
+ */
+export interface IncomeTaxComponentInput {
+  component: TaxComponent;
+  bookingDate: string;
+  amount?: string;
+  currency?: string;
+  sourceAmount?: string;
+  sourceCurrency?: string;
+  settlementAmount?: string;
+  settlementCurrency?: string;
 }
 
 /** A stored cash flow as served to its owner. */
@@ -33,6 +60,19 @@ export interface CashFlowRecord {
   amount_per_share: string | null;
   quantity_at_ex_date: string | null;
   expected_gross_amount: string | null;
+  // Foreign-currency income: source economics in the original currency. Null for
+  // same-currency bookings. Settlement fields above stay the reconciled amounts.
+  source_currency: string | null;
+  source_gross_amount: string | null;
+  source_withholding_tax: string | null;
+  source_fee: string | null;
+  source_net_amount: string | null;
+  source_amount_per_share: string | null;
+  // The broker's fixed conversion, as a direct source->settlement rate.
+  broker_fx_rate: string | null;
+  broker_fx_from_currency: string | null;
+  broker_fx_to_currency: string | null;
+  broker_fx_rate_date: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -57,6 +97,16 @@ export interface NewCashFlow {
   amountPerShare: string | null;
   quantityAtExDate: string | null;
   expectedGrossAmount: string | null;
+  sourceCurrency: string | null;
+  sourceGrossAmount: string | null;
+  sourceWithholdingTax: string | null;
+  sourceFee: string | null;
+  sourceNetAmount: string | null;
+  sourceAmountPerShare: string | null;
+  brokerFxRate: string | null;
+  brokerFxFromCurrency: string | null;
+  brokerFxToCurrency: string | null;
+  brokerFxRateDate: string | null;
 }
 
 export interface UpdateCashFlow {
@@ -68,6 +118,39 @@ export interface UpdateCashFlow {
   paymentDate?: string;
   taxRelevantValueDate?: string;
   note?: string | null;
+}
+
+/**
+ * Read-only comparison of the broker's fixed FX against the market reference rate,
+ * computed on read for foreign-currency bookings. All amounts are in the settlement
+ * currency. `status` is `same_currency` (no source layer), `available`, or
+ * `unavailable` (reference rate missing — the read still succeeds).
+ */
+export interface CashFlowFxComparison {
+  reference_fx_rate: string | null;
+  reference_fx_rate_date: string | null;
+  reference_fx_net_amount: string | null;
+  broker_fx_difference_amount: string | null;
+  broker_fx_difference_pct: string | null;
+  fx_comparison_status: 'same_currency' | 'available' | 'unavailable';
+}
+
+/** A cash flow as served on read: the stored record plus the broker-vs-reference FX comparison. */
+export type CashFlowView = CashFlowRecord & CashFlowFxComparison;
+
+/** A (currency, value date) pair to resolve a historical EUR-based rate for. */
+export interface DatedRateRequest {
+  currency: string;
+  date: string;
+}
+
+/**
+ * Reads historical EUR-based FX rates (units of currency per 1 EUR) keyed
+ * `${currency}@${date}` for the broker-vs-reference comparison. Structurally
+ * satisfied by the shared market FX client; EUR is the implicit pivot (rate 1).
+ */
+export interface FxRateReader {
+  getEurRatesAt(requests: DatedRateRequest[], bearerToken: string): Promise<Map<string, string>>;
 }
 
 export interface CashFlowRepository {

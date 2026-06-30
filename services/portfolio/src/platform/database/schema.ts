@@ -87,9 +87,35 @@ export interface CashFlowsTable {
   amount_per_share: Numeric | null;
   quantity_at_ex_date: Numeric | null;
   expected_gross_amount: Numeric | null;
+  // Foreign-currency income: source economics in the original (source) currency.
+  // Settlement fields above stay the broker-reconciled amounts reporting uses.
+  source_currency: string | null;
+  source_gross_amount: Numeric | null;
+  source_withholding_tax: Numeric | null;
+  source_fee: Numeric | null;
+  source_net_amount: Numeric | null;
+  source_amount_per_share: Numeric | null;
+  // The broker's fixed conversion, stored as a DIRECT source->settlement rate.
+  broker_fx_rate: Numeric | null;
+  broker_fx_from_currency: string | null;
+  broker_fx_to_currency: string | null;
+  broker_fx_rate_date: ColumnType<string | null, string | null | undefined, string | null>;
   source: ColumnType<BookingSource, BookingSource | undefined, BookingSource>;
   created_at: Generated<Date>;
   updated_at: Timestamp;
+}
+
+/** Original-source breakdown of an income booking's withheld tax (see migration 012). */
+export interface CashFlowTaxComponentsTable {
+  id: Generated<string>;
+  cash_flow_id: string;
+  component: 'capital_income' | 'solidarity' | 'church' | 'foreign_withholding' | 'generic';
+  source_amount: Numeric;
+  source_currency: string;
+  settlement_amount: Numeric;
+  settlement_currency: string;
+  booking_date: ColumnType<string, string, string>;
+  created_at: Generated<Date>;
 }
 
 export interface TaxEventsTable {
@@ -245,6 +271,7 @@ export interface PortfolioDatabase {
   'portfolio.positions': PositionsTable;
   'portfolio.transactions': TransactionsTable;
   'portfolio.cash_flows': CashFlowsTable;
+  'portfolio.cash_flow_tax_components': CashFlowTaxComponentsTable;
   'portfolio.tax_events': TaxEventsTable;
   'portfolio.tax_rules': TaxRulesTable;
   'portfolio.user_tax_settings': UserTaxSettingsTable;

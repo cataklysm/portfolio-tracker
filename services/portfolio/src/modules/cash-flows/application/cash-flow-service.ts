@@ -1,15 +1,22 @@
 import Decimal from 'decimal.js';
 import { AppError } from '@portfolio/platform';
-import type { TaxComponent } from '../../tax-events/application/ports.js';
 import type {
   CashFlowRecord,
   CashFlowRepository,
   CashFlowType,
+  CashFlowView,
+  DatedRateRequest,
+  FxRateReader,
+  IncomeTaxComponentInput,
   NewCashFlow,
   NewIncomeTaxComponent,
   PositionQuantityReader,
   UpdateCashFlow,
 } from './ports.js';
+import { computeFxComparison, type EurRateLookup } from '../domain/fx-comparison.js';
+
+/** Accepted absolute drift between a client-supplied source net and the computed identity. */
+const SOURCE_NET_TOLERANCE = new Decimal('0.000001');
 
 export interface CreateCashFlowInput {
   type: CashFlowType;
@@ -27,10 +34,52 @@ export interface CreateCashFlowInput {
   sourceEventType?: string | null;
   exDate?: string | null;
   amountPerShare?: string | null;
+  // Foreign-currency source economics (optional). When `sourceCurrency` differs from
+  // `currency` the full source breakdown and broker FX are required; same-currency
+  // bookings omit this layer entirely.
+  sourceCurrency?: string | null;
+  sourceGrossAmount?: string | null;
+  sourceWithholdingTax?: string | null;
+  sourceFee?: string | null;
+  /** Optional client-supplied source net; validated against the identity, then recomputed. */
+  sourceNetAmount?: string | null;
+  sourceAmountPerShare?: string | null;
+  brokerFxRate?: string | null;
+  /** Optional; when given must equal sourceCurrency / settlement currency respectively. */
+  brokerFxFromCurrency?: string | null;
+  brokerFxToCurrency?: string | null;
+  brokerFxRateDate?: string | null;
   // Withheld-tax components (income types only); set withholding_tax = their sum
   // and persist linked tax events. Mutually exclusive with `withholdingTax`.
-  taxComponents?: { component: TaxComponent; amount: string; currency: string; bookingDate: string }[];
+  taxComponents?: IncomeTaxComponentInput[];
 }
+
+/** The resolved source-economics + broker-FX columns persisted with a cash flow. */
+interface SourceEconomics {
+  sourceCurrency: string | null;
+  sourceGrossAmount: string | null;
+  sourceWithholdingTax: string | null;
+  sourceFee: string | null;
+  sourceNetAmount: string | null;
+  sourceAmountPerShare: string | null;
+  brokerFxRate: string | null;
+  brokerFxFromCurrency: string | null;
+  brokerFxToCurrency: string | null;
+  brokerFxRateDate: string | null;
+}
+
+const NO_SOURCE_ECONOMICS: SourceEconomics = {
+  sourceCurrency: null,
+  sourceGrossAmount: null,
+  sourceWithholdingTax: null,
+  sourceFee: null,
+  sourceNetAmount: null,
+  sourceAmountPerShare: null,
+  brokerFxRate: null,
+  brokerFxFromCurrency: null,
+  brokerFxToCurrency: null,
+  brokerFxRateDate: null,
+};
 
 /** Resolved + computed event-linkage fields persisted with the cash flow. */
 interface EventLinkage {
@@ -82,14 +131,40 @@ export class CashFlowService {
     private readonly repo: CashFlowRepository,
     /** Resolves held quantity at an ex-date for event-linked dividend bookings. */
     private readonly positions?: PositionQuantityReader,
+    /** Reads reference FX for the broker-vs-reference comparison on read; optional. */
+    private readonly fx?: FxRateReader,
   ) {}
 
-  list(
+  async list(
     userId: string,
     portfolioId: string,
     filter: { types?: CashFlowType[]; positionId?: string; dateFrom?: string; dateTo?: string },
-  ): Promise<CashFlowRecord[]> {
-    return this.repo.listForPortfolio(userId, portfolioId, filter);
+    bearerToken?: string,
+  ): Promise<CashFlowView[]> {
+    const records = await this.repo.listForPortfolio(userId, portfolioId, filter);
+    return this.enrich(records, bearerToken);
+  }
+
+  /**
+   * Adds the broker-vs-reference FX comparison to each record. Foreign bookings need
+   * the EUR-based source + settlement rates at the broker FX date (or value date),
+   * fetched in one batched read; without an FX reader or token, foreign rows report
+   * `unavailable` and same-currency rows `same_currency`.
+   */
+  private async enrich(records: CashFlowRecord[], bearerToken?: string): Promise<CashFlowView[]> {
+    const foreign = records.filter((r) => r.source_currency !== null && r.source_currency !== r.currency);
+    if (!this.fx || !bearerToken || foreign.length === 0) {
+      const noRate: EurRateLookup = () => null;
+      return records.map((r) => ({ ...r, ...computeFxComparison(r, noRate) }));
+    }
+    const requests: DatedRateRequest[] = [];
+    for (const r of foreign) {
+      const date = r.broker_fx_rate_date ?? r.tax_relevant_value_date;
+      requests.push({ currency: r.source_currency as string, date }, { currency: r.currency, date });
+    }
+    const map = await this.fx.getEurRatesAt(requests, bearerToken);
+    const rate: EurRateLookup = (cur, date) => (cur === 'EUR' ? '1' : (map.get(`${cur}@${date}`) ?? null));
+    return records.map((r) => ({ ...r, ...computeFxComparison(r, rate) }));
   }
 
   async create(userId: string, portfolioId: string, input: CreateCashFlowInput): Promise<CashFlowRecord> {
@@ -103,7 +178,9 @@ export class CashFlowService {
     const paymentDate = requireDate(input.paymentDate, 'payment_date');
     const taxRelevantValueDate = requireDate(input.taxRelevantValueDate ?? paymentDate, 'tax_relevant_value_date');
     const currency = normalizeCurrency(input.currency);
-    const { withholding, components } = this.resolveWithholding(input, currency);
+    const sourceCurrency = input.sourceCurrency?.trim() ? normalizeCurrency(input.sourceCurrency) : null;
+    const { withholding, sourceWithholding, components } = this.resolveWithholding(input, currency, sourceCurrency);
+    const source = resolveSourceEconomics(input, currency, sourceCurrency, sourceWithholding);
     const link = await this.resolveEventLinkage(userId, input, positionId);
 
     const newCashFlow: NewCashFlow = {
@@ -119,6 +196,7 @@ export class CashFlowService {
       paymentDate,
       taxRelevantValueDate,
       note: input.note?.trim() || null,
+      ...source,
       ...link,
     };
     const recordCreated = (created: CashFlowRecord) => ({
@@ -150,18 +228,23 @@ export class CashFlowService {
   }
 
   /**
-   * Resolves the withheld tax: either the explicit `withholding_tax` (no
-   * components) or the sum of `tax_components`. Components are income-types only,
-   * must each be in the cash-flow currency (MVP — no FX conversion), and are
-   * mutually exclusive with an explicit `withholding_tax`.
+   * Resolves the withheld tax in both layers: either the explicit `withholding_tax`
+   * / `source_withholding_tax` (no components) or the per-component sums. Components
+   * are income-types only and mutually exclusive with an explicit withholding;
+   * each is normalized to source + settlement amounts. `sourceWithholding` is null
+   * when the booking carries no source layer.
    */
   private resolveWithholding(
     input: CreateCashFlowInput,
     currency: string,
-  ): { withholding: Decimal; components: NewIncomeTaxComponent[] } {
+    sourceCurrency: string | null,
+  ): { withholding: Decimal; sourceWithholding: Decimal | null; components: NewIncomeTaxComponent[] } {
     const provided = input.taxComponents ?? [];
     if (provided.length === 0) {
-      return { withholding: nonNegative(input.withholdingTax ?? '0', 'withholding_tax'), components: [] };
+      const withholding = nonNegative(input.withholdingTax ?? '0', 'withholding_tax');
+      const sourceWithholding =
+        input.sourceWithholdingTax != null ? nonNegative(input.sourceWithholdingTax, 'source_withholding_tax') : null;
+      return { withholding, sourceWithholding, components: [] };
     }
     if (!INCOME_TYPES.has(input.type)) {
       throw AppError.badRequest('tax_components_unsupported', 'tax_components are only valid for income cash flows (dividend, cash_in_lieu, interest)');
@@ -169,17 +252,19 @@ export class CashFlowService {
     if (input.withholdingTax != null) {
       throw AppError.badRequest('withholding_conflict', 'Provide either withholding_tax or tax_components, not both');
     }
+    if (input.sourceWithholdingTax != null) {
+      throw AppError.badRequest('source_withholding_conflict', 'source_withholding_tax is derived from tax_components and must not be supplied with them');
+    }
     let withholding = new Decimal(0);
+    let sourceWithholding = new Decimal(0);
     const components: NewIncomeTaxComponent[] = [];
     for (const c of provided) {
-      if (normalizeCurrency(c.currency) !== currency) {
-        throw AppError.badRequest('tax_component_currency_mismatch', 'Each tax component must be in the cash-flow currency');
-      }
-      const amt = nonNegative(c.amount, 'tax_component.amount');
-      withholding = withholding.plus(amt);
-      components.push({ component: c.component, amount: amt.toString(), bookingDate: requireDate(c.bookingDate, 'tax_component.booking_date') });
+      const { component, settlement, source } = normalizeTaxComponent(c, currency, sourceCurrency);
+      withholding = withholding.plus(settlement);
+      sourceWithholding = sourceWithholding.plus(source);
+      components.push(component);
     }
-    return { withholding, components };
+    return { withholding, sourceWithholding, components };
   }
 
   /**
@@ -356,4 +441,159 @@ function normalizeCurrency(raw: string): string {
   const code = raw.trim().toUpperCase();
   if (!/^[A-Z]{3}$/.test(code)) throw AppError.badRequest('invalid_currency', 'currency must be a 3-letter code');
   return code;
+}
+
+function positive(raw: string, field: string): Decimal {
+  const value = amount(raw, field);
+  if (value.lte(0)) throw AppError.badRequest('invalid_amount', `${field} must be greater than zero`);
+  return value;
+}
+
+const SOURCE_FIELDS = [
+  'sourceGrossAmount',
+  'sourceWithholdingTax',
+  'sourceFee',
+  'sourceNetAmount',
+  'sourceAmountPerShare',
+  'brokerFxRate',
+  'brokerFxFromCurrency',
+  'brokerFxToCurrency',
+  'brokerFxRateDate',
+] as const;
+
+/**
+ * Resolves the source-economics + broker-FX columns. A booking is "foreign" only
+ * when `sourceCurrency` is set and differs from the settlement `currency`; then the
+ * full source breakdown and a coherent broker FX (direction source->settlement) are
+ * required and `source_net` is recomputed server-side. Same-currency bookings carry
+ * no source layer (prefer-omit); a source currency with no settlement difference and
+ * a broker FX rate is rejected as nonsensical.
+ */
+function resolveSourceEconomics(
+  input: CreateCashFlowInput,
+  currency: string,
+  sourceCurrency: string | null,
+  sourceWithholding: Decimal | null,
+): SourceEconomics {
+  const anySourceField = SOURCE_FIELDS.some((f) => input[f] != null);
+
+  if (sourceCurrency === null) {
+    if (anySourceField) {
+      throw AppError.badRequest('source_currency_required', 'source_currency is required when any source amount or broker FX field is given');
+    }
+    return NO_SOURCE_ECONOMICS;
+  }
+
+  if (sourceCurrency === currency) {
+    if (input.brokerFxRate != null) {
+      throw AppError.badRequest('broker_fx_not_applicable', 'broker_fx_rate does not apply when source_currency equals the settlement currency');
+    }
+    // Same-currency source layer adds nothing — collapse to omit it.
+    return NO_SOURCE_ECONOMICS;
+  }
+
+  // Foreign: source_currency differs from settlement currency.
+  if (input.sourceGrossAmount == null) {
+    throw AppError.badRequest('source_gross_required', 'source_gross_amount is required for a foreign-currency booking');
+  }
+  if (sourceWithholding === null) {
+    throw AppError.badRequest('source_withholding_required', 'source_withholding_tax (or tax_components) is required for a foreign-currency booking');
+  }
+  const sourceGross = nonNegative(input.sourceGrossAmount, 'source_gross_amount');
+  const sourceFee = input.sourceFee != null ? nonNegative(input.sourceFee, 'source_fee') : new Decimal(0);
+  const computedNet = sourceGross.minus(sourceWithholding).minus(sourceFee);
+  if (computedNet.lt(0)) {
+    throw AppError.badRequest('source_net_negative', 'source_net_amount (gross − withholding − fee) must not be negative');
+  }
+  if (input.sourceNetAmount != null) {
+    const supplied = nonNegative(input.sourceNetAmount, 'source_net_amount');
+    if (supplied.minus(computedNet).abs().gt(SOURCE_NET_TOLERANCE)) {
+      throw AppError.badRequest('source_net_mismatch', 'source_net_amount must equal source_gross_amount − source_withholding_tax − source_fee');
+    }
+  }
+
+  const brokerFxRate = input.brokerFxRate != null ? positive(input.brokerFxRate, 'broker_fx_rate') : null;
+  if (brokerFxRate === null) {
+    throw AppError.badRequest('broker_fx_required', 'broker_fx_rate is required for a foreign-currency booking');
+  }
+  if (input.brokerFxRateDate == null) {
+    throw AppError.badRequest('broker_fx_rate_date_required', 'broker_fx_rate_date is required for a foreign-currency booking');
+  }
+  const brokerFxRateDate = requireDate(input.brokerFxRateDate, 'broker_fx_rate_date');
+  if (input.brokerFxFromCurrency != null && normalizeCurrency(input.brokerFxFromCurrency) !== sourceCurrency) {
+    throw AppError.badRequest('broker_fx_direction_mismatch', 'broker_fx_from_currency must equal source_currency');
+  }
+  if (input.brokerFxToCurrency != null && normalizeCurrency(input.brokerFxToCurrency) !== currency) {
+    throw AppError.badRequest('broker_fx_direction_mismatch', 'broker_fx_to_currency must equal the settlement currency');
+  }
+  const sourceAmountPerShare =
+    input.sourceAmountPerShare != null ? nonNegative(input.sourceAmountPerShare, 'source_amount_per_share').toString() : null;
+
+  return {
+    sourceCurrency,
+    sourceGrossAmount: sourceGross.toString(),
+    sourceWithholdingTax: sourceWithholding.toString(),
+    sourceFee: sourceFee.toString(),
+    sourceNetAmount: computedNet.toString(),
+    sourceAmountPerShare,
+    brokerFxRate: brokerFxRate.toString(),
+    brokerFxFromCurrency: sourceCurrency,
+    brokerFxToCurrency: currency,
+    brokerFxRateDate,
+  };
+}
+
+/**
+ * Normalizes a supplied tax component into source + settlement amounts. The legacy
+ * `{ amount, currency }` shape is accepted only for same-currency bookings (source =
+ * settlement); the `{ sourceAmount, settlementAmount, … }` shape is required when the
+ * booking is foreign. Settlement currency must equal the cash-flow currency and the
+ * source currency must equal the cash-flow source currency.
+ */
+function normalizeTaxComponent(
+  c: IncomeTaxComponentInput,
+  currency: string,
+  sourceCurrency: string | null,
+): { component: NewIncomeTaxComponent; settlement: Decimal; source: Decimal } {
+  const bookingDate = requireDate(c.bookingDate, 'tax_component.booking_date');
+  const effectiveSource = sourceCurrency ?? currency;
+  const isCrossShape =
+    c.sourceAmount != null || c.settlementAmount != null || c.sourceCurrency != null || c.settlementCurrency != null;
+
+  if (!isCrossShape) {
+    if (c.amount == null || c.currency == null) {
+      throw AppError.badRequest('tax_component_invalid', 'tax component requires either { amount, currency } or { sourceAmount, sourceCurrency, settlementAmount, settlementCurrency }');
+    }
+    if (normalizeCurrency(c.currency) !== currency) {
+      throw AppError.badRequest('tax_component_currency_mismatch', 'Each tax component must be in the cash-flow settlement currency');
+    }
+    if (effectiveSource !== currency) {
+      throw AppError.badRequest('tax_component_source_required', 'A foreign-currency booking requires source/settlement tax components');
+    }
+    const amt = nonNegative(c.amount, 'tax_component.amount');
+    return {
+      component: { component: c.component, sourceAmount: amt.toString(), sourceCurrency: currency, settlementAmount: amt.toString(), settlementCurrency: currency, bookingDate },
+      settlement: amt,
+      source: amt,
+    };
+  }
+
+  if (c.sourceAmount == null || c.sourceCurrency == null || c.settlementAmount == null || c.settlementCurrency == null) {
+    throw AppError.badRequest('tax_component_invalid', 'cross-currency tax component requires sourceAmount, sourceCurrency, settlementAmount and settlementCurrency');
+  }
+  const sc = normalizeCurrency(c.sourceCurrency);
+  const stc = normalizeCurrency(c.settlementCurrency);
+  if (stc !== currency) {
+    throw AppError.badRequest('tax_component_currency_mismatch', 'tax component settlement currency must equal the cash-flow currency');
+  }
+  if (sc !== effectiveSource) {
+    throw AppError.badRequest('tax_component_currency_mismatch', 'tax component source currency must equal the cash-flow source currency');
+  }
+  const source = nonNegative(c.sourceAmount, 'tax_component.source_amount');
+  const settlement = nonNegative(c.settlementAmount, 'tax_component.settlement_amount');
+  return {
+    component: { component: c.component, sourceAmount: source.toString(), sourceCurrency: sc, settlementAmount: settlement.toString(), settlementCurrency: stc, bookingDate },
+    settlement,
+    source,
+  };
 }

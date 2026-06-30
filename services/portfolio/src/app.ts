@@ -126,8 +126,9 @@ export async function buildApp(config: PortfolioConfig): Promise<BuiltService> {
   });
   const corporateActionService = new CorporateActionService({ repo: corporateActionRepo, positions: positionService });
   // PositionService doubles as the open-quantity reader for event-linked dividend
-  // bookings (quantity held at the ex-date).
-  const cashFlowService = new CashFlowService(cashFlowRepo, positionService);
+  // bookings (quantity held at the ex-date); the market FX client supplies reference
+  // rates for the broker-vs-reference FX comparison computed on cash-flow reads.
+  const cashFlowService = new CashFlowService(cashFlowRepo, positionService, fxClient);
   const taxEventService = new TaxEventService(taxEventRepo);
   const taxRuleService = new TaxRuleService(new KyselyTaxRuleRepository(db));
   const taxSettingsService = new TaxSettingsService(userTaxRepo, portfolioTaxRepo, taxRuleService);
